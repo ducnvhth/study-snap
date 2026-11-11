@@ -18,5 +18,6 @@
 **/.impeccable/live/*.png
 # impeccable-ignore-end
 node_modules/
+.wrangler/
 .DS_Store
 

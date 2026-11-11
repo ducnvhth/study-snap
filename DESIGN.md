@@ -129,7 +129,7 @@ Hệ màu lấy cảm hứng từ sự tập trung, tươi mới và cảm giác
 
 - **Heading (`Nunito` 700/800/900)**: Các nét bo tròn mềm mại tạo sự thân thiện, giảm áp lực kiểm tra bài, hỗ trợ đầy đủ dấu Tiếng Việt.
 - **Body & Bảng tổng hợp (`Be Vietnam Pro` 400/500/600/700)**: Phông chữ thiết kế chuyên biệt cho Tiếng Việt, đảm bảo độ rõ nét tối đa khi đọc nhận xét của giáo viên, danh sách học sinh trong bảng tổng hợp và nghĩa từ vựng.
-- **Phonetics & Timers (`JetBrains Mono`)**: Hiển thị chuẩn xác phiên âm IPA và thời lượng file ghi âm/video với `font-variant-numeric: tabular-nums`.
+- **Phiên âm Pinyin tiếng Trung & Timers (`JetBrains Mono`)**: Hiển thị chuẩn xác phiên âm Pinyin có thanh điệu và thời lượng file ghi âm/video với `font-variant-numeric: tabular-nums`.
 
 ## Layout
 

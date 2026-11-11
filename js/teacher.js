@@ -26,7 +26,8 @@
     gradingAssignmentId: state.assignments[0] ? state.assignments[0].assignment_id : 'BVN01',
     matrixFilter: 'all',
     teacherDraftVoice: null,
-    isTeacherRecording: false
+    isTeacherRecording: false,
+    vocabFilter: 'all'
   };
 
   function escapeHtml(str) {
@@ -411,7 +412,49 @@
   /**
    * TAB 3: KHO TỪ VỰNG & KẾT QUẢ BÀI CUỐI GIỜ
    */
+  function renderTeacherVocabTable() {
+    const tbody = document.getElementById('teacher-vocab-tbody');
+    const badge = document.getElementById('teacher-vocab-count-badge');
+    if (!tbody) return;
+
+    const filtered = state.vocabulary.filter(function (v) {
+      if (ui.vocabFilter === 'all') return true;
+      return v.lesson_id === ui.vocabFilter;
+    });
+
+    if (badge) {
+      badge.textContent = filtered.length + ' từ vựng';
+    }
+
+    if (filtered.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--color-muted-foreground);">' +
+          'Chưa có từ vựng nào trong danh mục này. Hãy nhập từ vựng mới ở biểu mẫu phía trên.' +
+        '</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(function (v) {
+      return '<tr>' +
+        '<td><strong style="font-size:1.125rem;color:var(--color-primary-deep);">' + escapeHtml(v.word) + '</strong></td>' +
+        '<td><span class="mono-text tabular-nums" style="color:var(--color-accent);font-weight:600;">' + escapeHtml(v.ipa || '') + '</span></td>' +
+        '<td><span class="status-badge" style="background:var(--color-surface-muted);color:var(--color-muted-foreground);border-color:var(--color-border-soft);font-size:0.75rem;">' + escapeHtml(v.part_of_speech || 'Từ vựng') + '</span></td>' +
+        '<td><span style="font-weight:600;color:var(--color-foreground);">' + escapeHtml(v.meaning_vi || '') + '</span></td>' +
+        '<td><span style="font-size:0.8125rem;color:var(--color-muted-foreground);">' + escapeHtml(v.example_en || '') + '</span></td>' +
+        '<td><span style="font-size:0.8125rem;font-weight:600;color:var(--color-primary);">' + escapeHtml(v.lesson_title || v.lesson_id) + '</span></td>' +
+        '<td>' +
+          '<button type="button" class="btn btn-outline btn-sm" data-speak-vocab="' + escapeHtml(v.word) + '" title="Phát âm tiếng Trung">' +
+            ICONS.volume +
+            '<span>Nghe</span>' +
+          '</button>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
   function renderContentAndExitLogsTab() {
+    renderTeacherVocabTable();
+
     const logsContainer = document.getElementById('teacher-exit-ticket-logs');
     if (!logsContainer) return;
 
@@ -881,6 +924,45 @@
             new_password: st.password
           });
         }
+        return;
+      }
+
+      // Nút chèn nhanh dấu thanh điệu Pinyin
+      const toneBtn = ev.target.closest('[data-insert-tone]');
+      if (toneBtn) {
+        const toneChar = toneBtn.getAttribute('data-insert-tone');
+        const ipaInput = document.getElementById('new-vocab-ipa');
+        if (ipaInput && toneChar) {
+          const start = ipaInput.selectionStart || ipaInput.value.length;
+          const end = ipaInput.selectionEnd || ipaInput.value.length;
+          const text = ipaInput.value;
+          ipaInput.value = text.substring(0, start) + toneChar + text.substring(end);
+          ipaInput.focus();
+          const newPos = start + toneChar.length;
+          ipaInput.setSelectionRange(newPos, newPos);
+        }
+        return;
+      }
+
+      // Bộ lọc từ vựng trong Tab 3
+      const vocabFilterBtn = ev.target.closest('[data-teacher-vocab-filter]');
+      if (vocabFilterBtn) {
+        ui.vocabFilter = vocabFilterBtn.getAttribute('data-teacher-vocab-filter') || 'all';
+        document.querySelectorAll('[data-teacher-vocab-filter]').forEach(function (b) {
+          b.classList.toggle('is-active', b === vocabFilterBtn);
+        });
+        renderTeacherVocabTable();
+        return;
+      }
+
+      // Phát âm từ vựng tiếng Trung
+      const speakVocabBtn = ev.target.closest('[data-speak-vocab]');
+      if (speakVocabBtn) {
+        const wordToSpeak = speakVocabBtn.getAttribute('data-speak-vocab');
+        if (wordToSpeak) {
+          window.StudySnapAudio.speakText(wordToSpeak, 'zh-CN');
+        }
+        return;
       }
     });
   }

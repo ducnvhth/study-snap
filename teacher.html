@@ -359,6 +359,33 @@
                 <div class="form-group">
                   <label class="form-label" for="new-vocab-ipa">Phiên âm (Pinyin)</label>
                   <input type="text" id="new-vocab-ipa" class="form-control tabular-nums" placeholder="Ví dụ: xiè xie / xué xí">
+                  <div class="pinyin-tone-bar" aria-label="Bấm để chèn nhanh dấu thanh điệu Pinyin">
+                    <span style="font-size:0.75rem;color:var(--color-muted-foreground);font-weight:600;">Dấu thanh:</span>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ā">ā</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="á">á</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǎ">ǎ</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="à">à</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ō">ō</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ó">ó</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǒ">ǒ</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ò">ò</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ē">ē</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="é">é</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ě">ě</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="è">è</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ī">ī</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="í">í</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǐ">ǐ</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ì">ì</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ū">ū</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ú">ú</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǔ">ǔ</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ù">ù</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǖ">ǖ</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǘ">ǘ</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǚ">ǚ</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǜ">ǜ</button>
+                  </div>
                 </div>
                 <div class="form-group">
                   <label class="form-label" for="new-vocab-pos">Từ loại</label>
@@ -396,6 +423,48 @@
             </p>
 
             <div id="teacher-exit-ticket-logs"></div>
+          </div>
+        </div>
+
+        <!-- Danh Sách Từ Vựng Hiện Có Trong Kho Theo Bài Học -->
+        <div class="surface-panel" style="margin-top: 24px;">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
+                <path d="M6 6h10"></path>
+                <path d="M6 10h10"></path>
+              </svg>
+              <h2>Danh sách từ vựng tiếng Trung hiện có trong bài học</h2>
+            </div>
+            <span class="status-badge status-graded tabular-nums" id="teacher-vocab-count-badge">0 từ vựng</span>
+          </div>
+
+          <div class="matrix-toolbar">
+            <div class="filter-pill-group" id="teacher-vocab-filter-group">
+              <button type="button" class="filter-pill is-active" data-teacher-vocab-filter="all">Tất cả bài học</button>
+              <button type="button" class="filter-pill" data-teacher-vocab-filter="bai-1">Bài 1</button>
+              <button type="button" class="filter-pill" data-teacher-vocab-filter="bai-2">Bài 2</button>
+              <button type="button" class="filter-pill" data-teacher-vocab-filter="bai-3">Bài 3</button>
+              <button type="button" class="filter-pill" data-teacher-vocab-filter="bai-4">Bài 4</button>
+            </div>
+          </div>
+
+          <div style="overflow-x:auto;">
+            <table class="vocab-manage-table" aria-label="Bảng từ vựng tiếng Trung">
+              <thead>
+                <tr>
+                  <th>Chữ Hán</th>
+                  <th>Phiên âm Pinyin</th>
+                  <th>Từ loại</th>
+                  <th>Nghĩa tiếng Việt</th>
+                  <th>Câu ví dụ tiếng Trung</th>
+                  <th>Bài học</th>
+                  <th>Phát âm</th>
+                </tr>
+              </thead>
+              <tbody id="teacher-vocab-tbody"></tbody>
+            </table>
           </div>
         </div>
       </section>

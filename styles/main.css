@@ -576,6 +576,76 @@ textarea.form-control {
   border-top: 1px solid var(--color-border-soft);
 }
 
+/* Pinyin Tone Quick Helper Bar */
+.pinyin-tone-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-sm);
+}
+
+.pinyin-tone-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 4px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--color-border-soft);
+  background-color: var(--color-surface-card);
+  color: var(--color-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 120ms var(--ease-out);
+}
+
+.pinyin-tone-btn:hover {
+  background-color: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary-deep);
+}
+
+.pinyin-tone-btn:active {
+  transform: scale(0.92);
+}
+
+/* Vocabulary Review Table in Teacher Portal */
+.vocab-manage-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 14px;
+}
+
+.vocab-manage-table th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-primary-deep);
+  background-color: var(--color-surface-muted);
+  border-bottom: 2px solid var(--color-border-soft);
+}
+
+.vocab-manage-table td {
+  padding: 12px 14px;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--color-border-soft);
+  vertical-align: middle;
+}
+
+.vocab-manage-table tr:hover td {
+  background-color: #F8FAFC;
+}
+
 /* Interactive Voice / Audio Player (Play/Pause + Rewind -5s + Seek Bar + Duration) */
 .voice-player-bar {
   display: flex;
