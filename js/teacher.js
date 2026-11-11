@@ -27,7 +27,9 @@
     matrixFilter: 'all',
     teacherDraftVoice: null,
     isTeacherRecording: false,
-    vocabFilter: 'all'
+    vocabFilter: 'all',
+    selectedPracticeExId: (state.practiceExercises && state.practiceExercises[0]) ? state.practiceExercises[0].exercise_id : 'EX_HSK1_BAI_1',
+    activeGradingSubId: null
   };
 
   function escapeHtml(str) {
@@ -519,6 +521,1027 @@
     showToast('Đã xuất file Excel (CSV) Bảng tổng hợp tiến độ & nhận xét!');
   }
 
+  // =========================================================================
+  // TAB 4: QUẢN LÝ BÀI TẬP LUYỆN TẬP CUỐI BÀI (5 DẠNG BÀI) & CHẤM ĐIỂM
+  // =========================================================================
+  function getActivePracticeExercise() {
+    const exercises = state.practiceExercises || [];
+    const found = exercises.find(function (e) {
+      return e.exercise_id === ui.selectedPracticeExId;
+    });
+    return found || exercises[0] || null;
+  }
+
+  function renderTeacherPracticeTab() {
+    const ex = getActivePracticeExercise();
+    const selectEl = document.getElementById('teacher-practice-select');
+    if (selectEl) {
+      selectEl.innerHTML = (state.practiceExercises || [])
+        .map(function (e) {
+          const isSel = ex && e.exercise_id === ex.exercise_id ? ' selected' : '';
+          return (
+            '<option value="' +
+            escapeHtml(e.exercise_id) +
+            '"' +
+            isSel +
+            '>' +
+            (e.lesson_tag ? '[' + escapeHtml(e.lesson_tag) + '] ' : '') +
+            escapeHtml(e.title) +
+            ' (' +
+            (e.total_score || 35) +
+            'đ)' +
+            '</option>'
+          );
+        })
+        .join('');
+    }
+
+    if (!ex) {
+      const tbody = document.getElementById('teacher-practice-submissions-tbody');
+      if (tbody) {
+        tbody.innerHTML =
+          '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--color-muted-foreground);">Chưa có bài tập nào. Hãy bấm "+ Tạo bài tập mới" để bắt đầu.</td></tr>';
+      }
+      return;
+    }
+
+    // Populate Exercise Meta Form
+    const titleInput = document.getElementById('ex-meta-title');
+    const tagInput = document.getElementById('ex-meta-tag');
+    const threshGoodInput = document.getElementById('ex-meta-thresh-good');
+    const threshVeryGoodInput = document.getElementById('ex-meta-thresh-verygood');
+    const maxScoreBadge = document.getElementById('teacher-practice-maxscore-badge');
+
+    if (titleInput) titleInput.value = ex.title || '';
+    if (tagInput) tagInput.value = ex.lesson_tag || '';
+    if (threshGoodInput) threshGoodInput.value = (ex.thresholds && ex.thresholds.good) || 25;
+    if (threshVeryGoodInput) threshVeryGoodInput.value = (ex.thresholds && ex.thresholds.very_good) || 31;
+    if (maxScoreBadge) maxScoreBadge.textContent = 'Tổng ' + (ex.total_score || 35) + ' điểm';
+
+    // Render Sections List in Builder
+    renderBuilderSectionsList(ex);
+
+    // Render Submissions Table
+    renderTeacherPracticeSubmissions(ex);
+  }
+
+  function renderBuilderSectionsList(ex) {
+    const listEl = document.getElementById('teacher-builder-sections-list');
+    if (!listEl) return;
+
+    if (!ex.sections || ex.sections.length === 0) {
+      listEl.innerHTML =
+        '<div class="quick-account-row" style="color:var(--color-muted-foreground);">Chưa có phần thi nào. Hãy bấm "+ Thêm phần" hoặc "Nhập bằng JSON" / "Dán từ Excel".</div>';
+      return;
+    }
+
+    const typeLabels = {
+      matching: '1. Nối cặp (matching)',
+      multiple_choice: '2. Trắc nghiệm (multiple_choice)',
+      fill_blank_wordbank: '3. Điền từ (fill_blank_wordbank)',
+      error_correction: '4. Sửa câu sai (error_correction)',
+      translation: '5. Dịch câu (translation)'
+    };
+
+    listEl.innerHTML = ex.sections
+      .map(function (sec, idx) {
+        let itemCount = 0;
+        if (sec.type === 'matching') {
+          itemCount = (sec.data && sec.data.left && sec.data.left.length) || 0;
+        } else if (sec.data && sec.data.items) {
+          itemCount = sec.data.items.length;
+        }
+
+        return (
+          '<div class="builder-section-row">' +
+          '<div style="display:flex;align-items:center;gap:12px;">' +
+          '<span class="practice-section-num-badge">P' +
+          (sec.section_num || idx + 1) +
+          '</span>' +
+          '<div>' +
+          '<div style="font-weight:700;color:var(--color-foreground);font-size:0.9375rem;">' +
+          escapeHtml(sec.title) +
+          '</div>' +
+          '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);">' +
+          '<span class="status-badge status-submitted" style="font-size:0.75rem;padding:1px 6px;">' +
+          escapeHtml(typeLabels[sec.type] || sec.type) +
+          '</span> • ' +
+          itemCount +
+          ' câu • Tối đa <strong>' +
+          sec.max_score +
+          ' điểm</strong>' +
+          '</div>' +
+          '</div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:6px;">' +
+          '<button type="button" class="btn btn-outline btn-sm" data-sec-move-up="' +
+          idx +
+          '"' +
+          (idx === 0 ? ' disabled' : '') +
+          ' title="Di chuyển lên">↑</button>' +
+          '<button type="button" class="btn btn-outline btn-sm" data-sec-move-down="' +
+          idx +
+          '"' +
+          (idx === ex.sections.length - 1 ? ' disabled' : '') +
+          ' title="Di chuyển xuống">↓</button>' +
+          '<button type="button" class="btn btn-outline btn-sm" data-sec-delete-idx="' +
+          idx +
+          '" style="color:var(--color-destructive);border-color:var(--color-destructive);" title="Xóa phần này">✕</button>' +
+          '</div>' +
+          '</div>'
+        );
+      })
+      .join('');
+
+    // Reorder & Delete listeners
+    listEl.querySelectorAll('[data-sec-move-up]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const idx = parseInt(btn.getAttribute('data-sec-move-up'), 10);
+        if (idx > 0) {
+          const temp = ex.sections[idx];
+          ex.sections[idx] = ex.sections[idx - 1];
+          ex.sections[idx - 1] = temp;
+          ex.sections.forEach(function (s, i) {
+            s.section_num = i + 1;
+          });
+          window.StudySnapStore.savePracticeExercise(state, ex);
+          renderBuilderSectionsList(ex);
+        }
+      });
+    });
+
+    listEl.querySelectorAll('[data-sec-move-down]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const idx = parseInt(btn.getAttribute('data-sec-move-down'), 10);
+        if (idx < ex.sections.length - 1) {
+          const temp = ex.sections[idx];
+          ex.sections[idx] = ex.sections[idx + 1];
+          ex.sections[idx + 1] = temp;
+          ex.sections.forEach(function (s, i) {
+            s.section_num = i + 1;
+          });
+          window.StudySnapStore.savePracticeExercise(state, ex);
+          renderBuilderSectionsList(ex);
+        }
+      });
+    });
+
+    listEl.querySelectorAll('[data-sec-delete-idx]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const idx = parseInt(btn.getAttribute('data-sec-delete-idx'), 10);
+        if (window.confirm('Em có chắc muốn xóa phần này khỏi bài tập không?')) {
+          ex.sections.splice(idx, 1);
+          ex.sections.forEach(function (s, i) {
+            s.section_num = i + 1;
+          });
+          let total = 0;
+          ex.sections.forEach(function (s) {
+            total += s.max_score || 0;
+          });
+          ex.total_score = total;
+          window.StudySnapStore.savePracticeExercise(state, ex);
+          renderTeacherPracticeTab();
+          showToast('Đã xóa phần bài tập!');
+        }
+      });
+    });
+  }
+
+  function renderTeacherPracticeSubmissions(ex) {
+    const tbody = document.getElementById('teacher-practice-submissions-tbody');
+    const countBadge = document.getElementById('teacher-practice-sub-count');
+    if (!tbody) return;
+
+    const subs = (state.practiceSubmissions || []).filter(function (s) {
+      return s.exercise_id === ex.exercise_id;
+    });
+
+    if (countBadge) {
+      countBadge.textContent = subs.length + ' bài nộp';
+    }
+
+    if (subs.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--color-muted-foreground);">' +
+        'Chưa có học sinh nào nộp bài tập này. Học sinh có thể làm trực tiếp tại Cổng Học sinh (Tab 2).' +
+        '</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = subs
+      .map(function (sub) {
+        const student = findStudent(sub.student_id);
+        const studentName = student ? student.full_name : sub.student_name;
+        const totalScore = sub.total_score || 0;
+        const maxScore = sub.max_score || ex.total_score || 35;
+
+        let ratingBadge = '<span class="status-badge status-graded">Rất tốt 🌟</span>';
+        if (sub.rating === 'good') {
+          ratingBadge = '<span class="status-badge status-submitted">Khá 👍</span>';
+        } else if (sub.rating === 'needs_review') {
+          ratingBadge = '<span class="status-badge status-missing">Cần ôn 📚</span>';
+        }
+
+        const secScores = sub.section_scores || {};
+        const breakdownStr = (ex.sections || [])
+          .map(function (sec, idx) {
+            const sc = secScores[sec.section_id] !== undefined ? secScores[sec.section_id] : 0;
+            return 'P' + (sec.section_num || idx + 1) + ': ' + sc + '/' + sec.max_score;
+          })
+          .join(' • ');
+
+        let hasPendingManual = false;
+        (ex.sections || []).forEach(function (sec) {
+          if (sec.type === 'translation') {
+            ((sec.data && sec.data.items) || []).forEach(function (item) {
+              if (item.mode === 'manual') {
+                const mg = sub.manual_grades && sub.manual_grades[item.id];
+                if (!mg) hasPendingManual = true;
+              }
+            });
+          }
+        });
+
+        const statusBadge = hasPendingManual
+          ? '<span class="status-badge status-submitted">Chờ chấm câu Dịch</span>'
+          : '<span class="status-badge status-graded">Đã chấm xong</span>';
+
+        const actionBtnText = hasPendingManual ? 'Chấm câu Dịch' : 'Xem &amp; Sửa điểm';
+        const actionBtnClass = hasPendingManual ? 'btn-primary' : 'btn-outline';
+
+        return (
+          '<tr>' +
+          '<td>' +
+          '<div style="font-weight:700;color:var(--color-foreground);">' +
+          escapeHtml(studentName) +
+          '</div>' +
+          '<div class="tabular-nums" style="font-size:0.8125rem;color:var(--color-muted-foreground);">' +
+          escapeHtml(sub.student_id) +
+          ' • ' +
+          escapeHtml(sub.submitted_at) +
+          '</div>' +
+          '</td>' +
+          '<td class="tabular-nums" style="font-weight:700;font-size:1.125rem;color:var(--color-primary-deep);">' +
+          totalScore +
+          '/' +
+          maxScore +
+          ' đ' +
+          '</td>' +
+          '<td>' +
+          ratingBadge +
+          '</td>' +
+          '<td class="tabular-nums" style="font-size:0.8125rem;color:var(--color-foreground);">' +
+          escapeHtml(breakdownStr) +
+          '</td>' +
+          '<td>' +
+          statusBadge +
+          '</td>' +
+          '<td>' +
+          '<button type="button" class="btn ' +
+          actionBtnClass +
+          ' btn-sm" data-open-manual-sub="' +
+          escapeHtml(sub.submission_id) +
+          '">' +
+          actionBtnText +
+          '</button>' +
+          '</td>' +
+          '</tr>'
+        );
+      })
+      .join('');
+
+    tbody.querySelectorAll('[data-open-manual-sub]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const subId = btn.getAttribute('data-open-manual-sub');
+        openManualGradingModal(subId);
+      });
+    });
+  }
+
+  function openManualGradingModal(submissionId) {
+    const sub = (state.practiceSubmissions || []).find(function (s) {
+      return s.submission_id === submissionId;
+    });
+    if (!sub) return;
+
+    const ex =
+      (state.practiceExercises || []).find(function (e) {
+        return e.exercise_id === sub.exercise_id;
+      }) || getActivePracticeExercise();
+
+    ui.activeGradingSubId = sub.submission_id;
+
+    const student = findStudent(sub.student_id);
+    const studentName = student ? student.full_name : sub.student_name;
+
+    const infoEl = document.getElementById('manual-grading-student-info');
+    if (infoEl) {
+      infoEl.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--color-surface-muted);padding:10px 14px;border-radius:var(--radius-md);">' +
+        '<div><strong>Học sinh:</strong> ' +
+        escapeHtml(studentName) +
+        ' (' +
+        escapeHtml(sub.student_id) +
+        ') • Nộp lúc: ' +
+        escapeHtml(sub.submitted_at) +
+        '</div>' +
+        '<div><strong>Điểm hiện tại:</strong> <span class="tabular-nums" style="color:var(--color-primary-deep);font-weight:700;">' +
+        sub.total_score +
+        '/' +
+        (sub.max_score || 35) +
+        ' đ</span></div>' +
+        '</div>';
+    }
+
+    const manualItems = [];
+    let translationSecId = null;
+    (ex.sections || []).forEach(function (sec) {
+      if (sec.type === 'translation') {
+        translationSecId = sec.section_id;
+        ((sec.data && sec.data.items) || []).forEach(function (item) {
+          if (item.mode === 'manual') {
+            manualItems.push({ secId: sec.section_id, item: item });
+          }
+        });
+      }
+    });
+
+    const container = document.getElementById('manual-grading-questions-container');
+    if (!container) return;
+
+    if (manualItems.length === 0) {
+      container.innerHTML =
+        '<p style="color:var(--color-muted-foreground);text-align:center;">Bài tập này không có câu Dịch nào cần chấm thủ công.</p>';
+    } else {
+      const studentTransAns = (sub.answers && sub.answers[translationSecId]) || {};
+      const manualGrades = sub.manual_grades || {};
+
+      container.innerHTML = manualItems
+        .map(function (entry, idx) {
+          const item = entry.item;
+          const userAns = studentTransAns[item.id] || '';
+          const mg = manualGrades[item.id] || {};
+          const currentScore = mg.score !== undefined ? mg.score : 1;
+          const currentComment = mg.comment || '';
+
+          return (
+            '<div class="surface-panel" style="padding:14px;border:1px solid var(--color-border-soft);">' +
+            '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;">' +
+            '<div style="font-weight:700;color:var(--color-foreground);font-size:0.9375rem;">' +
+            'Câu Dịch ' +
+            (idx + 1) +
+            ': <span style="font-size:1.125rem;color:var(--color-primary-deep);">' +
+            escapeHtml(item.prompt) +
+            '</span>' +
+            '</div>' +
+            '<span class="status-badge status-submitted" style="font-size:0.75rem;">Trung &rarr; Việt (zh&rarr;vi)</span>' +
+            '</div>' +
+            (item.grading_note
+              ? '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-bottom:8px;font-style:italic;">💡 <strong>Gợi ý chấm của đề:</strong> ' +
+                escapeHtml(item.grading_note) +
+                '</div>'
+              : '') +
+            '<div style="background:var(--color-background);padding:10px 12px;border-radius:var(--radius-md);margin-bottom:12px;border:1px solid var(--color-border-soft);">' +
+            '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);font-weight:600;">Bản dịch của học sinh:</div>' +
+            '<div style="font-size:1rem;font-weight:700;color:var(--color-foreground);margin-top:2px;">' +
+            (userAns
+              ? escapeHtml(userAns)
+              : '<em style="color:var(--color-destructive);">Chưa nhập câu dịch</em>') +
+            '</div>' +
+            '</div>' +
+            '<div class="form-row-2">' +
+            '<div class="form-group" style="margin-bottom:0;">' +
+            '<label class="form-label" style="font-size:0.8125rem;" for="manual-score-' +
+            escapeHtml(item.id) +
+            '">Điểm câu này (0 đến 1 điểm):</label>' +
+            '<input type="number" id="manual-score-' +
+            escapeHtml(item.id) +
+            '" class="form-control tabular-nums" min="0" max="1" step="0.5" value="' +
+            currentScore +
+            '" data-manual-item-score="' +
+            escapeHtml(item.id) +
+            '" required>' +
+            '</div>' +
+            '<div class="form-group" style="margin-bottom:0;">' +
+            '<label class="form-label" style="font-size:0.8125rem;" for="manual-comment-' +
+            escapeHtml(item.id) +
+            '">Lời nhận xét cho học sinh:</label>' +
+            '<input type="text" id="manual-comment-' +
+            escapeHtml(item.id) +
+            '" class="form-control" placeholder="Ví dụ: Dịch tự nhiên, đúng ngữ cảnh..." value="' +
+            escapeHtml(currentComment) +
+            '" data-manual-item-comment="' +
+            escapeHtml(item.id) +
+            '">' +
+            '</div>' +
+            '</div>' +
+            '</div>'
+          );
+        })
+        .join('');
+    }
+
+    const modal = document.getElementById('modal-manual-grading');
+    if (modal) modal.classList.add('is-visible');
+  }
+
+  function exportPracticeSubmissionsToCsv() {
+    const ex = getActivePracticeExercise();
+    if (!ex) return;
+
+    const subs = (state.practiceSubmissions || []).filter(function (s) {
+      return s.exercise_id === ex.exercise_id;
+    });
+
+    if (subs.length === 0) {
+      showToast('Chưa có bài nộp nào để xuất file Excel!');
+      return;
+    }
+
+    const headers = [
+      'Mã Học Sinh',
+      'Họ và Tên',
+      'Bài Tập',
+      'Điểm Tổng',
+      'Điểm Tối Đa',
+      'Xếp Loại',
+      'Phần 1: Nối từ',
+      'Phần 2: Trắc nghiệm',
+      'Phần 3: Điền từ',
+      'Phần 4: Sửa câu sai',
+      'Phần 5: Dịch',
+      'Thời Gian Nộp',
+      'Trạng Thái'
+    ];
+
+    const rows = [headers];
+    subs.forEach(function (sub) {
+      const student = findStudent(sub.student_id);
+      const studentName = student ? student.full_name : sub.student_name;
+      const secScores = sub.section_scores || {};
+
+      let p1 = 0,
+        p2 = 0,
+        p3 = 0,
+        p4 = 0,
+        p5 = 0;
+      (ex.sections || []).forEach(function (sec, idx) {
+        const sc = secScores[sec.section_id] !== undefined ? secScores[sec.section_id] : 0;
+        if (idx === 0) p1 = sc;
+        else if (idx === 1) p2 = sc;
+        else if (idx === 2) p3 = sc;
+        else if (idx === 3) p4 = sc;
+        else if (idx === 4) p5 = sc;
+      });
+
+      const ratingText =
+        sub.rating === 'very_good'
+          ? 'Rất tốt'
+          : sub.rating === 'good'
+          ? 'Khá'
+          : 'Cần ôn';
+
+      rows.push([
+        sub.student_id,
+        studentName,
+        ex.title,
+        sub.total_score,
+        sub.max_score || ex.total_score || 35,
+        ratingText,
+        p1,
+        p2,
+        p3,
+        p4,
+        p5,
+        sub.submitted_at,
+        sub.status === 'graded' ? 'Đã chấm' : 'Chờ chấm câu Dịch'
+      ]);
+    });
+
+    const csvContent =
+      '\uFEFF' +
+      rows
+        .map(function (r) {
+          return r
+            .map(function (cell) {
+              return '"' + String(cell || '').replace(/"/g, '""') + '"';
+            })
+            .join(',');
+        })
+        .join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'StudySnap_Diem_Luyen_Tap_' + (ex.exercise_id || 'HSK1') + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Đã xuất file Excel (CSV) điểm bài tập luyện tập!');
+  }
+
+  function handleJsonImport() {
+    const textarea = document.getElementById('json-import-textarea');
+    if (!textarea) return;
+    const raw = textarea.value.trim();
+    if (!raw) {
+      alert('Vui lòng dán mã JSON bài tập vào ô nhập!');
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed.exercise_id || !parsed.title || !Array.isArray(parsed.sections)) {
+        alert(
+          'Mã JSON không hợp lệ! Bắt buộc phải có các trường "exercise_id", "title" và mảng "sections".'
+        );
+        return;
+      }
+
+      window.StudySnapStore.savePracticeExercise(state, parsed);
+      ui.selectedPracticeExId = parsed.exercise_id;
+      renderTeacherPracticeTab();
+
+      const modal = document.getElementById('modal-json-import');
+      if (modal) modal.classList.remove('is-visible');
+      showToast('Đã nhập bài tập "' + parsed.title + '" từ JSON thành công!');
+    } catch (err) {
+      alert('Lỗi cú pháp JSON: ' + err.message);
+    }
+  }
+
+  function handleExcelPaste() {
+    const ex = getActivePracticeExercise();
+    if (!ex) return;
+    const typeSelect = document.getElementById('excel-target-section-type');
+    const textarea = document.getElementById('excel-paste-textarea');
+    if (!typeSelect || !textarea) return;
+
+    const raw = textarea.value.trim();
+    if (!raw) {
+      alert('Vui lòng dán các dòng dữ liệu từ bảng tính Excel vào ô nhập!');
+      return;
+    }
+
+    const targetType = typeSelect.value;
+    const lines = raw
+      .split(/\r?\n/)
+      .map(function (l) {
+        return l.trim();
+      })
+      .filter(function (l) {
+        return l.length > 0;
+      });
+
+    if (lines.length === 0) return;
+
+    let targetSec = (ex.sections || []).find(function (s) {
+      return s.type === targetType;
+    });
+    if (!targetSec) {
+      targetSec = {
+        section_id: 'sec_' + targetType + '_' + Date.now(),
+        section_num: (ex.sections || []).length + 1,
+        type: targetType,
+        title: 'Phần mới: ' + targetType,
+        description: 'Dữ liệu nhập từ Excel',
+        max_score: lines.length,
+        data: {}
+      };
+      if (!ex.sections) ex.sections = [];
+      ex.sections.push(targetSec);
+    }
+
+    if (targetType === 'matching') {
+      const left = [];
+      const right = [];
+      const answer = {};
+
+      lines.forEach(function (line, i) {
+        const parts = line.split('\t');
+        const hanzi = (parts[0] || '').trim();
+        const pinyin = (parts[1] || '').trim();
+        const text = (parts[2] || '').trim();
+        const leftId = i + 1;
+        const rightId = String.fromCharCode(65 + i);
+
+        if (hanzi) {
+          left.push({ id: leftId, hanzi: hanzi, pinyin: pinyin });
+          right.push({ id: rightId, text: text || hanzi });
+          answer[String(leftId)] = rightId;
+        }
+      });
+
+      targetSec.data = { left: left, right: right, answer: answer };
+      targetSec.max_score = left.length;
+    } else if (targetType === 'fill_blank_wordbank') {
+      const items = [];
+      const wordbank = [];
+
+      lines.forEach(function (line, i) {
+        const parts = line.split('\t');
+        const text = (parts[0] || '').trim();
+        const hint = (parts[1] || '').trim();
+        const ans = (parts[2] || '').trim();
+
+        if (text && ans) {
+          items.push({ id: 'FB_' + (i + 1), text: text, hint: hint, answer: ans });
+          if (wordbank.indexOf(ans) === -1) wordbank.push(ans);
+        }
+      });
+
+      targetSec.data = { wordbank: wordbank, items: items };
+      targetSec.max_score = items.length;
+    } else if (targetType === 'error_correction') {
+      const items = [];
+
+      lines.forEach(function (line, i) {
+        const parts = line.split('\t');
+        const wrong = (parts[0] || '').trim();
+        const situation = (parts[1] || '').trim();
+        const acceptedStr = (parts[2] || '').trim();
+        const explanation = (parts[3] || '').trim();
+
+        if (wrong) {
+          const accepted = acceptedStr
+            .split(/[\/,;]/)
+            .map(function (s) {
+              return s.trim();
+            })
+            .filter(Boolean);
+          items.push({
+            id: 'ERR_' + (i + 1),
+            wrong: wrong,
+            situation: situation,
+            accepted: accepted.length > 0 ? accepted : [acceptedStr],
+            explanation: explanation
+          });
+        }
+      });
+
+      targetSec.data = { items: items };
+      targetSec.max_score = items.length;
+    }
+
+    let totalScore = 0;
+    ex.sections.forEach(function (s) {
+      totalScore += s.max_score || 0;
+    });
+    ex.total_score = totalScore;
+
+    window.StudySnapStore.savePracticeExercise(state, ex);
+    renderTeacherPracticeTab();
+
+    const modal = document.getElementById('modal-excel-paste');
+    if (modal) modal.classList.remove('is-visible');
+    showToast('Đã nạp ' + lines.length + ' câu từ Excel vào dạng bài ' + targetType + '!');
+  }
+
+  function bindTeacherPracticeEvents() {
+    // 1. Practice Exercise selector dropdown
+    const selectEl = document.getElementById('teacher-practice-select');
+    if (selectEl) {
+      selectEl.addEventListener('change', function () {
+        ui.selectedPracticeExId = selectEl.value;
+        renderTeacherPracticeTab();
+      });
+    }
+
+    // 2. Create Practice Exercise Button
+    const btnCreateEx = document.getElementById('btn-create-practice-ex');
+    if (btnCreateEx) {
+      btnCreateEx.addEventListener('click', function () {
+        const title = window.prompt(
+          'Nhập tiêu đề bài tập mới:',
+          'Bài tập luyện tập cuối bài — HSK 1: Bài ' +
+            ((state.practiceExercises || []).length + 1)
+        );
+        if (!title || !title.trim()) return;
+
+        const newExId = 'EX_CUSTOM_' + Date.now();
+        const newEx = {
+          exercise_id: newExId,
+          title: title.trim(),
+          lesson_tag: 'Bài ' + ((state.practiceExercises || []).length + 1),
+          total_score: 35,
+          thresholds: { very_good: 31, good: 25 },
+          sections: [
+            {
+              section_id: 'sec_matching_' + Date.now(),
+              section_num: 1,
+              type: 'matching',
+              title: 'Phần 1: Nối từ (10 điểm)',
+              description: 'Nối chữ Hán và phiên âm pinyin ở cột trái với nghĩa tương ứng.',
+              max_score: 10,
+              data: { left: [], right: [], answer: {} }
+            },
+            {
+              section_id: 'sec_mc_' + Date.now(),
+              section_num: 2,
+              type: 'multiple_choice',
+              title: 'Phần 2: Trắc nghiệm (8 điểm)',
+              description: 'Chọn đáp án chính xác nhất.',
+              max_score: 8,
+              data: { items: [] }
+            },
+            {
+              section_id: 'sec_fill_' + Date.now(),
+              section_num: 3,
+              type: 'fill_blank_wordbank',
+              title: 'Phần 3: Điền từ có ngân hàng từ (7 điểm)',
+              description: 'Chọn từ trong ngân hàng từ để điền vào chỗ trống.',
+              max_score: 7,
+              data: { wordbank: [], items: [] }
+            },
+            {
+              section_id: 'sec_err_' + Date.now(),
+              section_num: 4,
+              type: 'error_correction',
+              title: 'Phần 4: Sửa câu sai (5 điểm)',
+              description: 'Viết lại câu đúng vào ô nhập.',
+              max_score: 5,
+              data: { items: [] }
+            },
+            {
+              section_id: 'sec_trans_' + Date.now(),
+              section_num: 5,
+              type: 'translation',
+              title: 'Phần 5: Dịch câu (5 điểm)',
+              description: 'Dịch câu theo hướng yêu cầu.',
+              max_score: 5,
+              data: { items: [] }
+            }
+          ]
+        };
+
+        window.StudySnapStore.savePracticeExercise(state, newEx);
+        ui.selectedPracticeExId = newExId;
+        renderTeacherPracticeTab();
+        showToast('Đã tạo bài tập mới: ' + title.trim());
+      });
+    }
+
+    // 3. Exercise Meta Form Submit
+    const metaForm = document.getElementById('teacher-exercise-meta-form');
+    if (metaForm) {
+      metaForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const ex = getActivePracticeExercise();
+        if (!ex) return;
+
+        ex.title = document.getElementById('ex-meta-title').value.trim();
+        ex.lesson_tag = document.getElementById('ex-meta-tag').value.trim();
+        ex.thresholds = {
+          good: parseInt(document.getElementById('ex-meta-thresh-good').value, 10) || 25,
+          very_good:
+            parseInt(document.getElementById('ex-meta-thresh-verygood').value, 10) || 31
+        };
+
+        let total = 0;
+        (ex.sections || []).forEach(function (s) {
+          total += s.max_score || 0;
+        });
+        ex.total_score = total;
+
+        window.StudySnapStore.savePracticeExercise(state, ex);
+        renderTeacherPracticeTab();
+        showToast('Đã lưu thay đổi bài tập thành công!');
+      });
+    }
+
+    // 4. Delete Current Exercise Button
+    const btnDeleteEx = document.getElementById('btn-delete-current-ex');
+    if (btnDeleteEx) {
+      btnDeleteEx.addEventListener('click', function () {
+        const ex = getActivePracticeExercise();
+        if (!ex) return;
+        if (
+          window.confirm(
+            'Em có chắc muốn xóa vĩnh viễn bài tập "' +
+              ex.title +
+              '" không? Toàn bộ câu hỏi và bài nộp sẽ bị xóa.'
+          )
+        ) {
+          window.StudySnapStore.deletePracticeExercise(state, ex.exercise_id);
+          ui.selectedPracticeExId =
+            state.practiceExercises && state.practiceExercises[0]
+              ? state.practiceExercises[0].exercise_id
+              : null;
+          renderTeacherPracticeTab();
+          showToast('Đã xóa bài tập!');
+        }
+      });
+    }
+
+    // 5. Add New Section Button
+    const btnAddNewSec = document.getElementById('btn-add-new-section');
+    if (btnAddNewSec) {
+      btnAddNewSec.addEventListener('click', function () {
+        const ex = getActivePracticeExercise();
+        if (!ex) return;
+
+        const typeChoice = window.prompt(
+          'Chọn dạng bài (nhập 1-5):\n1. matching (Nối cặp)\n2. multiple_choice (Trắc nghiệm)\n3. fill_blank_wordbank (Điền từ)\n4. error_correction (Sửa câu sai)\n5. translation (Dịch câu)',
+          '1'
+        );
+        const mapType = {
+          '1': { type: 'matching', title: 'Nối cặp', score: 10 },
+          '2': { type: 'multiple_choice', title: 'Trắc nghiệm', score: 8 },
+          '3': { type: 'fill_blank_wordbank', title: 'Điền từ có ngân hàng từ', score: 7 },
+          '4': { type: 'error_correction', title: 'Sửa câu sai', score: 5 },
+          '5': { type: 'translation', title: 'Dịch câu', score: 5 }
+        };
+
+        const chosen = mapType[String(typeChoice || '').trim()];
+        if (!chosen) return;
+
+        const newSec = {
+          section_id: 'sec_' + chosen.type + '_' + Date.now(),
+          section_num: (ex.sections || []).length + 1,
+          type: chosen.type,
+          title: 'Phần ' + ((ex.sections || []).length + 1) + ': ' + chosen.title,
+          description: 'Mô tả yêu cầu làm bài cho học sinh...',
+          max_score: chosen.score,
+          data: chosen.type === 'matching' ? { left: [], right: [], answer: {} } : { items: [] }
+        };
+
+        if (!ex.sections) ex.sections = [];
+        ex.sections.push(newSec);
+
+        let total = 0;
+        ex.sections.forEach(function (s) {
+          total += s.max_score || 0;
+        });
+        ex.total_score = total;
+
+        window.StudySnapStore.savePracticeExercise(state, ex);
+        renderTeacherPracticeTab();
+        showToast('Đã thêm phần mới vào bài tập!');
+      });
+    }
+
+    // 6. CSV Export Button
+    const btnExportCsv = document.getElementById('btn-export-practice-csv');
+    if (btnExportCsv) {
+      btnExportCsv.addEventListener('click', exportPracticeSubmissionsToCsv);
+    }
+
+    // 7. Modals: Open & Close bindings
+    // JSON Modal
+    const btnOpenJson = document.getElementById('btn-open-json-modal');
+    const modalJson = document.getElementById('modal-json-import');
+    const btnCloseJson = document.getElementById('btn-close-json-modal');
+    const btnCancelJson = document.getElementById('btn-cancel-json-modal');
+    const btnSubmitJson = document.getElementById('btn-submit-json-import');
+    const btnLoadSampleJson = document.getElementById('btn-load-sample-json');
+
+    if (btnOpenJson && modalJson) {
+      btnOpenJson.addEventListener('click', function () {
+        modalJson.classList.add('is-visible');
+      });
+    }
+    if (btnCloseJson && modalJson) {
+      btnCloseJson.addEventListener('click', function () {
+        modalJson.classList.remove('is-visible');
+      });
+    }
+    if (btnCancelJson && modalJson) {
+      btnCancelJson.addEventListener('click', function () {
+        modalJson.classList.remove('is-visible');
+      });
+    }
+    if (btnLoadSampleJson) {
+      btnLoadSampleJson.addEventListener('click', function () {
+        const sample =
+          (state.practiceExercises && state.practiceExercises[0]) || null;
+        const textarea = document.getElementById('json-import-textarea');
+        if (textarea && sample) {
+          textarea.value = JSON.stringify(sample, null, 2);
+        }
+      });
+    }
+    if (btnSubmitJson) {
+      btnSubmitJson.addEventListener('click', handleJsonImport);
+    }
+
+    // Excel Modal
+    const btnOpenExcel = document.getElementById('btn-open-excel-modal');
+    const modalExcel = document.getElementById('modal-excel-paste');
+    const btnCloseExcel = document.getElementById('btn-close-excel-modal');
+    const btnCancelExcel = document.getElementById('btn-cancel-excel-modal');
+    const btnSubmitExcel = document.getElementById('btn-submit-excel-paste');
+
+    if (btnOpenExcel && modalExcel) {
+      btnOpenExcel.addEventListener('click', function () {
+        modalExcel.classList.add('is-visible');
+      });
+    }
+    if (btnCloseExcel && modalExcel) {
+      btnCloseExcel.addEventListener('click', function () {
+        modalExcel.classList.remove('is-visible');
+      });
+    }
+    if (btnCancelExcel && modalExcel) {
+      btnCancelExcel.addEventListener('click', function () {
+        modalExcel.classList.remove('is-visible');
+      });
+    }
+    if (btnSubmitExcel) {
+      btnSubmitExcel.addEventListener('click', handleExcelPaste);
+    }
+
+    // Manual Grading Modal Close & Submit
+    const modalManual = document.getElementById('modal-manual-grading');
+    const btnCloseManual = document.getElementById('btn-close-manual-modal');
+    const btnCancelManual = document.getElementById('btn-cancel-manual-modal');
+    const manualForm = document.getElementById('manual-grading-form');
+
+    if (btnCloseManual && modalManual) {
+      btnCloseManual.addEventListener('click', function () {
+        modalManual.classList.remove('is-visible');
+      });
+    }
+    if (btnCancelManual && modalManual) {
+      btnCancelManual.addEventListener('click', function () {
+        modalManual.classList.remove('is-visible');
+      });
+    }
+
+    if (manualForm) {
+      manualForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        if (!ui.activeGradingSubId) return;
+
+        const sub = (state.practiceSubmissions || []).find(function (s) {
+          return s.submission_id === ui.activeGradingSubId;
+        });
+        if (!sub) return;
+
+        const ex =
+          (state.practiceExercises || []).find(function (e) {
+            return e.exercise_id === sub.exercise_id;
+          }) || getActivePracticeExercise();
+
+        const manualGrades = sub.manual_grades || {};
+        let manualSum = 0;
+
+        document.querySelectorAll('[data-manual-item-score]').forEach(function (inp) {
+          const itemId = inp.getAttribute('data-manual-item-score');
+          const score = parseFloat(inp.value) || 0;
+          const commentInp = document.querySelector(
+            '[data-manual-item-comment="' + itemId + '"]'
+          );
+          const comment = commentInp ? commentInp.value.trim() : '';
+          manualGrades[itemId] = { score: score, comment: comment };
+          manualSum += score;
+        });
+
+        // Recalculate translation section score:
+        let autoTransScore = 0;
+        let transSecId = null;
+        (ex.sections || []).forEach(function (sec) {
+          if (sec.type === 'translation') {
+            transSecId = sec.section_id;
+            ((sec.data && sec.data.items) || []).forEach(function (item) {
+              if (item.mode !== 'manual') {
+                const userVal =
+                  sub.answers && sub.answers[sec.section_id] && sub.answers[sec.section_id][item.id];
+                if (window.StudySnapStore.isAnswerMatch(userVal, item.accepted || [])) {
+                  autoTransScore += 1;
+                }
+              }
+            });
+          }
+        });
+
+        if (transSecId) {
+          if (!sub.section_scores) sub.section_scores = {};
+          sub.section_scores[transSecId] = autoTransScore + manualSum;
+        }
+
+        // Recalculate total score
+        let newTotal = 0;
+        Object.keys(sub.section_scores || {}).forEach(function (k) {
+          newTotal += Number(sub.section_scores[k] || 0);
+        });
+
+        const newRating = window.StudySnapStore.calculateRating(newTotal, ex.thresholds);
+
+        await window.StudySnapStore.gradeManualTranslation(
+          state,
+          sub.submission_id,
+          manualGrades,
+          newTotal,
+          newRating
+        );
+
+        if (modalManual) modalManual.classList.remove('is-visible');
+        renderTeacherPracticeTab();
+        showToast('Đã lưu điểm và nhận xét cho câu Dịch của học sinh thành công!');
+      });
+    }
+  }
+
   function switchTeacherTab(tabId) {
     ui.activeTab = tabId;
     document.querySelectorAll('[data-teacher-tab]').forEach(function (b) {
@@ -527,9 +1550,14 @@
     document.querySelectorAll('.module-section').forEach(function (sec) {
       sec.classList.toggle('is-active', sec.id === 'teacher-tab-' + tabId);
     });
+    if (tabId === 'practice') {
+      renderTeacherPracticeTab();
+    }
   }
 
   function bindEvents() {
+    bindTeacherPracticeEvents();
+
     document.querySelectorAll('[data-teacher-tab]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         switchTeacherTab(btn.getAttribute('data-teacher-tab'));
@@ -972,6 +2000,7 @@
     renderGradingPanel();
     renderProgressMatrix();
     renderStudentAccountsTab();
+    renderTeacherPracticeTab();
     renderContentAndExitLogsTab();
   }
 

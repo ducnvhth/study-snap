@@ -34,12 +34,15 @@
           <span>1. BVN &amp; Phản Hồi Giáo Viên</span>
         </button>
 
-        <button type="button" class="nav-tab" data-student-tab="exit-ticket">
+        <button type="button" class="nav-tab" data-student-tab="practice">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M9 11l3 3L22 4"></path>
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
           </svg>
-          <span>2. Bài Luyện Tập Cuối Giờ</span>
+          <span>2. Luyện Tập Cuối Bài (5 Dạng Bài)</span>
         </button>
 
         <button type="button" class="nav-tab" data-student-tab="vocabulary">
@@ -62,14 +65,14 @@
       <div>
         <h1 id="student-welcome-heading">Xin chào Nguyễn Minh Anh!</h1>
         <p id="student-welcome-desc">
-          Nộp bài tập về nhà bằng thu âm trực tiếp hoặc tải video, nghe giáo viên nhận xét bằng giọng nói (Voice Feedback), làm bài luyện tập cuối giờ và ôn từ vựng theo từng bài học hoặc tổng hợp cả khóa.
+          Nộp bài tập về nhà bằng thu âm trực tiếp hoặc tải video, nghe giáo viên nhận xét bằng giọng nói (Voice Feedback), làm Bài tập luyện tập cuối bài (5 dạng) có hệ thống tự chấm và ôn từ vựng theo bài hoặc tổng hợp.
         </p>
         <div class="banner-actions">
-          <button type="button" class="btn btn-primary" id="btn-banner-go-vocab-all">
-            <span>Ôn Tổng Hợp Tất Cả Từ Vựng</span>
+          <button type="button" class="btn btn-primary" id="btn-banner-go-practice">
+            <span>Làm Bài Tập Luyện Tập Cuối Bài</span>
           </button>
-          <button type="button" class="btn btn-outline" id="btn-banner-go-exit-ticket">
-            <span>Làm Bài Luyện Tập Cuối Giờ</span>
+          <button type="button" class="btn btn-outline" id="btn-banner-go-vocab-all">
+            <span>Ôn Tổng Hợp Tất Cả Từ Vựng</span>
           </button>
         </div>
       </div>
@@ -80,12 +83,12 @@
           <div class="stat-label">Bài tập về nhà đã nộp</div>
         </div>
         <div class="stat-tile">
-          <div class="stat-value tabular-nums" id="student-stat-hw-graded">2</div>
-          <div class="stat-label">Bài đã có phản hồi Voice GV</div>
+          <div class="stat-value tabular-nums" id="student-stat-practice-score">33/35</div>
+          <div class="stat-label">Điểm Luyện tập cuối bài</div>
         </div>
         <div class="stat-tile">
-          <div class="stat-value tabular-nums" id="student-stat-avg-score">9.3</div>
-          <div class="stat-label">Điểm BVN trung bình (thang 10)</div>
+          <div class="stat-value tabular-nums" id="student-stat-practice-rating">Rất tốt 🌟</div>
+          <div class="stat-label">Xếp loại luyện tập</div>
         </div>
         <div class="stat-tile">
           <div class="stat-value tabular-nums" id="student-stat-vocab-mastered">4/12</div>
@@ -224,40 +227,60 @@
       </section>
 
       <!-- ====================================================================
-           TAB 2: BÀI LUYỆN TẬP CUỐI GIỜ (EXIT TICKET)
+           TAB 2: BÀI TẬP LUYỆN TẬP CUỐI BÀI (5 DẠNG BÀI)
            ==================================================================== -->
-      <section id="student-tab-exit-ticket" class="module-section" aria-label="Bài luyện tập cuối giờ kiểm tra mức độ hiểu bài">
+      <section id="student-tab-practice" class="module-section" aria-label="Bài tập luyện tập cuối bài đa dạng 5 phần">
         <div class="surface-panel">
           <div class="panel-header">
             <div class="panel-title-row">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M9 11l3 3L22 4"></path>
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
               </svg>
-              <h2>Bài Luyện Tập Cuối Giờ — Kiểm Tra Hiểu Bài Ngay Sau Buổi Học</h2>
+              <h2 id="student-practice-title">Bài tập luyện tập cuối bài (HSK 1 – Bài 1, Tổng 35 điểm)</h2>
             </div>
-            <div class="filter-pill-group" id="student-exit-ticket-selector" role="tablist" aria-label="Chọn đề luyện tập cuối giờ">
+            <div class="filter-pill-group" id="student-practice-exercise-selector" role="tablist" aria-label="Chọn bài tập cần làm">
               <!-- Populated by js/student.js -->
             </div>
           </div>
 
-          <div class="quiz-layout-grid">
-            <!-- Khung câu hỏi tương tác -->
-            <div id="student-quiz-active-box">
-              <!-- Populated by js/student.js -->
+          <!-- Sticky / Top Progress & Auto-Save Draft Bar -->
+          <div class="practice-header-card">
+            <div class="practice-meta-row">
+              <span id="student-practice-progress-text" class="mono-text tabular-nums" style="font-weight:700;color:var(--color-primary-deep);">
+                Tiến độ làm bài: 0/35 câu (0%)
+              </span>
+              <span class="draft-saved-indicator" id="student-draft-status">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                <span id="student-draft-text">Sẵn sàng làm bài</span>
+              </span>
             </div>
-
-            <!-- Lịch sử làm bài luyện tập cuối giờ của Học sinh -->
-            <div>
-              <h3>Kết quả luyện tập cuối giờ của em</h3>
-              <p style="font-size: 0.875rem; color: var(--color-muted-foreground); margin-bottom: 12px;">
-                Điểm số được lưu tự động theo tài khoản học sinh của em và gửi về bảng theo dõi của giáo viên.
-              </p>
-              <div id="student-exit-ticket-history-list">
-                <!-- Populated by js/student.js -->
-              </div>
+            <div class="practice-progress-bar">
+              <div class="practice-progress-fill" id="student-practice-progress-fill" style="width: 0%;"></div>
             </div>
           </div>
+
+          <!-- Vùng kết quả sau khi nộp bài -->
+          <div id="student-practice-results-box" style="display: none;"></div>
+
+          <!-- Vùng hiển thị 5 phần câu hỏi -->
+          <form id="student-practice-form">
+            <div id="student-practice-sections-container">
+              <!-- Populated by js/student.js (Phần 1: Nối cặp, Phần 2: Trắc nghiệm, Phần 3: Điền từ, Phần 4: Sửa câu sai, Phần 5: Dịch) -->
+            </div>
+
+            <div class="banner-actions" style="margin-top: 24px; justify-content: flex-end;">
+              <button type="button" class="btn btn-outline" id="btn-reset-practice-draft">
+                <span>Làm lại từ đầu</span>
+              </button>
+              <button type="submit" class="btn btn-primary" id="btn-submit-practice">
+                <span>Nộp bài &amp; Chấm điểm toàn bộ</span>
+              </button>
+            </div>
+          </form>
         </div>
       </section>
 

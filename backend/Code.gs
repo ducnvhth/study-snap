@@ -12,7 +12,9 @@ const SHEET_NAMES = {
   ASSIGNMENTS: 'Assignments',
   SUBMISSIONS: 'Submissions',
   EXIT_TICKETS: 'ExitTickets',
-  VOCABULARY: 'Vocabulary'
+  VOCABULARY: 'Vocabulary',
+  PRACTICE_EXERCISES: 'PracticeExercises',
+  PRACTICE_SUBMISSIONS: 'PracticeSubmissions'
 };
 
 const DRIVE_FOLDER_NAME = 'StudySnap_Media_Uploads';
@@ -163,6 +165,41 @@ function doPost(e) {
       return jsonResponse({
         ok: true,
         assignment: result,
+        data: getBootstrapData_(ss)
+      });
+    }
+
+    if (action === 'submitPracticeExercise') {
+      const result = handleSubmitPracticeExercise_(ss, payload);
+      return jsonResponse({
+        ok: true,
+        practiceSubmission: result,
+        data: getBootstrapData_(ss)
+      });
+    }
+
+    if (action === 'gradeManualTranslation') {
+      const result = handleGradeManualTranslation_(ss, payload);
+      return jsonResponse({
+        ok: true,
+        practiceSubmission: result,
+        data: getBootstrapData_(ss)
+      });
+    }
+
+    if (action === 'savePracticeExercise') {
+      const result = handleSavePracticeExercise_(ss, payload);
+      return jsonResponse({
+        ok: true,
+        practiceExercise: result,
+        data: getBootstrapData_(ss)
+      });
+    }
+
+    if (action === 'deletePracticeExercise') {
+      handleDeletePracticeExercise_(ss, payload);
+      return jsonResponse({
+        ok: true,
         data: getBootstrapData_(ss)
       });
     }
@@ -354,7 +391,9 @@ function clearAllData() {
     SHEET_NAMES.ASSIGNMENTS,
     SHEET_NAMES.SUBMISSIONS,
     SHEET_NAMES.EXIT_TICKETS,
-    SHEET_NAMES.VOCABULARY
+    SHEET_NAMES.VOCABULARY,
+    SHEET_NAMES.PRACTICE_EXERCISES,
+    SHEET_NAMES.PRACTICE_SUBMISSIONS
   ];
 
   sheetsToClear.forEach(function (sheetName) {
@@ -435,6 +474,14 @@ function ensureSheetsExist_(ss) {
     {
       name: SHEET_NAMES.VOCABULARY,
       headers: ['vocab_id', 'lesson_id', 'lesson_title', 'word', 'ipa', 'part_of_speech', 'meaning_vi', 'example_en', 'example_vi']
+    },
+    {
+      name: SHEET_NAMES.PRACTICE_EXERCISES,
+      headers: ['exercise_id', 'title', 'lesson_tag', 'total_score', 'thresholds_json', 'sections_json', 'created_at']
+    },
+    {
+      name: SHEET_NAMES.PRACTICE_SUBMISSIONS,
+      headers: ['submission_id', 'exercise_id', 'student_id', 'student_name', 'total_score', 'max_score', 'rating', 'submitted_at', 'section_scores_json', 'answers_json', 'manual_grades_json', 'status']
     }
   ];
 
@@ -460,7 +507,9 @@ function getBootstrapData_(ss) {
     assignments: readSheetRows_(ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS)),
     submissions: readSheetRows_(ss.getSheetByName(SHEET_NAMES.SUBMISSIONS)),
     exitTicketLogs: readSheetRows_(ss.getSheetByName(SHEET_NAMES.EXIT_TICKETS)),
-    vocabulary: readSheetRows_(ss.getSheetByName(SHEET_NAMES.VOCABULARY))
+    vocabulary: readSheetRows_(ss.getSheetByName(SHEET_NAMES.VOCABULARY)),
+    practiceExercises: readSheetRows_(ss.getSheetByName(SHEET_NAMES.PRACTICE_EXERCISES)),
+    practiceSubmissions: readSheetRows_(ss.getSheetByName(SHEET_NAMES.PRACTICE_SUBMISSIONS))
   };
 }
 
@@ -778,6 +827,121 @@ function saveBase64MediaToDrive_(base64Data, mimeType, fileName) {
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
   return 'https://drive.google.com/uc?export=download&id=' + file.getId();
+}
+
+function handleSubmitPracticeExercise_(ss, payload) {
+  const sheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_SUBMISSIONS);
+  const exerciseId = String(payload.exercise_id || '');
+  const studentId = String(payload.student_id || '');
+  const nowStr = new Date().toLocaleString('vi-VN');
+
+  const values = sheet.getDataRange().getValues();
+  let foundRowIndex = -1;
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][1]) === exerciseId && String(values[i][2]) === studentId) {
+      foundRowIndex = i + 1;
+      break;
+    }
+  }
+
+  const subId = foundRowIndex > 0 ? values[foundRowIndex - 1][0] : ('PRAC_SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase());
+  const rowData = [
+    subId,
+    exerciseId,
+    studentId,
+    payload.student_name || '',
+    payload.total_score !== undefined ? payload.total_score : 0,
+    payload.max_score || 35,
+    payload.rating || '',
+    nowStr,
+    typeof payload.section_scores === 'object' ? JSON.stringify(payload.section_scores) : String(payload.section_scores_json || '{}'),
+    typeof payload.answers === 'object' ? JSON.stringify(payload.answers) : String(payload.answers_json || '{}'),
+    typeof payload.manual_grades === 'object' ? JSON.stringify(payload.manual_grades) : String(payload.manual_grades_json || '{}'),
+    payload.status || 'submitted'
+  ];
+
+  if (foundRowIndex > 0) {
+    sheet.getRange(foundRowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
+  return { submission_id: subId, status: rowData[11] };
+}
+
+function handleGradeManualTranslation_(ss, payload) {
+  const sheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_SUBMISSIONS);
+  const subId = String(payload.submission_id || '');
+  const values = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === subId) {
+      const existing = values[i];
+      const updatedRow = [
+        existing[0],
+        existing[1],
+        existing[2],
+        existing[3],
+        payload.total_score !== undefined ? payload.total_score : existing[4],
+        existing[5],
+        payload.rating || existing[6],
+        existing[7],
+        existing[8],
+        existing[9],
+        typeof payload.manual_grades === 'object' ? JSON.stringify(payload.manual_grades) : String(payload.manual_grades_json || existing[10]),
+        'graded'
+      ];
+      sheet.getRange(i + 1, 1, 1, updatedRow.length).setValues([updatedRow]);
+      return { submission_id: subId, status: 'graded', total_score: updatedRow[4] };
+    }
+  }
+  return null;
+}
+
+function handleSavePracticeExercise_(ss, payload) {
+  const sheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_EXERCISES);
+  const ex = payload.exercise || payload;
+  const exId = String(ex.exercise_id || ('EX_' + Date.now()));
+  const nowStr = new Date().toLocaleString('vi-VN');
+
+  const values = sheet.getDataRange().getValues();
+  let foundRowIndex = -1;
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === exId) {
+      foundRowIndex = i + 1;
+      break;
+    }
+  }
+
+  const rowData = [
+    exId,
+    ex.title || 'Bài tập mới',
+    ex.lesson_tag || 'Bài 1',
+    ex.total_score || 35,
+    typeof ex.thresholds === 'object' ? JSON.stringify(ex.thresholds) : String(ex.thresholds_json || '{"very_good":31,"good":25}'),
+    typeof ex.sections === 'object' ? JSON.stringify(ex.sections) : String(ex.sections_json || '[]'),
+    nowStr
+  ];
+
+  if (foundRowIndex > 0) {
+    sheet.getRange(foundRowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
+  return { exercise_id: exId };
+}
+
+function handleDeletePracticeExercise_(ss, payload) {
+  const sheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_EXERCISES);
+  const exId = String(payload.exercise_id || '');
+  const values = sheet.getDataRange().getValues();
+
+  for (let i = values.length - 1; i >= 1; i--) {
+    if (String(values[i][0]) === exId) {
+      sheet.deleteRow(i + 1);
+      return true;
+    }
+  }
+  return false;
 }
 
 function jsonResponse(obj) {

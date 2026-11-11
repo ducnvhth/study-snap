@@ -53,6 +53,17 @@
           </svg>
           <span>3. Kho Từ Vựng &amp; Kết Quả Cuối Giờ</span>
         </button>
+
+        <button type="button" class="nav-tab" data-teacher-tab="practice">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          <span>4. Bài Tập Luyện Tập Cuối Bài</span>
+        </button>
       </nav>
 
       <div class="utility-group">
@@ -258,6 +269,200 @@
       </section>
 
       <!-- ====================================================================
+           TAB 4: QUẢN LÝ BÀI TẬP LUYỆN TẬP CUỐI BÀI (5 DẠNG BÀI)
+           ==================================================================== -->
+      <section id="teacher-tab-practice" class="module-section" aria-label="Quản lý bài tập luyện tập cuối bài và chấm điểm">
+        <!-- Top Toolbar -->
+        <div class="matrix-toolbar" style="margin-bottom: 20px;">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <label for="teacher-practice-select" style="font-weight:700;color:var(--color-primary-deep);">Chọn bài tập:</label>
+            <select id="teacher-practice-select" class="form-control" style="min-width:280px;width:auto;"></select>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-create-practice-ex">
+              <span>+ Tạo bài tập mới</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-open-json-modal">
+              <span>Nhập bằng JSON</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-open-excel-modal">
+              <span>Dán từ Excel</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-export-practice-csv">
+              <span>Xuất điểm (CSV)</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="bvn-workspace-grid">
+          <!-- Cột Trái: Bảng kết quả bài nộp của học sinh & Chấm bài Manual -->
+          <div class="surface-panel">
+            <div class="panel-header">
+              <div class="panel-title-row">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                </svg>
+                <h2>Danh sách bài nộp &amp; Chấm câu Dịch</h2>
+              </div>
+              <span class="status-badge status-submitted" id="teacher-practice-sub-count">0 bài nộp</span>
+            </div>
+
+            <p style="color:var(--color-muted-foreground);font-size:0.875rem;">
+              Theo dõi điểm tự động (Phần 1–4) và chấm điểm thủ công cho các câu Dịch (Phần 5: zh→vi).
+            </p>
+
+            <div style="overflow-x:auto;">
+              <table class="vocab-manage-table" aria-label="Bảng điểm bài tập luyện tập của học sinh">
+                <thead>
+                  <tr>
+                    <th>Học sinh</th>
+                    <th>Điểm tổng</th>
+                    <th>Xếp loại</th>
+                    <th>Điểm 5 phần</th>
+                    <th>Trạng thái</th>
+                    <th>Hành động</th>
+                  </tr>
+                </thead>
+                <tbody id="teacher-practice-submissions-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Cột Phải: Cấu trúc Bài tập (Sections Builder) -->
+          <div class="surface-panel">
+            <div class="panel-header">
+              <div class="panel-title-row">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                </svg>
+                <h2>Cấu trúc bài tập &amp; Các phần thi</h2>
+              </div>
+              <span class="status-badge status-graded" id="teacher-practice-maxscore-badge">Tổng 35 điểm</span>
+            </div>
+
+            <form id="teacher-exercise-meta-form">
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label class="form-label" for="ex-meta-title">Tiêu đề bài tập</label>
+                  <input type="text" id="ex-meta-title" class="form-control" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="ex-meta-tag">Thuộc bài học</label>
+                  <input type="text" id="ex-meta-tag" class="form-control" placeholder="Ví dụ: Bài 1, HSK 1..." required>
+                </div>
+              </div>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label class="form-label" for="ex-meta-thresh-good">Ngưỡng đạt loại Khá (&ge; điểm)</label>
+                  <input type="number" id="ex-meta-thresh-good" class="form-control tabular-nums" value="25" min="1" max="100">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="ex-meta-thresh-verygood">Ngưỡng đạt loại Rất tốt (&ge; điểm)</label>
+                  <input type="number" id="ex-meta-thresh-verygood" class="form-control tabular-nums" value="31" min="1" max="100">
+                </div>
+              </div>
+
+              <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 10px;">
+                <h3 style="margin:0;font-size:1rem;color:var(--color-primary-deep);">Các phần bài tập theo thứ tự (5 dạng)</h3>
+                <button type="button" class="btn btn-outline btn-sm" id="btn-add-new-section">
+                  <span>+ Thêm phần</span>
+                </button>
+              </div>
+
+              <div id="teacher-builder-sections-list" class="builder-sections-list"></div>
+
+              <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+                <button type="button" class="btn btn-outline" id="btn-delete-current-ex" style="color:var(--color-destructive);border-color:var(--color-destructive);">
+                  <span>Xóa bài tập này</span>
+                </button>
+                <button type="submit" class="btn btn-primary" id="btn-save-exercise-meta">
+                  <span>Lưu thay đổi bài tập</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL 1: CHẤM DỊCH THỦ CÔNG (MANUAL GRADING MODAL) -->
+  <div class="modal-backdrop" id="modal-manual-grading" role="dialog" aria-modal="true" aria-labelledby="manual-grading-title">
+    <div class="modal-dialog" style="max-width: 680px;">
+      <div class="panel-header" style="margin-bottom: 16px;">
+        <div class="panel-title-row">
+          <h2 id="manual-grading-title">Chấm điểm câu Dịch thủ công (Phần 5: zh→vi)</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-manual-modal">✕</button>
+      </div>
+      <div id="manual-grading-student-info" style="font-size:0.9375rem;margin-bottom:14px;color:var(--color-foreground);"></div>
+      <form id="manual-grading-form">
+        <div id="manual-grading-questions-container" style="display:flex;flex-direction:column;gap:16px;max-height:60vh;overflow-y:auto;padding-right:4px;"></div>
+        <div class="banner-actions" style="margin-top:20px;justify-content:flex-end;">
+          <button type="button" class="btn btn-outline" id="btn-cancel-manual-modal">Hủy</button>
+          <button type="submit" class="btn btn-primary">Lưu điểm &amp; Nhận xét</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: NHẬP HÀNG LOẠT BẰNG JSON -->
+  <div class="modal-backdrop" id="modal-json-import" role="dialog" aria-modal="true" aria-labelledby="json-import-title">
+    <div class="modal-dialog" style="max-width: 720px;">
+      <div class="panel-header" style="margin-bottom: 16px;">
+        <div class="panel-title-row">
+          <h2 id="json-import-title">Nhập bài tập hàng loạt bằng JSON</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-json-modal">✕</button>
+      </div>
+      <p style="font-size:0.875rem;color:var(--color-muted-foreground);margin-bottom:12px;">
+        Dán cấu trúc JSON chứa đầy đủ 5 phần bài tập (matching, multiple_choice, fill_blank_wordbank, error_correction, translation).
+      </p>
+      <div style="display:flex;gap:10px;margin-bottom:12px;">
+        <button type="button" class="btn btn-outline btn-sm" id="btn-load-sample-json">
+          <span>Tải mẫu JSON HSK 1 Bài 1 chuẩn</span>
+        </button>
+      </div>
+      <textarea id="json-import-textarea" class="json-textarea-box" placeholder="Dán mã JSON bài tập vào đây..."></textarea>
+      <div class="banner-actions" style="margin-top:18px;justify-content:flex-end;">
+        <button type="button" class="btn btn-outline" id="btn-cancel-json-modal">Hủy</button>
+        <button type="button" class="btn btn-primary" id="btn-submit-json-import">Xác nhận nhập JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: DÁN TỪ EXCEL -->
+  <div class="modal-backdrop" id="modal-excel-paste" role="dialog" aria-modal="true" aria-labelledby="excel-paste-title">
+    <div class="modal-dialog" style="max-width: 680px;">
+      <div class="panel-header" style="margin-bottom: 16px;">
+        <div class="panel-title-row">
+          <h2 id="excel-paste-title">Dán câu hỏi nhanh từ bảng tính Excel / Google Sheets</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-excel-modal">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="excel-target-section-type">Chọn dạng bài muốn thêm từ Excel:</label>
+        <select id="excel-target-section-type" class="form-control">
+          <option value="matching">1. matching (Nối cặp: Cột 1 = Chữ Hán, Cột 2 = Pinyin, Cột 3 = Nghĩa tiếng Việt)</option>
+          <option value="fill_blank_wordbank">3. fill_blank_wordbank (Điền từ: Cột 1 = Câu có ____, Cột 2 = Nghĩa gợi ý, Cột 3 = Từ cần điền)</option>
+          <option value="error_correction">4. error_correction (Sửa câu sai: Cột 1 = Câu sai, Cột 2 = Tình huống, Cột 3 = Câu đúng, Cột 4 = Giải thích)</option>
+        </select>
+      </div>
+      <p style="font-size:0.875rem;color:var(--color-muted-foreground);margin-bottom:10px;">
+        Sao chép các ô từ Excel và dán trực tiếp vào ô bên dưới (mỗi dòng là một câu hỏi, các cột ngăn cách nhau bằng dấu Tab):
+      </p>
+      <textarea id="excel-paste-textarea" class="json-textarea-box" placeholder="Ví dụ nối từ:&#10;谢谢&#9;xièxie&#9;Cảm ơn&#10;再见&#9;zàijiàn&#9;Tạm biệt"></textarea>
+      <div class="banner-actions" style="margin-top:18px;justify-content:flex-end;">
+        <button type="button" class="btn btn-outline" id="btn-cancel-excel-modal">Hủy</button>
+        <button type="button" class="btn btn-primary" id="btn-submit-excel-paste">Thêm vào bài tập</button>
+      </div>
+    </div>
+  </div>
+
+      <!-- ====================================================================
            TAB 2: QUẢN LÝ & TẠO TÀI KHOẢN CHO HỌC SINH
            ==================================================================== -->
       <section id="teacher-tab-accounts" class="module-section" aria-label="Giáo viên tạo và quản lý tài khoản học sinh">
@@ -323,6 +528,200 @@
           </div>
         </div>
       </section>
+
+      <!-- ====================================================================
+           TAB 4: QUẢN LÝ BÀI TẬP LUYỆN TẬP CUỐI BÀI (5 DẠNG BÀI)
+           ==================================================================== -->
+      <section id="teacher-tab-practice" class="module-section" aria-label="Quản lý bài tập luyện tập cuối bài và chấm điểm">
+        <!-- Top Toolbar -->
+        <div class="matrix-toolbar" style="margin-bottom: 20px;">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <label for="teacher-practice-select" style="font-weight:700;color:var(--color-primary-deep);">Chọn bài tập:</label>
+            <select id="teacher-practice-select" class="form-control" style="min-width:280px;width:auto;"></select>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-create-practice-ex">
+              <span>+ Tạo bài tập mới</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-open-json-modal">
+              <span>Nhập bằng JSON</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-open-excel-modal">
+              <span>Dán từ Excel</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-export-practice-csv">
+              <span>Xuất điểm (CSV)</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="bvn-workspace-grid">
+          <!-- Cột Trái: Bảng kết quả bài nộp của học sinh & Chấm bài Manual -->
+          <div class="surface-panel">
+            <div class="panel-header">
+              <div class="panel-title-row">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                </svg>
+                <h2>Danh sách bài nộp &amp; Chấm câu Dịch</h2>
+              </div>
+              <span class="status-badge status-submitted" id="teacher-practice-sub-count">0 bài nộp</span>
+            </div>
+
+            <p style="color:var(--color-muted-foreground);font-size:0.875rem;">
+              Theo dõi điểm tự động (Phần 1–4) và chấm điểm thủ công cho các câu Dịch (Phần 5: zh→vi).
+            </p>
+
+            <div style="overflow-x:auto;">
+              <table class="vocab-manage-table" aria-label="Bảng điểm bài tập luyện tập của học sinh">
+                <thead>
+                  <tr>
+                    <th>Học sinh</th>
+                    <th>Điểm tổng</th>
+                    <th>Xếp loại</th>
+                    <th>Điểm 5 phần</th>
+                    <th>Trạng thái</th>
+                    <th>Hành động</th>
+                  </tr>
+                </thead>
+                <tbody id="teacher-practice-submissions-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Cột Phải: Cấu trúc Bài tập (Sections Builder) -->
+          <div class="surface-panel">
+            <div class="panel-header">
+              <div class="panel-title-row">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                </svg>
+                <h2>Cấu trúc bài tập &amp; Các phần thi</h2>
+              </div>
+              <span class="status-badge status-graded" id="teacher-practice-maxscore-badge">Tổng 35 điểm</span>
+            </div>
+
+            <form id="teacher-exercise-meta-form">
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label class="form-label" for="ex-meta-title">Tiêu đề bài tập</label>
+                  <input type="text" id="ex-meta-title" class="form-control" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="ex-meta-tag">Thuộc bài học</label>
+                  <input type="text" id="ex-meta-tag" class="form-control" placeholder="Ví dụ: Bài 1, HSK 1..." required>
+                </div>
+              </div>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label class="form-label" for="ex-meta-thresh-good">Ngưỡng đạt loại Khá (&ge; điểm)</label>
+                  <input type="number" id="ex-meta-thresh-good" class="form-control tabular-nums" value="25" min="1" max="100">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="ex-meta-thresh-verygood">Ngưỡng đạt loại Rất tốt (&ge; điểm)</label>
+                  <input type="number" id="ex-meta-thresh-verygood" class="form-control tabular-nums" value="31" min="1" max="100">
+                </div>
+              </div>
+
+              <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 10px;">
+                <h3 style="margin:0;font-size:1rem;color:var(--color-primary-deep);">Các phần bài tập theo thứ tự (5 dạng)</h3>
+                <button type="button" class="btn btn-outline btn-sm" id="btn-add-new-section">
+                  <span>+ Thêm phần</span>
+                </button>
+              </div>
+
+              <div id="teacher-builder-sections-list" class="builder-sections-list"></div>
+
+              <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+                <button type="button" class="btn btn-outline" id="btn-delete-current-ex" style="color:var(--color-destructive);border-color:var(--color-destructive);">
+                  <span>Xóa bài tập này</span>
+                </button>
+                <button type="submit" class="btn btn-primary" id="btn-save-exercise-meta">
+                  <span>Lưu thay đổi bài tập</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL 1: CHẤM DỊCH THỦ CÔNG (MANUAL GRADING MODAL) -->
+  <div class="modal-backdrop" id="modal-manual-grading" role="dialog" aria-modal="true" aria-labelledby="manual-grading-title">
+    <div class="modal-dialog" style="max-width: 680px;">
+      <div class="panel-header" style="margin-bottom: 16px;">
+        <div class="panel-title-row">
+          <h2 id="manual-grading-title">Chấm điểm câu Dịch thủ công (Phần 5: zh→vi)</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-manual-modal">✕</button>
+      </div>
+      <div id="manual-grading-student-info" style="font-size:0.9375rem;margin-bottom:14px;color:var(--color-foreground);"></div>
+      <form id="manual-grading-form">
+        <div id="manual-grading-questions-container" style="display:flex;flex-direction:column;gap:16px;max-height:60vh;overflow-y:auto;padding-right:4px;"></div>
+        <div class="banner-actions" style="margin-top:20px;justify-content:flex-end;">
+          <button type="button" class="btn btn-outline" id="btn-cancel-manual-modal">Hủy</button>
+          <button type="submit" class="btn btn-primary">Lưu điểm &amp; Nhận xét</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: NHẬP HÀNG LOẠT BẰNG JSON -->
+  <div class="modal-backdrop" id="modal-json-import" role="dialog" aria-modal="true" aria-labelledby="json-import-title">
+    <div class="modal-dialog" style="max-width: 720px;">
+      <div class="panel-header" style="margin-bottom: 16px;">
+        <div class="panel-title-row">
+          <h2 id="json-import-title">Nhập bài tập hàng loạt bằng JSON</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-json-modal">✕</button>
+      </div>
+      <p style="font-size:0.875rem;color:var(--color-muted-foreground);margin-bottom:12px;">
+        Dán cấu trúc JSON chứa đầy đủ 5 phần bài tập (matching, multiple_choice, fill_blank_wordbank, error_correction, translation).
+      </p>
+      <div style="display:flex;gap:10px;margin-bottom:12px;">
+        <button type="button" class="btn btn-outline btn-sm" id="btn-load-sample-json">
+          <span>Tải mẫu JSON HSK 1 Bài 1 chuẩn</span>
+        </button>
+      </div>
+      <textarea id="json-import-textarea" class="json-textarea-box" placeholder="Dán mã JSON bài tập vào đây..."></textarea>
+      <div class="banner-actions" style="margin-top:18px;justify-content:flex-end;">
+        <button type="button" class="btn btn-outline" id="btn-cancel-json-modal">Hủy</button>
+        <button type="button" class="btn btn-primary" id="btn-submit-json-import">Xác nhận nhập JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: DÁN TỪ EXCEL -->
+  <div class="modal-backdrop" id="modal-excel-paste" role="dialog" aria-modal="true" aria-labelledby="excel-paste-title">
+    <div class="modal-dialog" style="max-width: 680px;">
+      <div class="panel-header" style="margin-bottom: 16px;">
+        <div class="panel-title-row">
+          <h2 id="excel-paste-title">Dán câu hỏi nhanh từ bảng tính Excel / Google Sheets</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-excel-modal">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="excel-target-section-type">Chọn dạng bài muốn thêm từ Excel:</label>
+        <select id="excel-target-section-type" class="form-control">
+          <option value="matching">1. matching (Nối cặp: Cột 1 = Chữ Hán, Cột 2 = Pinyin, Cột 3 = Nghĩa tiếng Việt)</option>
+          <option value="fill_blank_wordbank">3. fill_blank_wordbank (Điền từ: Cột 1 = Câu có ____, Cột 2 = Nghĩa gợi ý, Cột 3 = Từ cần điền)</option>
+          <option value="error_correction">4. error_correction (Sửa câu sai: Cột 1 = Câu sai, Cột 2 = Tình huống, Cột 3 = Câu đúng, Cột 4 = Giải thích)</option>
+        </select>
+      </div>
+      <p style="font-size:0.875rem;color:var(--color-muted-foreground);margin-bottom:10px;">
+        Sao chép các ô từ Excel và dán trực tiếp vào ô bên dưới (mỗi dòng là một câu hỏi, các cột ngăn cách nhau bằng dấu Tab):
+      </p>
+      <textarea id="excel-paste-textarea" class="json-textarea-box" placeholder="Ví dụ nối từ:&#10;谢谢&#9;xièxie&#9;Cảm ơn&#10;再见&#9;zàijiàn&#9;Tạm biệt"></textarea>
+      <div class="banner-actions" style="margin-top:18px;justify-content:flex-end;">
+        <button type="button" class="btn btn-outline" id="btn-cancel-excel-modal">Hủy</button>
+        <button type="button" class="btn btn-primary" id="btn-submit-excel-paste">Thêm vào bài tập</button>
+      </div>
+    </div>
+  </div>
 
       <!-- ====================================================================
            TAB 3: QUẢN LÝ KHO TỪ VỰNG & KẾT QUẢ BÀI LUYỆN TẬP CUỐI GIỜ
@@ -468,6 +867,200 @@
           </div>
         </div>
       </section>
+
+      <!-- ====================================================================
+           TAB 4: QUẢN LÝ BÀI TẬP LUYỆN TẬP CUỐI BÀI (5 DẠNG BÀI)
+           ==================================================================== -->
+      <section id="teacher-tab-practice" class="module-section" aria-label="Quản lý bài tập luyện tập cuối bài và chấm điểm">
+        <!-- Top Toolbar -->
+        <div class="matrix-toolbar" style="margin-bottom: 20px;">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <label for="teacher-practice-select" style="font-weight:700;color:var(--color-primary-deep);">Chọn bài tập:</label>
+            <select id="teacher-practice-select" class="form-control" style="min-width:280px;width:auto;"></select>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-create-practice-ex">
+              <span>+ Tạo bài tập mới</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-open-json-modal">
+              <span>Nhập bằng JSON</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-open-excel-modal">
+              <span>Dán từ Excel</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-export-practice-csv">
+              <span>Xuất điểm (CSV)</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="bvn-workspace-grid">
+          <!-- Cột Trái: Bảng kết quả bài nộp của học sinh & Chấm bài Manual -->
+          <div class="surface-panel">
+            <div class="panel-header">
+              <div class="panel-title-row">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                </svg>
+                <h2>Danh sách bài nộp &amp; Chấm câu Dịch</h2>
+              </div>
+              <span class="status-badge status-submitted" id="teacher-practice-sub-count">0 bài nộp</span>
+            </div>
+
+            <p style="color:var(--color-muted-foreground);font-size:0.875rem;">
+              Theo dõi điểm tự động (Phần 1–4) và chấm điểm thủ công cho các câu Dịch (Phần 5: zh→vi).
+            </p>
+
+            <div style="overflow-x:auto;">
+              <table class="vocab-manage-table" aria-label="Bảng điểm bài tập luyện tập của học sinh">
+                <thead>
+                  <tr>
+                    <th>Học sinh</th>
+                    <th>Điểm tổng</th>
+                    <th>Xếp loại</th>
+                    <th>Điểm 5 phần</th>
+                    <th>Trạng thái</th>
+                    <th>Hành động</th>
+                  </tr>
+                </thead>
+                <tbody id="teacher-practice-submissions-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Cột Phải: Cấu trúc Bài tập (Sections Builder) -->
+          <div class="surface-panel">
+            <div class="panel-header">
+              <div class="panel-title-row">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                </svg>
+                <h2>Cấu trúc bài tập &amp; Các phần thi</h2>
+              </div>
+              <span class="status-badge status-graded" id="teacher-practice-maxscore-badge">Tổng 35 điểm</span>
+            </div>
+
+            <form id="teacher-exercise-meta-form">
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label class="form-label" for="ex-meta-title">Tiêu đề bài tập</label>
+                  <input type="text" id="ex-meta-title" class="form-control" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="ex-meta-tag">Thuộc bài học</label>
+                  <input type="text" id="ex-meta-tag" class="form-control" placeholder="Ví dụ: Bài 1, HSK 1..." required>
+                </div>
+              </div>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label class="form-label" for="ex-meta-thresh-good">Ngưỡng đạt loại Khá (&ge; điểm)</label>
+                  <input type="number" id="ex-meta-thresh-good" class="form-control tabular-nums" value="25" min="1" max="100">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="ex-meta-thresh-verygood">Ngưỡng đạt loại Rất tốt (&ge; điểm)</label>
+                  <input type="number" id="ex-meta-thresh-verygood" class="form-control tabular-nums" value="31" min="1" max="100">
+                </div>
+              </div>
+
+              <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 10px;">
+                <h3 style="margin:0;font-size:1rem;color:var(--color-primary-deep);">Các phần bài tập theo thứ tự (5 dạng)</h3>
+                <button type="button" class="btn btn-outline btn-sm" id="btn-add-new-section">
+                  <span>+ Thêm phần</span>
+                </button>
+              </div>
+
+              <div id="teacher-builder-sections-list" class="builder-sections-list"></div>
+
+              <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+                <button type="button" class="btn btn-outline" id="btn-delete-current-ex" style="color:var(--color-destructive);border-color:var(--color-destructive);">
+                  <span>Xóa bài tập này</span>
+                </button>
+                <button type="submit" class="btn btn-primary" id="btn-save-exercise-meta">
+                  <span>Lưu thay đổi bài tập</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL 1: CHẤM DỊCH THỦ CÔNG (MANUAL GRADING MODAL) -->
+  <div class="modal-backdrop" id="modal-manual-grading" role="dialog" aria-modal="true" aria-labelledby="manual-grading-title">
+    <div class="modal-dialog" style="max-width: 680px;">
+      <div class="panel-header" style="margin-bottom: 16px;">
+        <div class="panel-title-row">
+          <h2 id="manual-grading-title">Chấm điểm câu Dịch thủ công (Phần 5: zh→vi)</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-manual-modal">✕</button>
+      </div>
+      <div id="manual-grading-student-info" style="font-size:0.9375rem;margin-bottom:14px;color:var(--color-foreground);"></div>
+      <form id="manual-grading-form">
+        <div id="manual-grading-questions-container" style="display:flex;flex-direction:column;gap:16px;max-height:60vh;overflow-y:auto;padding-right:4px;"></div>
+        <div class="banner-actions" style="margin-top:20px;justify-content:flex-end;">
+          <button type="button" class="btn btn-outline" id="btn-cancel-manual-modal">Hủy</button>
+          <button type="submit" class="btn btn-primary">Lưu điểm &amp; Nhận xét</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: NHẬP HÀNG LOẠT BẰNG JSON -->
+  <div class="modal-backdrop" id="modal-json-import" role="dialog" aria-modal="true" aria-labelledby="json-import-title">
+    <div class="modal-dialog" style="max-width: 720px;">
+      <div class="panel-header" style="margin-bottom: 16px;">
+        <div class="panel-title-row">
+          <h2 id="json-import-title">Nhập bài tập hàng loạt bằng JSON</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-json-modal">✕</button>
+      </div>
+      <p style="font-size:0.875rem;color:var(--color-muted-foreground);margin-bottom:12px;">
+        Dán cấu trúc JSON chứa đầy đủ 5 phần bài tập (matching, multiple_choice, fill_blank_wordbank, error_correction, translation).
+      </p>
+      <div style="display:flex;gap:10px;margin-bottom:12px;">
+        <button type="button" class="btn btn-outline btn-sm" id="btn-load-sample-json">
+          <span>Tải mẫu JSON HSK 1 Bài 1 chuẩn</span>
+        </button>
+      </div>
+      <textarea id="json-import-textarea" class="json-textarea-box" placeholder="Dán mã JSON bài tập vào đây..."></textarea>
+      <div class="banner-actions" style="margin-top:18px;justify-content:flex-end;">
+        <button type="button" class="btn btn-outline" id="btn-cancel-json-modal">Hủy</button>
+        <button type="button" class="btn btn-primary" id="btn-submit-json-import">Xác nhận nhập JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: DÁN TỪ EXCEL -->
+  <div class="modal-backdrop" id="modal-excel-paste" role="dialog" aria-modal="true" aria-labelledby="excel-paste-title">
+    <div class="modal-dialog" style="max-width: 680px;">
+      <div class="panel-header" style="margin-bottom: 16px;">
+        <div class="panel-title-row">
+          <h2 id="excel-paste-title">Dán câu hỏi nhanh từ bảng tính Excel / Google Sheets</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-excel-modal">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="excel-target-section-type">Chọn dạng bài muốn thêm từ Excel:</label>
+        <select id="excel-target-section-type" class="form-control">
+          <option value="matching">1. matching (Nối cặp: Cột 1 = Chữ Hán, Cột 2 = Pinyin, Cột 3 = Nghĩa tiếng Việt)</option>
+          <option value="fill_blank_wordbank">3. fill_blank_wordbank (Điền từ: Cột 1 = Câu có ____, Cột 2 = Nghĩa gợi ý, Cột 3 = Từ cần điền)</option>
+          <option value="error_correction">4. error_correction (Sửa câu sai: Cột 1 = Câu sai, Cột 2 = Tình huống, Cột 3 = Câu đúng, Cột 4 = Giải thích)</option>
+        </select>
+      </div>
+      <p style="font-size:0.875rem;color:var(--color-muted-foreground);margin-bottom:10px;">
+        Sao chép các ô từ Excel và dán trực tiếp vào ô bên dưới (mỗi dòng là một câu hỏi, các cột ngăn cách nhau bằng dấu Tab):
+      </p>
+      <textarea id="excel-paste-textarea" class="json-textarea-box" placeholder="Ví dụ nối từ:&#10;谢谢&#9;xièxie&#9;Cảm ơn&#10;再见&#9;zàijiàn&#9;Tạm biệt"></textarea>
+      <div class="banner-actions" style="margin-top:18px;justify-content:flex-end;">
+        <button type="button" class="btn btn-outline" id="btn-cancel-excel-modal">Hủy</button>
+        <button type="button" class="btn btn-primary" id="btn-submit-excel-paste">Thêm vào bài tập</button>
+      </div>
+    </div>
+  </div>
     </main>
   </div>
 

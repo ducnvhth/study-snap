@@ -1223,7 +1223,496 @@ textarea.form-control {
   font-weight: 600;
 }
 
-@media (max-width: 1024px) {
+/* ==========================================================================
+   BÀI TẬP LUYỆN TẬP CUỐI BÀI (PRACTICE EXERCISES - 5 DẠNG BÀI)
+   ========================================================================== */
+
+.practice-header-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.practice-progress-bar {
+  width: 100%;
+  height: 10px;
+  background-color: var(--color-surface-muted);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.practice-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  border-radius: var(--radius-pill);
+  transition: width 240ms var(--ease-out);
+}
+
+.practice-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.875rem;
+}
+
+.draft-saved-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+}
+
+.practice-section-block {
+  margin-bottom: 28px;
+  padding-bottom: 24px;
+  border-bottom: 2px solid var(--color-surface-muted);
+}
+
+.practice-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.practice-section-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-primary-deep);
+  margin: 0;
+}
+
+.practice-section-desc {
+  font-size: 0.9375rem;
+  color: var(--color-muted-foreground);
+  margin-bottom: 16px;
+}
+
+/* 1. MATCHING (NỐI CẶP) */
+.matching-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.matching-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.matching-card {
+  min-height: 52px;
+  padding: 10px 14px;
+  border: 2px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-card);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  transition: all 160ms var(--ease-out);
+  user-select: none;
+}
+
+.matching-card:hover {
+  border-color: var(--color-primary);
+  background-color: var(--color-background);
+}
+
+.matching-card.is-selected {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-light);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.matching-card.is-paired {
+  border-color: var(--color-secondary);
+  background-color: var(--color-background);
+}
+
+.matching-card.is-correct,
+.mc-card.is-correct,
+.fill-blank-item.is-correct,
+.error-item-card.is-correct,
+.trans-item-card.is-correct {
+  border-color: var(--color-success);
+  background-color: var(--color-success-bg);
+}
+
+.matching-card.is-wrong,
+.mc-card.is-wrong,
+.fill-blank-item.is-wrong,
+.error-item-card.is-wrong,
+.trans-item-card.is-wrong {
+  border-color: var(--color-destructive);
+  background-color: var(--color-destructive-bg);
+}
+
+.trans-item-card.is-pending {
+  border-color: var(--color-border-soft);
+  background-color: var(--color-surface-muted);
+}
+
+.matching-hanzi {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-primary-deep);
+  line-height: 1.2;
+}
+
+.matching-pinyin {
+  font-size: 0.875rem;
+  font-family: var(--font-mono);
+  color: var(--color-accent);
+}
+
+.matching-badge {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface-muted);
+  color: var(--color-foreground);
+  border: 1px solid var(--color-border-soft);
+}
+
+.matching-card.is-paired .matching-badge {
+  background-color: var(--color-primary-deep);
+  color: var(--color-on-primary);
+}
+
+/* 2. MULTIPLE CHOICE (TRẮC NGHIỆM) */
+.mc-card {
+  padding: 16px;
+  margin-bottom: 14px;
+  background-color: var(--color-surface-card);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+}
+
+.mc-prompt-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mc-prompt-text {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin: 0;
+}
+
+.mc-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* 3. FILL BLANK WITH WORD BANK (ĐIỀN TỪ CÓ NGÂN HÀNG TỪ) */
+.wordbank-bar {
+  padding: 14px 16px;
+  background-color: var(--color-background);
+  border: 2px solid var(--color-border-soft);
+  border-radius: var(--radius-xl);
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wordbank-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-primary-deep);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.wordbank-chips-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wordbank-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  min-height: 42px;
+  background-color: var(--color-surface-card);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-pill);
+  color: var(--color-primary-deep);
+  font-size: 1.125rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 140ms var(--ease-out);
+  user-select: none;
+}
+
+.wordbank-chip:hover {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  transform: translateY(-2px);
+}
+
+.wordbank-chip.is-used {
+  opacity: 0.35;
+  border-color: var(--color-border-soft);
+  color: var(--color-muted-foreground);
+  pointer-events: none;
+  text-decoration: line-through;
+}
+
+.wordbank-chip.is-active {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.fill-blank-item {
+  padding: 16px;
+  margin-bottom: 12px;
+  background-color: var(--color-surface-card);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+}
+
+.fill-sentence-row {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  line-height: 1.6;
+}
+
+.blank-slot-target {
+  min-width: 90px;
+  min-height: 40px;
+  padding: 4px 12px;
+  border: 2px dashed var(--color-primary);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 1.125rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 150ms var(--ease-out);
+}
+
+.blank-slot-target:hover {
+  border-color: var(--color-accent);
+  background-color: var(--color-background);
+}
+
+.blank-slot-target.is-filled {
+  border-style: solid;
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-deep);
+}
+
+.blank-slot-target.is-correct {
+  border-color: var(--color-success);
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.blank-slot-target.is-wrong {
+  border-color: var(--color-destructive);
+  background-color: var(--color-destructive-bg);
+  color: var(--color-destructive-text);
+}
+
+.blank-remove-btn {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-destructive);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.fill-hint-text {
+  font-size: 0.875rem;
+  color: var(--color-muted-foreground);
+  margin-top: 6px;
+  font-style: italic;
+}
+
+/* 4. ERROR CORRECTION (SỬA CÂU SAI) */
+.error-item-card {
+  padding: 16px;
+  margin-bottom: 14px;
+  background-color: var(--color-surface-card);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+}
+
+.error-wrong-sentence {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-destructive);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.error-situation-tag {
+  font-size: 0.8125rem;
+  color: var(--color-muted-foreground);
+  margin-bottom: 10px;
+}
+
+.chinese-text-input {
+  font-size: 1.125rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  letter-spacing: 0.02em;
+}
+
+/* 5. TRANSLATION (DỊCH CÂU) */
+.trans-item-card {
+  padding: 16px;
+  margin-bottom: 14px;
+  background-color: var(--color-surface-card);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+}
+
+.trans-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.trans-prompt-sentence {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin-bottom: 10px;
+}
+
+/* RESULT & EVALUATION DASHBOARD */
+.practice-result-card {
+  padding: 24px;
+  background-color: var(--color-surface-card);
+  border: 2px solid var(--color-border-soft);
+  border-radius: var(--radius-2xl);
+  margin-bottom: 24px;
+}
+
+.practice-score-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.practice-big-score {
+  font-size: 2rem;
+  font-weight: 900;
+  font-family: var(--font-heading);
+  color: var(--color-primary-deep);
+}
+
+.section-score-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.section-score-box {
+  padding: 12px;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.section-score-box strong {
+  display: block;
+  font-size: 1.25rem;
+  color: var(--color-primary);
+  margin-top: 4px;
+}
+
+.explanation-reveal-box {
+  margin-top: 10px;
+  padding: 12px 14px;
+  background-color: var(--color-surface-muted);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+}
+
+/* TEACHER BUILDER & SUBMISSIONS UI */
+.builder-sections-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.builder-section-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+}
+
+.json-textarea-box {
+  width: 100%;
+  min-height: 200px;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  padding: 12px;
+  border: 2px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-muted);
+}
+
+@media (max-width: 768px) {
+  .matching-container,
+  .mc-options-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
   .workspace-banner,
   .bvn-workspace-grid,
   .vocab-workspace-grid,

@@ -468,6 +468,362 @@ window.STUDYSNAP_INITIAL_DATA = {
       total: 3,
       submitted_at: '10/11/2026 20:47'
     }
+  ],
+
+  practiceExercises: [
+    {
+      exercise_id: 'EX_HSK1_BAI_1',
+      title: 'Bài tập luyện tập cuối bài — HSK 1: Bài 1 (Chào hỏi & Làm quen)',
+      lesson_tag: 'Bài 1',
+      total_score: 35,
+      thresholds: {
+        very_good: 31,
+        good: 25
+      },
+      sections: [
+        {
+          section_id: 'sec_matching_1',
+          section_num: 1,
+          type: 'matching',
+          title: 'Phần 1: Nối từ (10 điểm)',
+          description: 'Nối chữ Hán và phiên âm pinyin ở cột trái với nghĩa tiếng Việt tương ứng ở cột phải. Mỗi cặp đúng được 1 điểm.',
+          max_score: 10,
+          data: {
+            left: [
+              { id: 1, hanzi: '你', pinyin: 'nǐ' },
+              { id: 2, hanzi: '好', pinyin: 'hǎo' },
+              { id: 3, hanzi: '您', pinyin: 'nín' },
+              { id: 4, hanzi: '你们', pinyin: 'nǐmen' },
+              { id: 5, hanzi: '对不起', pinyin: 'duìbuqǐ' },
+              { id: 6, hanzi: '没关系', pinyin: 'méi guānxi' },
+              { id: 7, hanzi: '谢谢', pinyin: 'xièxie' },
+              { id: 8, hanzi: '不客气', pinyin: 'bú kèqi' },
+              { id: 9, hanzi: '再见', pinyin: 'zàijiàn' },
+              { id: 10, hanzi: '老师', pinyin: 'lǎoshī' }
+            ],
+            right: [
+              { id: 'A', text: 'Bạn, cậu (ngôi thứ 2 số ít)' },
+              { id: 'B', text: 'Tốt, khỏe, an lành' },
+              { id: 'C', text: 'Ngài, ông, bà, thầy, cô (kính trọng)' },
+              { id: 'D', text: 'Các bạn, các cậu (số nhiều)' },
+              { id: 'E', text: 'Xin lỗi, có lỗi' },
+              { id: 'F', text: 'Không sao, không có gì' },
+              { id: 'G', text: 'Cảm ơn' },
+              { id: 'H', text: 'Đừng khách sáo, không có gì' },
+              { id: 'I', text: 'Tạm biệt, hẹn gặp lại' },
+              { id: 'J', text: 'Thầy giáo, cô giáo' }
+            ],
+            answer: {
+              '1': 'A',
+              '2': 'B',
+              '3': 'C',
+              '4': 'D',
+              '5': 'E',
+              '6': 'F',
+              '7': 'G',
+              '8': 'H',
+              '9': 'I',
+              '10': 'J'
+            }
+          }
+        },
+        {
+          section_id: 'sec_mc_2',
+          section_num: 2,
+          type: 'multiple_choice',
+          title: 'Phần 2: Trắc nghiệm (8 điểm)',
+          description: 'Chọn đáp án chính xác nhất cho từng câu hỏi về ngữ âm, chữ Hán và giao tiếp Bài 1. Mỗi câu đúng được 1 điểm.',
+          max_score: 8,
+          shuffle_options: true,
+          data: {
+            items: [
+              {
+                id: 'MC1',
+                prompt: 'Khi hai âm tiết mang thanh 3 đi liền nhau như "你好 (nǐ hǎo)", quy tắc biến điệu phát âm chuẩn là gì?',
+                options: [
+                  'Âm tiết thứ nhất biến điệu đọc thành thanh 2: ní hǎo',
+                  'Cả hai âm tiết đều chuyển thành thanh 1: nī hāo',
+                  'Âm tiết thứ hai biến điệu đọc thành thanh 4: nǐ hào',
+                  'Giữ nguyên thanh 3 đọc nặng cả hai âm: nǐ hǎo'
+                ],
+                correctIndex: 0,
+                explanation: 'Quy tắc biến điệu hai thanh 3 (3 + 3): Âm tiết thứ nhất bắt buộc biến âm thành thanh 2 (2 + 3 → ní hǎo).'
+              },
+              {
+                id: 'MC2',
+                prompt: 'Khi chào hỏi thầy cô giáo hoặc người lớn tuổi, từ xưng hô nào thể hiện sự tôn trọng, lễ phép nhất?',
+                options: [
+                  '您 (nín)',
+                  '你 (nǐ)',
+                  '他 (tā)',
+                  '它 (tā)'
+                ],
+                correctIndex: 0,
+                explanation: '"您" (nín) là đại từ nhân xưng ngôi thứ 2 số ít mang sắc thái kính cẩn, tôn kính (dưới chữ 你 có bộ Tâm 心).'
+              },
+              {
+                id: 'MC3',
+                prompt: 'Khi một người bạn nói "对不起 (duìbuqǐ)" với em, câu đáp lại lịch sự và tự nhiên nhất là:',
+                options: [
+                  '没关系 (méi guānxi)',
+                  '不客气 (bú kèqi)',
+                  '不用谢 (bú yòng xiè)',
+                  '再见 (zàijiàn)'
+                ],
+                correctIndex: 0,
+                explanation: 'Đáp lại lời xin lỗi "对不起" dùng "没关系" (không sao/không hề gì). Còn "不客气" dùng để đáp lại lời cảm ơn "谢谢".'
+              },
+              {
+                id: 'MC4',
+                prompt: 'Hậu tố nào dưới đây được thêm vào sau đại từ nhân xưng hoặc danh từ chỉ người để tạo dạng số nhiều?',
+                options: [
+                  '们 (men)',
+                  '吗 (ma)',
+                  '呢 (ne)',
+                  '好 (hǎo)'
+                ],
+                correctIndex: 0,
+                explanation: 'Hậu tố "们" (men) dùng để tạo số nhiều: 我们 (chúng tôi), 你们 (các bạn), 他们 (họ), 老师们 (các thầy cô).'
+              },
+              {
+                id: 'MC5',
+                prompt: 'Trong từ "谢谢 (xièxie)", âm tiết thứ hai mang thanh điệu gì?',
+                options: [
+                  'Thanh nhẹ (khinh thanh - đọc ngắn và nhẹ)',
+                  'Thanh 1 (âm cao ngang bằng phẳng)',
+                  'Thanh 4 (âm hạ nhanh, dứt khoát)',
+                  'Thanh 3 (âm trầm xuống rồi lên)'
+                ],
+                correctIndex: 0,
+                explanation: 'Trong từ lặp "谢谢", chữ thứ hai là thanh nhẹ (khinh thanh), phiên âm chuẩn là "xièxie".'
+              },
+              {
+                id: 'MC6',
+                prompt: 'Phó từ phủ định "不 (bù)" khi đứng trước chữ "客 (kè - mang thanh 4)" trong cụm "不客气" sẽ biến điệu như thế nào?',
+                options: [
+                  'Đọc thành thanh 2: bú (bú kèqi)',
+                  'Đọc thành thanh 1: bū (bū kèqi)',
+                  'Đọc thành thanh 3: bǔ (bǔ kèqi)',
+                  'Giữ nguyên thanh 4: bù (bù kèqi)'
+                ],
+                correctIndex: 0,
+                explanation: 'Quy tắc biến điệu của "不": khi đứng trước một âm tiết mang thanh 4, "不" (bù) biến điệu đọc thành thanh 2 "bú".'
+              },
+              {
+                id: 'MC7',
+                prompt: 'Chữ Hán nào dưới đây viết đúng của từ "Tạm biệt / Hẹn gặp lại"?',
+                options: [
+                  '再见 (zàijiàn)',
+                  '在见 (zàijiàn)',
+                  '见再 (jiànzài)',
+                  '现见 (xiànjiàn)'
+                ],
+                correctIndex: 0,
+                explanation: '"再见": chữ 再 (tái: lần nữa, lại) + 见 (kiến: gặp). "再见" có nghĩa gốc là "Hẹn gặp lại lần sau".'
+              },
+              {
+                id: 'MC8',
+                prompt: 'Câu nào sau đây là câu chào hỏi đúng ngữ pháp và lễ phép nhất khi gặp cô giáo vào buổi sáng?',
+                options: [
+                  '老师，您好！ (Lǎoshī, nín hǎo!)',
+                  '您们好老师！ (Nínmen hǎo lǎoshī!)',
+                  '你好老师，您好！ (Nǐ hǎo lǎoshī, nín hǎo!)',
+                  '老师你好们！ (Lǎoshī nǐ hǎo men!)'
+                ],
+                correctIndex: 0,
+                explanation: 'Cấu trúc chào hỏi chuẩn mực trong tiếng Trung: [Danh xưng/Chức danh] + [Lời chào]. Ví dụ: 老师，您好！ (Cô giáo, chào cô ạ!).'
+              }
+            ]
+          }
+        },
+        {
+          section_id: 'sec_fill_3',
+          section_num: 3,
+          type: 'fill_blank_wordbank',
+          title: 'Phần 3: Điền từ có ngân hàng từ (7 điểm)',
+          description: 'Chọn từ thích hợp từ ngân hàng từ bên trên để điền vào chỗ trống "____". Mỗi từ dùng 1 lần, mỗi câu đúng được 1 điểm.',
+          max_score: 7,
+          data: {
+            wordbank: ['您', '好', '们', '对不起', '没关系', '谢谢', '再见'],
+            items: [
+              {
+                id: 'FB1',
+                text: '李老师，____好！',
+                hint: 'Chào cô Lý ạ! (kính trọng)',
+                answer: '您'
+              },
+              {
+                id: 'FB2',
+                text: '同学____，早上好！',
+                hint: 'Chào các bạn học! (số nhiều)',
+                answer: '们'
+              },
+              {
+                id: 'FB3',
+                text: 'A: ____！ B: 没关系。',
+                hint: 'Xin lỗi!',
+                answer: '对不起'
+              },
+              {
+                id: 'FB4',
+                text: 'A: 对不起！ B: ____。',
+                hint: 'Không sao đâu / Không có gì.',
+                answer: '没关系'
+              },
+              {
+                id: 'FB5',
+                text: 'A: ____你的帮助！ B: 不客气。',
+                hint: 'Cảm ơn sự giúp đỡ của bạn!',
+                answer: '谢谢'
+              },
+              {
+                id: 'FB6',
+                text: '明天____，李老师！',
+                hint: 'Hẹn ngày mai gặp lại, cô Lý!',
+                answer: '再见'
+              },
+              {
+                id: 'FB7',
+                text: '认识你，我也很____。',
+                hint: 'Quen biết bạn, tôi cũng rất vui/tốt.',
+                answer: '好'
+              }
+            ]
+          }
+        },
+        {
+          section_id: 'sec_err_4',
+          section_num: 4,
+          type: 'error_correction',
+          title: 'Phần 4: Sửa câu sai (5 điểm)',
+          description: 'Mỗi câu dưới đây có một lỗi sai ngữ pháp hoặc dùng từ. Em hãy viết lại câu đúng vào ô nhập. Mỗi câu đúng được 1 điểm.',
+          max_score: 5,
+          data: {
+            items: [
+              {
+                id: 'ERR1',
+                wrong: '大家们好！',
+                situation: 'Chào mọi người trong lớp học',
+                accepted: ['大家好！', '大家好', '大家好!'],
+                explanation: 'Chữ "大家" (dàjiā) bản thân đã mang ý nghĩa số nhiều là "mọi người/cả nhà", do đó tuyệt đối không thêm hậu tố "们".'
+              },
+              {
+                id: 'ERR2',
+                wrong: '你叫什么名字是？',
+                situation: 'Hỏi tên một người bạn mới quen',
+                accepted: ['你叫什么名字？', '你叫什么名字', '你叫什么名字?'],
+                explanation: 'Trong tiếng Trung, câu hỏi dùng đại từ nghi vấn "什么" (gì/cái gì) không dùng động từ "是" đặt ở cuối câu.'
+              },
+              {
+                id: 'ERR3',
+                wrong: '我很很高兴。',
+                situation: 'Bày tỏ tâm trạng rất vui mừng khi gặp bạn',
+                accepted: ['我很高兴。', '我很高兴', '我很高兴.'],
+                explanation: 'Phó từ chỉ mức độ "很" (rất) là đơn âm tiết, không được lặp lại thành "很很". Đúng là "我很高兴。"'
+              },
+              {
+                id: 'ERR4',
+                wrong: '您们好！',
+                situation: 'Chào các thầy cô giáo trong trường',
+                accepted: ['老师们好！', '老师们好', '你们好！', '你们好', '老师好！', '老师好', '各位老师好！'],
+                explanation: '"您" là đại từ nhân xưng ngôi thứ 2 số ít trang trọng, không đi với "们". Muốn chào nhiều thầy cô dùng "老师们好！" hoặc "你们好！".'
+              },
+              {
+                id: 'ERR5',
+                wrong: '不谢谢。',
+                situation: 'Đáp lại lời cảm ơn của người khác',
+                accepted: ['不客气。', '不客气', '不用谢。', '不用谢', '不客气!', '不用谢!'],
+                explanation: 'Đáp lại lời cảm ơn "谢谢", người Trung Quốc dùng "不客气" (bú kèqi) hoặc "不用谢" (bú yòng xiè), tuyệt đối không dùng "不谢谢".'
+              }
+            ]
+          }
+        },
+        {
+          section_id: 'sec_trans_5',
+          section_num: 5,
+          type: 'translation',
+          title: 'Phần 5: Dịch câu (5 điểm)',
+          description: 'Dịch các câu sau theo đúng hướng yêu cầu (Việt → Trung hoặc Trung → Việt). Mỗi câu đúng được 1 điểm.',
+          max_score: 5,
+          data: {
+            items: [
+              {
+                id: 'TR1',
+                direction: 'vi->zh',
+                mode: 'exact',
+                prompt: 'Xin chào các bạn!',
+                accepted: ['你们好！', '你们好', '大家好！', '大家好', '你们好!', '大家好!'],
+                explanation: '"Các bạn" là 你们 (nǐmen), câu chào các bạn là 你们好！ Hoặc chào cả lớp/mọi người: 大家好！'
+              },
+              {
+                id: 'TR2',
+                direction: 'vi->zh',
+                mode: 'exact',
+                prompt: 'Thầy giáo, chào thầy ạ!',
+                accepted: ['老师，您好！', '老师，您好', '老师您好！', '老师您好', '老师，你好！', '老师你好！', '老师，您好!', '老师您好!'],
+                explanation: 'Chào thầy giáo lễ phép dùng kính ngữ: 老师，您好！'
+              },
+              {
+                id: 'TR3',
+                direction: 'vi->zh',
+                mode: 'exact',
+                prompt: 'Không sao đâu, đừng bận tâm.',
+                accepted: ['没关系。', '没关系', '没关系!', '没关系！', '没事。', '没事'],
+                explanation: 'Đáp lại lời xin lỗi hoặc trấn an người khác: 没关系。 (méi guānxi).'
+              },
+              {
+                id: 'TR4',
+                direction: 'zh->vi',
+                mode: 'manual',
+                prompt: '认识你，我也很高兴。 (Rènshi nǐ, wǒ yě hěn gāoxìng.)',
+                grading_note: 'Dịch đúng nghĩa: "Làm quen/Quen biết bạn, tôi cũng rất vui / Rất vui được làm quen với bạn."',
+                explanation: '认识 (rènshi: quen biết), 也 (yě: cũng), 高兴 (gāoxìng: vui mừng).'
+              },
+              {
+                id: 'TR5',
+                direction: 'zh->vi',
+                mode: 'manual',
+                prompt: '明天见，李老师！ (Míngtiān jiàn, Lǐ lǎoshī!)',
+                grading_note: 'Dịch đúng nghĩa: "Ngày mai gặp lại, cô Lý! / Hẹn ngày mai gặp lại cô Lý!"',
+                explanation: '明天 (míngtiān: ngày mai), 见 (jiàn: gặp), 李老师 (Lǐ lǎoshī: cô giáo Lý).'
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+
+  practiceSubmissions: [
+    {
+      submission_id: 'PRAC_SUB_01',
+      exercise_id: 'EX_HSK1_BAI_1',
+      student_id: 'HS01',
+      student_name: 'Nguyễn Minh Anh',
+      total_score: 33,
+      max_score: 35,
+      rating: 'very_good',
+      submitted_at: '11/11/2026 15:30',
+      section_scores: {
+        'sec_matching_1': 10,
+        'sec_mc_2': 8,
+        'sec_fill_3': 7,
+        'sec_err_4': 4,
+        'sec_trans_5': 4
+      },
+      answers: {
+        'sec_matching_1': { '1': 'A', '2': 'B', '3': 'C', '4': 'D', '5': 'E', '6': 'F', '7': 'G', '8': 'H', '9': 'I', '10': 'J' },
+        'sec_mc_2': { 'MC1': 0, 'MC2': 0, 'MC3': 0, 'MC4': 0, 'MC5': 0, 'MC6': 0, 'MC7': 0, 'MC8': 0 },
+        'sec_fill_3': { 'FB1': '您', 'FB2': '们', 'FB3': '对不起', 'FB4': '没关系', 'FB5': '谢谢', 'FB6': '再见', 'FB7': '好' },
+        'sec_err_4': { 'ERR1': '大家好！', 'ERR2': '你叫什么名字？', 'ERR3': '我很高兴。', 'ERR4': '老师们好！', 'ERR5': '谢谢你。' },
+        'sec_trans_5': { 'TR1': '你们好！', 'TR2': '老师，您好！', 'TR3': '没关系。', 'TR4': 'Quen biết bạn tôi cũng rất vui.', 'TR5': 'Hẹn gặp cô Lý ngày mai ạ!' }
+      },
+      manual_grades: {
+        'TR4': { score: 1, comment: 'Dịch rất tự nhiên và chính xác!' },
+        'TR5': { score: 1, comment: 'Đạt yêu cầu.' }
+      },
+      status: 'graded'
+    }
   ]
 };
 
@@ -503,6 +859,12 @@ window.StudySnapStore = (function () {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.students) && Array.isArray(parsed.teachers)) {
+          if (!Array.isArray(parsed.practiceExercises)) {
+            parsed.practiceExercises = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.practiceExercises || []));
+          }
+          if (!Array.isArray(parsed.practiceSubmissions)) {
+            parsed.practiceSubmissions = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.practiceSubmissions || []));
+          }
           return parsed;
         }
       }
@@ -680,8 +1042,97 @@ window.StudySnapStore = (function () {
         };
       });
     }
+
+    if (Array.isArray(remoteData.practiceExercises) && remoteData.practiceExercises.length > 0) {
+      stateObj.practiceExercises = remoteData.practiceExercises.map(function (pe) {
+        return {
+          exercise_id: pe.exercise_id,
+          title: pe.title,
+          lesson_tag: pe.lesson_tag,
+          total_score: Number(pe.total_score) || 35,
+          thresholds: typeof pe.thresholds_json === 'string' ? JSON.parse(pe.thresholds_json || '{}') : (pe.thresholds || { very_good: 31, good: 25 }),
+          sections: typeof pe.sections_json === 'string' ? JSON.parse(pe.sections_json || '[]') : (pe.sections || []),
+          created_at: formatCleanDate(pe.created_at) || ''
+        };
+      });
+    }
+
+    if (Array.isArray(remoteData.practiceSubmissions)) {
+      stateObj.practiceSubmissions = remoteData.practiceSubmissions.map(function (ps) {
+        return {
+          submission_id: ps.submission_id,
+          exercise_id: ps.exercise_id,
+          student_id: ps.student_id,
+          student_name: ps.student_name,
+          total_score: Number(ps.total_score) || 0,
+          max_score: Number(ps.max_score) || 35,
+          rating: ps.rating || '',
+          submitted_at: formatCleanDate(ps.submitted_at),
+          section_scores: typeof ps.section_scores_json === 'string' ? JSON.parse(ps.section_scores_json || '{}') : (ps.section_scores || {}),
+          answers: typeof ps.answers_json === 'string' ? JSON.parse(ps.answers_json || '{}') : (ps.answers || {}),
+          manual_grades: typeof ps.manual_grades_json === 'string' ? JSON.parse(ps.manual_grades_json || '{}') : (ps.manual_grades || {}),
+          status: ps.status || 'submitted'
+        };
+      });
+    }
+
     saveState(stateObj);
     return stateObj;
+  }
+
+  function normalizeChineseSentence(str) {
+    if (!str) return '';
+    let s = String(str).trim();
+    // Chuẩn hóa dấu toàn góc sang bán góc
+    s = s.replace(/！/g, '!')
+         .replace(/，/g, ',')
+         .replace(/。/g, '.')
+         .replace(/？/g, '?')
+         .replace(/：/g, ':')
+         .replace(/；/g, ';')
+         .replace(/[“”]/g, '"')
+         .replace(/[‘’]/g, "'")
+         .replace(/（/g, '(')
+         .replace(/）/g, ')');
+    // Không phân biệt hoa/thường với pinyin
+    s = s.toLowerCase();
+    // Bỏ khoảng trắng thừa
+    s = s.replace(/\s+/g, ' ').trim();
+    return s;
+  }
+
+  function isAnswerMatch(studentInput, acceptedList) {
+    if (!studentInput || !Array.isArray(acceptedList) || acceptedList.length === 0) return false;
+    const inputNorm = normalizeChineseSentence(studentInput).toLowerCase();
+    const inputNoPunct = inputNorm.replace(/[!.,?:;'"()]/g, '').trim();
+
+    return acceptedList.some(function (acc) {
+      const accNorm = normalizeChineseSentence(acc).toLowerCase();
+      if (inputNorm === accNorm) return true;
+      const accNoPunct = accNorm.replace(/[!.,?:;'"()]/g, '').trim();
+      return inputNoPunct === accNoPunct;
+    });
+  }
+
+  function isKeywordsMatch(studentInput, requiredKeywords) {
+    if (!studentInput || !Array.isArray(requiredKeywords) || requiredKeywords.length === 0) return false;
+    const inputNorm = normalizeChineseSentence(studentInput).toLowerCase();
+    return requiredKeywords.every(function (kw) {
+      const kwNorm = normalizeChineseSentence(kw).toLowerCase();
+      return inputNorm.indexOf(kwNorm) !== -1;
+    });
+  }
+
+  function calculateRating(score, thresholds) {
+    const t = thresholds || { very_good: 31, good: 25 };
+    const num = Number(score) || 0;
+    if (num >= (t.very_good || 31)) {
+      return { key: 'very_good', label: 'Rất tốt 🌟', badgeClass: 'status-graded' };
+    }
+    if (num >= (t.good || 25)) {
+      return { key: 'good', label: 'Khá 👍', badgeClass: 'status-submitted' };
+    }
+    return { key: 'needs_review', label: 'Cần ôn tập lại 📚', badgeClass: 'status-missing' };
   }
 
   async function clearAllTestData(stateObj) {
@@ -690,12 +1141,16 @@ window.StudySnapStore = (function () {
     stateObj.submissions = [];
     stateObj.vocabulary = [];
     stateObj.exitTicketLogs = [];
+    stateObj.practiceSubmissions = [];
     stateObj.isClearedForProduction = true;
     saveState(stateObj);
 
     try {
       Object.keys(localStorage).forEach(function (key) {
-        if (key.indexOf('studysnap_mastered_vocab') === 0) {
+        if (
+          key.indexOf('studysnap_mastered_vocab') === 0 ||
+          key.indexOf('studysnap_practice_draft_') === 0
+        ) {
           localStorage.removeItem(key);
         }
       });
@@ -748,6 +1203,82 @@ window.StudySnapStore = (function () {
     }
   }
 
+  async function submitPracticeExercise(stateObj, sub) {
+    if (!stateObj.practiceSubmissions) stateObj.practiceSubmissions = [];
+    const idx = stateObj.practiceSubmissions.findIndex(function (s) {
+      return s.exercise_id === sub.exercise_id && s.student_id === sub.student_id;
+    });
+    if (idx >= 0) {
+      stateObj.practiceSubmissions[idx] = sub;
+    } else {
+      stateObj.practiceSubmissions.push(sub);
+    }
+    saveState(stateObj);
+    return await syncPostToGas(stateObj, {
+      action: 'submitPracticeExercise',
+      exercise_id: sub.exercise_id,
+      student_id: sub.student_id,
+      student_name: sub.student_name,
+      total_score: sub.total_score,
+      max_score: sub.max_score,
+      rating: sub.rating,
+      section_scores: sub.section_scores,
+      answers: sub.answers,
+      manual_grades: sub.manual_grades,
+      status: sub.status
+    });
+  }
+
+  async function savePracticeExercise(stateObj, exercise) {
+    if (!stateObj.practiceExercises) stateObj.practiceExercises = [];
+    const idx = stateObj.practiceExercises.findIndex(function (e) {
+      return e.exercise_id === exercise.exercise_id;
+    });
+    if (idx >= 0) {
+      stateObj.practiceExercises[idx] = exercise;
+    } else {
+      stateObj.practiceExercises.push(exercise);
+    }
+    saveState(stateObj);
+    return await syncPostToGas(stateObj, {
+      action: 'savePracticeExercise',
+      exercise: exercise
+    });
+  }
+
+  async function deletePracticeExercise(stateObj, exerciseId) {
+    if (!stateObj.practiceExercises) return;
+    stateObj.practiceExercises = stateObj.practiceExercises.filter(function (e) {
+      return e.exercise_id !== exerciseId;
+    });
+    saveState(stateObj);
+    return await syncPostToGas(stateObj, {
+      action: 'deletePracticeExercise',
+      exercise_id: exerciseId
+    });
+  }
+
+  async function gradeManualTranslation(stateObj, submissionId, manualGrades, totalScore, rating) {
+    if (!stateObj.practiceSubmissions) return;
+    const sub = stateObj.practiceSubmissions.find(function (s) {
+      return s.submission_id === submissionId;
+    });
+    if (sub) {
+      sub.manual_grades = manualGrades;
+      sub.total_score = totalScore;
+      sub.rating = rating;
+      sub.status = 'graded';
+      saveState(stateObj);
+    }
+    return await syncPostToGas(stateObj, {
+      action: 'gradeManualTranslation',
+      submission_id: submissionId,
+      manual_grades: manualGrades,
+      total_score: totalScore,
+      rating: rating
+    });
+  }
+
   function getInitials(fullName) {
     const parts = String(fullName || '').trim().split(/\s+/);
     if (!parts.length || !parts[0]) return 'HS';
@@ -763,6 +1294,14 @@ window.StudySnapStore = (function () {
     syncPostToGas: syncPostToGas,
     fetchBootstrapFromGas: fetchBootstrapFromGas,
     clearAllTestData: clearAllTestData,
+    normalizeChineseSentence: normalizeChineseSentence,
+    isAnswerMatch: isAnswerMatch,
+    isKeywordsMatch: isKeywordsMatch,
+    calculateRating: calculateRating,
+    submitPracticeExercise: submitPracticeExercise,
+    savePracticeExercise: savePracticeExercise,
+    deletePracticeExercise: deletePracticeExercise,
+    gradeManualTranslation: gradeManualTranslation,
     getInitials: getInitials
   };
 })();
