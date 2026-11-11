@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cổng Giáo Viên — StudySnap (Chấm BVN Voice, Bảng Tổng Hợp &amp; Quản Lý Học Sinh)</title>
+  <meta name="description" content="Không gian làm việc dành riêng cho Giáo viên: chấm chữa BVN bằng giọng nói, theo dõi bảng tự động tổng hợp tiến độ, tạo tài khoản cho học sinh và quản lý kho từ vựng.">
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Header Cổng Giáo Viên -->
+    <header class="top-bar">
+      <div class="brand-group">
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <polyline points="16 11 18 13 22 9"></polyline>
+          </svg>
+        </div>
+        <div>
+          <div class="brand-title">StudySnap • Cổng Giáo Viên</div>
+          <p class="brand-subtitle" id="teacher-header-subtitle">Quản lý lớp học, chấm BVN Voice &amp; cấp tài khoản học sinh</p>
+        </div>
+      </div>
+
+      <nav class="module-nav" aria-label="Chức năng của Giáo viên">
+        <button type="button" class="nav-tab is-active" data-teacher-tab="grading">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" x2="12" y1="19" y2="22"></line>
+          </svg>
+          <span>1. Chữa BVN &amp; Bảng Tổng Hợp</span>
+        </button>
+
+        <button type="button" class="nav-tab" data-teacher-tab="accounts">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <line x1="19" x2="19" y1="8" y2="14"></line>
+            <line x1="22" x2="16" y1="11" y2="11"></line>
+          </svg>
+          <span>2. Tạo Tài Khoản Học Sinh</span>
+        </button>
+
+        <button type="button" class="nav-tab" data-teacher-tab="content">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+          <span>3. Kho Từ Vựng &amp; Kết Quả Cuối Giờ</span>
+        </button>
+      </nav>
+
+      <div class="utility-group">
+        <span class="user-profile-pill" id="teacher-profile-pill">Cô Nguyễn Thu Minh</span>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-teacher-logout">Đăng xuất</button>
+      </div>
+    </header>
+
+    <!-- Banner Thống Kê Lớp Học Dành Cho Giáo Viên -->
+    <section class="workspace-banner" aria-label="Thống kê tiến độ lớp học">
+      <div>
+        <h1>Bảng điều khiển giảng dạy &amp; chấm chữa bài</h1>
+        <p>
+          Theo dõi toàn diện tiến độ làm bài tập về nhà của học sinh, nghe bài thu âm/video và phản hồi bằng giọng nói (Voice Feedback), tạo tài khoản mới cho học sinh và cập nhật kho từ vựng theo bài.
+        </p>
+        <div class="banner-actions">
+          <button type="button" class="btn btn-primary" id="btn-jump-create-student">
+            <span>Tạo tài khoản cho học sinh mới</span>
+          </button>
+          <button type="button" class="btn btn-outline" id="btn-export-matrix-csv">
+            <span>Xuất Bảng tổng hợp (CSV)</span>
+          </button>
+          <button type="button" class="btn btn-outline" id="btn-clear-all-test-data" title="Xóa toàn bộ dữ liệu test để bắt đầu nhập dữ liệu lớp học thật">
+            <span>Xóa toàn bộ dữ liệu test</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="summary-stats-grid">
+        <div class="stat-tile">
+          <div class="stat-value tabular-nums" id="stat-total-students">6 học sinh</div>
+          <div class="stat-label">Tài khoản học sinh trong lớp</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-value tabular-nums" id="stat-submitted-count">7/18</div>
+          <div class="stat-label">Lượt BVN đã nộp</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-value tabular-nums" id="stat-missing-count">11</div>
+          <div class="stat-label">Lượt BVN chưa làm</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-value tabular-nums" id="stat-graded-count">4</div>
+          <div class="stat-label">Đã chữa &amp; phản hồi Voice</div>
+        </div>
+      </div>
+    </section>
+
+    <main>
+      <!-- ====================================================================
+           TAB 1: CHẤM CHỮA BVN VOICE & BẢNG TỰ ĐỘNG TỔNG HỢP TIẾN ĐỘ
+           ==================================================================== -->
+      <section id="teacher-tab-grading" class="module-section is-active" aria-label="Chấm chữa BVN và Bảng tự động tổng hợp">
+        <div class="bvn-workspace-grid">
+          <!-- Cột Trái: Giáo viên Chấm bài & Phản hồi bằng Voice -->
+          <div class="surface-panel" id="teacher-grading-panel">
+            <div class="panel-header">
+              <div class="panel-title-row">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                  <line x1="12" x2="12" y1="19" y2="22"></line>
+                </svg>
+                <h2>Chữa bài trực tiếp &amp; Phản hồi Voice</h2>
+              </div>
+              <span class="status-badge status-submitted" id="grading-target-badge">Nguyễn Minh Anh • Bài 1</span>
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label" for="grade-student-select">Chọn Học sinh cần chữa</label>
+                <select id="grade-student-select" class="form-control"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="grade-assignment-select">Chọn Bài tập về nhà</label>
+                <select id="grade-assignment-select" class="form-control"></select>
+              </div>
+            </div>
+
+            <div id="grading-student-media-box"></div>
+
+            <form id="teacher-grading-form">
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label class="form-label" for="teacher-score-input">Điểm số (Thang 10)</label>
+                  <input type="text" id="teacher-score-input" class="form-control tabular-nums" placeholder="Ví dụ: 9.5">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="btn-teacher-record-voice">Thu âm phản hồi (Voice Feedback)</label>
+                  <button type="button" class="btn btn-secondary" id="btn-teacher-record-voice" style="width:100%;">
+                    <span>Thu âm phản hồi Voice</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="recorder-status-bar" id="teacher-recorder-bar">
+                <div class="waveform-bars" aria-hidden="true">
+                  <span class="waveform-bar"></span>
+                  <span class="waveform-bar"></span>
+                  <span class="waveform-bar"></span>
+                  <span class="waveform-bar"></span>
+                  <span class="waveform-bar"></span>
+                  <span class="waveform-bar"></span>
+                </div>
+                <span style="font-size:0.875rem;color:var(--color-muted-foreground);">Thời lượng Voice Feedback:</span>
+                <span class="tabular-nums" id="teacher-record-timer">00:00</span>
+              </div>
+
+              <div id="teacher-voice-preview"></div>
+
+              <div class="form-group">
+                <label class="form-label" for="teacher-comment-input">Ý kiến nhận xét của Giáo viên (hiển thị luôn trong Bảng tổng hợp)</label>
+                <textarea id="teacher-comment-input" class="form-control" placeholder="Nhập nhận xét chi tiết về thanh điệu (thanh 1, 2, 3, 4), âm bật hơi, chữ Hán..."></textarea>
+              </div>
+
+              <button type="submit" class="btn btn-primary">
+                <span>Lưu chữa bài &amp; Cập nhật Bảng tổng hợp</span>
+              </button>
+            </form>
+          </div>
+
+          <!-- Cột Phải: Giáo viên Giao Bài Tập Về Nhà Mới -->
+          <div class="surface-panel">
+            <div class="panel-header">
+              <div class="panel-title-row">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="12" x2="12" y1="18" y2="12"></line>
+                  <line x1="9" x2="15" y1="15" y2="15"></line>
+                </svg>
+                <h2>Giao Bài tập về nhà mới cho lớp</h2>
+              </div>
+              <span class="status-badge status-graded">Tự động thêm cột vào Bảng tổng hợp</span>
+            </div>
+
+            <p style="color:var(--color-muted-foreground);">
+              Bài tập mới sau khi tạo sẽ xuất hiện ngay trên Cổng Học sinh để học sinh nộp file ghi âm/video và tự động thêm cột mới vào Bảng tổng hợp bên dưới.
+            </p>
+
+            <form id="create-assignment-form">
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label class="form-label" for="new-asg-tag">Nhãn bài học</label>
+                  <input type="text" id="new-asg-tag" class="form-control" placeholder="Ví dụ: Bài 4" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="new-asg-due">Hạn nộp bài</label>
+                  <input type="text" id="new-asg-due" class="form-control tabular-nums" placeholder="Ví dụ: 20/11/2026" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="new-asg-title">Tiêu đề Bài tập về nhà</label>
+                <input type="text" id="new-asg-title" class="form-control" placeholder="Ví dụ: Bài 4: Thu âm hội thoại đặt món ăn bằng tiếng Trung" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="new-asg-desc">Hướng dẫn &amp; Yêu cầu thu âm/quay video</label>
+                <textarea id="new-asg-desc" class="form-control" placeholder="Mô tả yêu cầu phát âm thanh điệu, chữ Hán, độ dài file ghi âm hoặc video..." required></textarea>
+              </div>
+
+              <button type="submit" class="btn btn-secondary">
+                <span>Giao bài tập mới cho cả lớp</span>
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Bảng Tự Động Tổng Hợp Tiến Độ Làm Bài & Ý Kiến Giáo Viên -->
+        <div class="surface-panel">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
+                <line x1="3" x2="21" y1="9" y2="9"></line>
+                <line x1="9" x2="9" y1="21" y2="9"></line>
+              </svg>
+              <h2>Bảng tự động tổng hợp tiến độ làm bài &amp; ý kiến giáo viên</h2>
+            </div>
+            <span class="status-badge status-graded">Hiển thị đầy đủ nhận xét từng bài</span>
+          </div>
+
+          <div class="matrix-toolbar">
+            <p style="margin:0;font-size:0.9375rem;color:var(--color-muted-foreground);">
+              Kiểm tra bài nào có bạn nào chưa làm, nghe nhanh bài nộp và xem toàn bộ ý kiến nhận xét + phản hồi Voice của giáo viên trong từng bài.
+            </p>
+            <div class="filter-pill-group" role="group" aria-label="Bộ lọc trạng thái học sinh">
+              <button type="button" class="filter-pill is-active" data-matrix-filter="all">Tất cả học sinh</button>
+              <button type="button" class="filter-pill" data-matrix-filter="missing">Có bài chưa làm</button>
+              <button type="button" class="filter-pill" data-matrix-filter="submitted">Đang chờ chữa</button>
+              <button type="button" class="filter-pill" data-matrix-filter="graded">Đã chữa bài</button>
+            </div>
+          </div>
+
+          <div class="matrix-scroll-wrapper">
+            <table class="progress-matrix-table">
+              <thead id="matrix-thead"></thead>
+              <tbody id="matrix-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           TAB 2: QUẢN LÝ & TẠO TÀI KHOẢN CHO HỌC SINH
+           ==================================================================== -->
+      <section id="teacher-tab-accounts" class="module-section" aria-label="Giáo viên tạo và quản lý tài khoản học sinh">
+        <div class="bvn-workspace-grid">
+          <!-- Cột Trái: Form Giáo viên Tạo Tài Khoản Học Sinh Mới -->
+          <div class="surface-panel">
+            <div class="panel-header">
+              <div class="panel-title-row">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <line x1="19" x2="19" y1="8" y2="14"></line>
+                  <line x1="22" x2="16" y1="11" y2="11"></line>
+                </svg>
+                <h2>Tạo tài khoản mới cho Học sinh</h2>
+              </div>
+              <span class="status-badge status-graded">Cấp quyền đăng nhập ngay</span>
+            </div>
+
+            <p style="color:var(--color-muted-foreground);">
+              Tài khoản sau khi tạo có thể dùng để đăng nhập ngay tại Cổng Học sinh và tự động được thêm vào Bảng tổng hợp tiến độ BVN.
+            </p>
+
+            <form id="create-student-account-form">
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label class="form-label" for="new-student-name">Họ và tên học sinh</label>
+                  <input type="text" id="new-student-name" class="form-control" placeholder="Ví dụ: Hoàng Phương Thảo" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="new-student-class">Lớp học</label>
+                  <input type="text" id="new-student-class" class="form-control" value="Lớp Tiếng Trung HSK 2" required>
+                </div>
+              </div>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label class="form-label" for="new-student-username">Tên đăng nhập</label>
+                  <input type="text" id="new-student-username" class="form-control tabular-nums" placeholder="Nhập tên đăng nhập cho học sinh" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="new-student-password">Mật khẩu khởi tạo</label>
+                  <input type="text" id="new-student-password" class="form-control tabular-nums" value="123456" required>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary">
+                <span>Tạo tài khoản Học sinh</span>
+              </button>
+            </form>
+          </div>
+
+          <!-- Cột Phải: Danh sách Tài khoản Học sinh Đã Cấp -->
+          <div class="surface-panel">
+            <div class="panel-header">
+              <div class="panel-title-row">
+                <h2>Danh sách tài khoản Học sinh trong lớp</h2>
+              </div>
+              <span class="status-badge status-submitted" id="student-accounts-count-badge">6 tài khoản</span>
+            </div>
+
+            <div id="student-accounts-list" class="quick-account-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           TAB 3: QUẢN LÝ KHO TỪ VỰNG & KẾT QUẢ BÀI LUYỆN TẬP CUỐI GIỜ
+           ==================================================================== -->
+      <section id="teacher-tab-content" class="module-section" aria-label="Quản lý kho từ vựng và kết quả cuối giờ">
+        <div class="bvn-workspace-grid">
+          <!-- Cột Trái: Thêm Từ Vựng Mới Theo Bài Học -->
+          <div class="surface-panel">
+            <div class="panel-header">
+              <div class="panel-title-row">
+                <h2>Thêm từ vựng mới vào bài học</h2>
+              </div>
+              <span class="status-badge status-graded">Đồng bộ sang Web Ôn Từ Vựng</span>
+            </div>
+
+            <form id="add-vocab-form">
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label class="form-label" for="new-vocab-lesson">Thuộc bài học</label>
+                  <select id="new-vocab-lesson" class="form-control">
+                    <option value="bai-1">Bài 1: Chào hỏi &amp; Làm quen</option>
+                    <option value="bai-2">Bài 2: Học tập &amp; Ngôn ngữ</option>
+                    <option value="bai-3">Bài 3: Mua sắm &amp; Đời sống</option>
+                    <option value="bai-4">Bài 4: Chủ đề Mở rộng</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="new-vocab-word">Từ vựng tiếng Trung (Chữ Hán)</label>
+                  <input type="text" id="new-vocab-word" class="form-control" placeholder="Ví dụ: 谢谢 hoặc 学习" required>
+                </div>
+              </div>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label class="form-label" for="new-vocab-ipa">Phiên âm (Pinyin)</label>
+                  <input type="text" id="new-vocab-ipa" class="form-control tabular-nums" placeholder="Ví dụ: xiè xie / xué xí">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="new-vocab-pos">Từ loại</label>
+                  <input type="text" id="new-vocab-pos" class="form-control" placeholder="Ví dụ: Động từ / Danh từ">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="new-vocab-meaning">Nghĩa tiếng Việt</label>
+                <input type="text" id="new-vocab-meaning" class="form-control" placeholder="Ví dụ: Cảm ơn / Học tập" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="new-vocab-example-en">Câu ví dụ tiếng Trung (kèm Pinyin)</label>
+                <input type="text" id="new-vocab-example-en" class="form-control" placeholder="Ví dụ: 谢谢你的帮助。(Xièxie nǐ de bāngzhù.)">
+              </div>
+
+              <button type="submit" class="btn btn-primary">
+                <span>Thêm từ vựng vào bài học</span>
+              </button>
+            </form>
+          </div>
+
+          <!-- Cột Phải: Kết quả Bài Luyện Tập Cuối Giờ (Exit Ticket) Của Cả Lớp -->
+          <div class="surface-panel">
+            <div class="panel-header">
+              <div class="panel-title-row">
+                <h2>Kết quả Bài luyện tập cuối giờ của học sinh</h2>
+              </div>
+              <span class="status-badge status-graded">Thay thế Google Forms</span>
+            </div>
+
+            <p style="color:var(--color-muted-foreground);">
+              Danh sách điểm số và mức độ hiểu bài của học sinh ngay sau khi làm bài luyện tập cuối giờ trên cổng Học sinh.
+            </p>
+
+            <div id="teacher-exit-ticket-logs"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast-banner" id="toast-banner" role="status" aria-live="polite">
+    <span id="toast-message">Đã lưu thay đổi!</span>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/teacher.js"></script>
+</body>
+</html>
+

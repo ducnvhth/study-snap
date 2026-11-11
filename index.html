@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng nhập StudySnap — Cổng Giáo viên &amp; Học sinh</title>
+  <meta name="description" content="Cổng đăng nhập phân quyền dành cho Giáo viên và Học sinh trên nền tảng học tập tương tác StudySnap.">
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <div class="login-shell">
+    <!-- Top Header -->
+    <header class="top-bar">
+      <div class="brand-group">
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+          </svg>
+        </div>
+        <div>
+          <div class="brand-title">StudySnap</div>
+          <p class="brand-subtitle">Nền tảng BVN Đa phương tiện, Bài cuối giờ &amp; Web ôn từ vựng</p>
+        </div>
+      </div>
+
+      <div class="utility-group">
+        <span class="status-badge status-graded">Hệ thống học tập trực tuyến</span>
+      </div>
+    </header>
+
+    <!-- Active Session Banner (hiển thị nếu đã đăng nhập trước đó) -->
+    <section id="active-session-banner" class="surface-panel" style="display:none;margin-bottom:24px;" aria-label="Phiên đăng nhập hiện tại">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+        <div>
+          <h2 id="active-session-title" style="margin-bottom:4px;">Xin chào!</h2>
+          <p id="active-session-desc" style="margin:0;color:var(--color-muted-foreground);">Bạn đang có phiên đăng nhập hoạt động.</p>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <a id="btn-continue-session" href="student.html" class="btn btn-primary">Vào không gian làm việc</a>
+          <button type="button" id="btn-clear-session" class="btn btn-outline">Đăng xuất tài khoản này</button>
+        </div>
+      </div>
+    </section>
+
+    <main class="login-grid">
+      <!-- Cột Trái: Biểu mẫu Đăng nhập Phân quyền -->
+      <section class="surface-panel" aria-label="Biểu mẫu đăng nhập">
+        <div class="panel-header">
+          <div class="panel-title-row">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <h1>Đăng nhập hệ thống</h1>
+          </div>
+          <span class="status-badge status-graded" id="selected-role-badge">Vai trò: Học sinh</span>
+        </div>
+
+        <p style="color:var(--color-muted-foreground);">
+          Vui lòng chọn đúng vai trò và nhập thông tin tài khoản đã được cấp để truy cập không gian học tập hoặc quản lý lớp học.
+        </p>
+
+        <div class="role-switch-group" role="group" aria-label="Chọn vai trò đăng nhập">
+          <button type="button" class="role-switch-btn is-active" data-role-tab="student">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <span>Cổng Học sinh</span>
+          </button>
+          <button type="button" class="role-switch-btn" data-role-tab="teacher">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <polyline points="16 11 18 13 22 9"></polyline>
+            </svg>
+            <span>Cổng Giáo viên</span>
+          </button>
+        </div>
+
+        <div id="login-error-box" class="form-error-box" role="alert"></div>
+
+        <form id="login-form">
+          <div class="form-group">
+            <label class="form-label" for="login-username" id="login-username-label">Tên đăng nhập hoặc Mã học sinh</label>
+            <input
+              type="text"
+              id="login-username"
+              class="form-control"
+              autocomplete="username"
+              placeholder="Nhập tên đăng nhập được cấp"
+              required
+            >
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="login-password">Mật khẩu</label>
+            <div class="password-input-wrap">
+              <input
+                type="password"
+                id="login-password"
+                class="form-control"
+                autocomplete="current-password"
+                placeholder="Nhập mật khẩu của bạn"
+                required
+              >
+              <button type="button" class="btn btn-outline btn-sm" id="btn-toggle-password" aria-label="Hiện hoặc ẩn mật khẩu">
+                Hiện
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+              <polyline points="10 17 15 12 10 7"></polyline>
+              <line x1="15" x2="3" y1="12" y2="12"></line>
+            </svg>
+            <span id="login-submit-text">Đăng nhập vào Cổng Học sinh</span>
+          </button>
+        </form>
+      </section>
+
+      <!-- Cột Phải: Giới thiệu Tính năng Theo Vai trò -->
+      <section class="surface-panel" aria-label="Hướng dẫn không gian học tập">
+        <div class="panel-header">
+          <div class="panel-title-row">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+              <line x1="12" x2="12" y1="19" y2="22"></line>
+            </svg>
+            <h2>Tính năng theo từng vai trò</h2>
+          </div>
+          <span class="status-badge status-submitted">Tương tác trực tiếp</span>
+        </div>
+
+        <div class="assignment-brief-box">
+          <div class="assignment-brief-title">1. Dành cho Học sinh</div>
+          <p class="assignment-brief-desc">
+            Nộp bài tập về nhà bằng thu âm trực tiếp hoặc tải lên file ghi âm/video, nghe phản hồi chữa phát âm bằng giọng nói của giáo viên, làm bài luyện tập cuối giờ và ôn từ vựng theo từng bài học (Bài 1, Bài 2...) hoặc ôn tổng hợp toàn khóa.
+          </p>
+        </div>
+
+        <div class="assignment-brief-box">
+          <div class="assignment-brief-title">2. Dành cho Giáo viên</div>
+          <p class="assignment-brief-desc">
+            Nghe và chấm chữa bài tập về nhà trực tiếp kèm ghi âm phản hồi bằng giọng nói (Voice Feedback), theo dõi bảng tự động tổng hợp tiến độ làm bài và nhận xét của cả lớp, giao bài tập mới và cấp tài khoản cho học sinh.
+          </p>
+        </div>
+
+        <p style="margin:12px 0 0;font-size:0.875rem;color:var(--color-muted-foreground);">
+          Nếu học sinh quên mật khẩu hoặc chưa có tài khoản, vui lòng liên hệ giáo viên phụ trách lớp để được cấp mới hoặc đặt lại mật khẩu.
+        </p>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast-banner" id="toast-banner" role="status" aria-live="polite">
+    <span id="toast-message">Thông báo</span>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/login.js"></script>
+</body>
+</html>

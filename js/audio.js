@@ -1,0 +1,576 @@
+/**
+ * StudySnap — Bộ xử lý Ghi âm Giọng nói (MediaRecorder), Tải file Audio/Video
+ * & Trình phát Voice tương tác (Play/Pause, Tua đoạn cần nghe, -5s, Thời lượng 00:00 / 01:18)
+ */
+
+window.StudySnapAudio = (function () {
+  let activeRecorder = null;
+  let recordedChunks = [];
+  let timerInterval = null;
+  let startTime = 0;
+
+  // Quản lý các phiên phát âm thanh tương tác (Play / Pause / Seek / Time readout)
+  const playerSessions = {};
+  let activePlayerId = null;
+
+  const PLAYER_ICONS = {
+    play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>',
+    pause: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>',
+    rewind: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>'
+  };
+
+  function escapeAttr(val) {
+    return String(val === undefined || val === null ? '' : val)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function formatDuration(seconds) {
+    const safeSec = Math.max(0, Math.floor(Number(seconds) || 0));
+    const mins = Math.floor(safeSec / 60);
+    const secs = Math.floor(safeSec % 60);
+    return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+  }
+
+  function parseDurationToSeconds(durationStr) {
+    if (!durationStr) return 45;
+    const clean = String(durationStr).trim();
+    const parts = clean.split(':');
+    if (parts.length === 2) {
+      const m = parseInt(parts[0], 10) || 0;
+      const s = parseInt(parts[1], 10) || 0;
+      return Math.max(1, m * 60 + s);
+    }
+    const num = parseFloat(clean);
+    return isFinite(num) && num > 0 ? Math.round(num) : 45;
+  }
+
+  function extractDriveFileId(url) {
+    if (!url || typeof url !== 'string') return '';
+    if (url.indexOf('drive.google.com') === -1 && url.indexOf('docs.google.com') === -1) {
+      return '';
+    }
+    const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    return idMatch && idMatch[1] ? idMatch[1] : '';
+  }
+
+  /**
+   * Tạo HTML cho Trình phát Voice tương tác (Play/Pause + Tua đoạn cần nghe + Thời lượng 00:00 / 01:18)
+   * @param {Object} opts
+   *   - id: mã định danh duy nhất cho trình phát
+   *   - url: đường dẫn audio/video (data:, blob:, https:, hoặc demo:)
+   *   - duration: chuỗi thời lượng (ví dụ: "01:18")
+   *   - label: nhãn hiển thị (ví dụ: "Bài HS", "Voice GV", "Ghi âm bài nộp")
+   *   - fallbackText: câu thoại dự phòng nếu là dữ liệu mẫu
+   *   - lang: ngôn ngữ đọc ('zh-CN' hoặc 'vi-VN')
+   *   - compact: true nếu hiển thị gọn trong ô bảng tổng hợp
+   *   - variant: 'student' | 'teacher'
+   */
+  function renderVoicePlayer(opts) {
+    const id = opts.id || ('vp-' + Math.random().toString(36).slice(2, 9));
+    const url = opts.url || 'demo:voice';
+    const durationStr = formatDuration(parseDurationToSeconds(opts.duration || '00:40'));
+    const label = opts.label || 'Bản thu âm';
+    const fallbackText = opts.fallbackText || '你好，老师！我是越南学生。';
+    const lang = opts.lang || 'zh-CN';
+    const compactClass = opts.compact ? ' is-compact' : '';
+    const variantClass = opts.variant === 'teacher' ? ' is-teacher-voice' : ' is-student-voice';
+
+    const existing = playerSessions[id];
+    const isPlaying = existing && existing.isPlaying;
+    const currentSec = existing ? existing.currentSeconds : 0;
+    const totalSec = existing && existing.totalSeconds ? existing.totalSeconds : parseDurationToSeconds(durationStr);
+    const currentStr = formatDuration(currentSec);
+    const totalStr = formatDuration(totalSec);
+    const percent = totalSec > 0 ? Math.min(100, Math.round((currentSec / totalSec) * 1000) / 10) : 0;
+
+    return (
+      '<div class="voice-player-bar' + compactClass + variantClass + (isPlaying ? ' is-playing' : '') + '" ' +
+        'data-voice-player="' + escapeAttr(id) + '" ' +
+        'data-voice-url="' + escapeAttr(url) + '" ' +
+        'data-voice-duration="' + escapeAttr(totalStr) + '" ' +
+        'data-voice-fallback="' + escapeAttr(fallbackText) + '" ' +
+        'data-voice-lang="' + escapeAttr(lang) + '">' +
+        '<button type="button" class="voice-ctrl-btn voice-play-toggle" data-vp-action="toggle" ' +
+          'title="' + (isPlaying ? 'Tạm dừng (Pause)' : 'Phát (Play)') + '" ' +
+          'aria-label="' + (isPlaying ? 'Tạm dừng âm thanh' : 'Phát âm thanh') + '">' +
+          '<span class="vp-icon-play"' + (isPlaying ? ' style="display:none;"' : '') + '>' + PLAYER_ICONS.play + '</span>' +
+          '<span class="vp-icon-pause"' + (isPlaying ? '' : ' style="display:none;"') + '>' + PLAYER_ICONS.pause + '</span>' +
+        '</button>' +
+        '<button type="button" class="voice-ctrl-btn voice-rewind-btn" data-vp-action="rewind" ' +
+          'title="Tua lại 5 giây để nghe lại đoạn vừa rồi" aria-label="Tua lại 5 giây">' +
+          '<span>-5s</span>' +
+        '</button>' +
+        '<div class="voice-timeline-col">' +
+          '<div class="voice-meta-row">' +
+            '<span class="voice-label-text">' + escapeAttr(label) + '</span>' +
+            '<span class="voice-time-badge tabular-nums">' +
+              '<span data-vp-current>' + escapeAttr(currentStr) + '</span>' +
+              ' / ' +
+              '<span data-vp-total>' + escapeAttr(totalStr) + '</span>' +
+            '</span>' +
+          '</div>' +
+          '<input type="range" class="voice-seek-slider" data-vp-slider ' +
+            'min="0" max="100" step="0.5" value="' + percent + '" ' +
+            'aria-label="Thanh tua thời gian nghe ' + escapeAttr(label) + '">' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function syncPlayerDom(playerId) {
+    const session = playerSessions[playerId];
+    if (!session) return;
+    const containers = document.querySelectorAll('[data-voice-player="' + CSS.escape(playerId) + '"]');
+    containers.forEach(function (el) {
+      el.classList.toggle('is-playing', Boolean(session.isPlaying));
+      const playIcon = el.querySelector('.vp-icon-play');
+      const pauseIcon = el.querySelector('.vp-icon-pause');
+      const toggleBtn = el.querySelector('[data-vp-action="toggle"]');
+      if (playIcon) playIcon.style.display = session.isPlaying ? 'none' : '';
+      if (pauseIcon) pauseIcon.style.display = session.isPlaying ? '' : 'none';
+      if (toggleBtn) {
+        toggleBtn.setAttribute('title', session.isPlaying ? 'Tạm dừng (Pause)' : 'Phát (Play)');
+        toggleBtn.setAttribute('aria-label', session.isPlaying ? 'Tạm dừng âm thanh' : 'Phát âm thanh');
+      }
+      const curEl = el.querySelector('[data-vp-current]');
+      const totEl = el.querySelector('[data-vp-total]');
+      const slider = el.querySelector('[data-vp-slider]');
+      if (curEl) curEl.textContent = formatDuration(session.currentSeconds);
+      if (totEl) totEl.textContent = formatDuration(session.totalSeconds);
+      if (slider && !session.isDraggingSlider) {
+        const pct = session.totalSeconds > 0
+          ? Math.min(100, Math.round((session.currentSeconds / session.totalSeconds) * 1000) / 10)
+          : 0;
+        slider.value = String(pct);
+      }
+    });
+  }
+
+  function getOrCreateSession(playerEl) {
+    const id = playerEl.getAttribute('data-voice-player');
+    const url = playerEl.getAttribute('data-voice-url') || '';
+    const durStr = playerEl.getAttribute('data-voice-duration') || '00:40';
+    const fallbackText = playerEl.getAttribute('data-voice-fallback') || '你好，老师！';
+    const lang = playerEl.getAttribute('data-voice-lang') || 'zh-CN';
+    const totalSec = parseDurationToSeconds(durStr);
+
+    if (!playerSessions[id] || playerSessions[id].url !== url) {
+      if (playerSessions[id]) {
+        pauseSession(id);
+      }
+      playerSessions[id] = {
+        id: id,
+        url: url,
+        fallbackText: fallbackText,
+        lang: lang,
+        totalSeconds: totalSec,
+        currentSeconds: 0,
+        isPlaying: false,
+        audioEl: null,
+        simTimer: null,
+        isRealAudio: url.indexOf('data:') === 0 || url.indexOf('blob:') === 0 || url.indexOf('http') === 0,
+        fetchingDriveMedia: false
+      };
+    }
+    return playerSessions[id];
+  }
+
+  function pauseSession(playerId) {
+    const session = playerSessions[playerId];
+    if (!session) return;
+    session.isPlaying = false;
+    if (session.simTimer) {
+      clearInterval(session.simTimer);
+      session.simTimer = null;
+    }
+    if (session.audioEl) {
+      try {
+        session.audioEl.pause();
+      } catch (e) {
+        // ignore
+      }
+    }
+    if ('speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {
+        // ignore
+      }
+    }
+    if (activePlayerId === playerId) {
+      activePlayerId = null;
+    }
+    syncPlayerDom(playerId);
+  }
+
+  function pauseAllExcept(playerId) {
+    Object.keys(playerSessions).forEach(function (id) {
+      if (id !== playerId && playerSessions[id] && playerSessions[id].isPlaying) {
+        pauseSession(id);
+      }
+    });
+  }
+
+  function startSimulatedPlayback(session) {
+    if (session.simTimer) clearInterval(session.simTimer);
+    if (session.currentSeconds >= session.totalSeconds) {
+      session.currentSeconds = 0;
+    }
+    session.isPlaying = true;
+    activePlayerId = session.id;
+    syncPlayerDom(session.id);
+
+    // Phát giọng đọc minh họa từ vị trí tương ứng với thanh tua (seek position)
+    if ('speechSynthesis' in window && session.fallbackText) {
+      try {
+        window.speechSynthesis.cancel();
+        const ratio = session.totalSeconds > 0 ? session.currentSeconds / session.totalSeconds : 0;
+        const fullText = String(session.fallbackText);
+        const startIdx = Math.min(fullText.length - 1, Math.max(0, Math.floor(fullText.length * ratio)));
+        const slicedText = fullText.slice(startIdx) || fullText;
+        const utter = new SpeechSynthesisUtterance(slicedText);
+        utter.lang = session.lang || 'zh-CN';
+        utter.rate = 0.92;
+        window.speechSynthesis.speak(utter);
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    let lastTick = Date.now();
+    session.simTimer = setInterval(function () {
+      if (!session.isPlaying) return;
+      const now = Date.now();
+      const delta = (now - lastTick) / 1000;
+      lastTick = now;
+      session.currentSeconds = Math.min(session.totalSeconds, session.currentSeconds + delta);
+      syncPlayerDom(session.id);
+
+      if (session.currentSeconds >= session.totalSeconds) {
+        clearInterval(session.simTimer);
+        session.simTimer = null;
+        session.isPlaying = false;
+        session.currentSeconds = 0;
+        if (activePlayerId === session.id) activePlayerId = null;
+        syncPlayerDom(session.id);
+      }
+    }, 200);
+  }
+
+  function attachRealAudioEvents(session, audio) {
+    audio.addEventListener('loadedmetadata', function () {
+      if (isFinite(audio.duration) && audio.duration > 0) {
+        session.totalSeconds = Math.max(1, Math.round(audio.duration));
+        syncPlayerDom(session.id);
+      }
+    });
+
+    audio.addEventListener('timeupdate', function () {
+      if (!session.isDraggingSlider) {
+        session.currentSeconds = audio.currentTime || 0;
+        if (isFinite(audio.duration) && audio.duration > 0) {
+          session.totalSeconds = Math.max(1, Math.round(audio.duration));
+        }
+        syncPlayerDom(session.id);
+      }
+    });
+
+    audio.addEventListener('ended', function () {
+      session.isPlaying = false;
+      session.currentSeconds = 0;
+      if (activePlayerId === session.id) activePlayerId = null;
+      syncPlayerDom(session.id);
+    });
+  }
+
+  async function playSession(session) {
+    pauseAllExcept(session.id);
+
+    if (!session.isRealAudio) {
+      startSimulatedPlayback(session);
+      return;
+    }
+
+    if (!session.audioEl) {
+      const audio = new Audio();
+      audio.preload = 'metadata';
+      attachRealAudioEvents(session, audio);
+      audio.src = session.url;
+      session.audioEl = audio;
+    }
+
+    if (session.currentSeconds >= session.totalSeconds) {
+      session.currentSeconds = 0;
+      try {
+        session.audioEl.currentTime = 0;
+      } catch (e) {
+        // ignore
+      }
+    } else if (Math.abs((session.audioEl.currentTime || 0) - session.currentSeconds) > 0.5) {
+      try {
+        session.audioEl.currentTime = session.currentSeconds;
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    session.isPlaying = true;
+    activePlayerId = session.id;
+    syncPlayerDom(session.id);
+
+    try {
+      await session.audioEl.play();
+    } catch (err) {
+      // Nếu link Google Drive bị trình duyệt chặn CORS redirect trên thẻ <audio>,
+      // tự động tải dữ liệu Base64 qua Google Apps Script (?action=getMedia&fileId=...)
+      const driveFileId = extractDriveFileId(session.url);
+      if (driveFileId && !session.fetchingDriveMedia && window.StudySnapStore && window.StudySnapStore.getGasUrl) {
+        session.fetchingDriveMedia = true;
+        try {
+          const gasUrl = window.StudySnapStore.getGasUrl();
+          const res = await fetch(gasUrl + '?action=getMedia&fileId=' + encodeURIComponent(driveFileId));
+          const json = await res.json();
+          if (json && json.ok && json.dataUrl) {
+            session.url = json.dataUrl;
+            session.audioEl.src = json.dataUrl;
+            session.audioEl.currentTime = session.currentSeconds;
+            await session.audioEl.play();
+            session.fetchingDriveMedia = false;
+            return;
+          }
+        } catch (fetchErr) {
+          // Fallback to simulated timeline
+        }
+        session.fetchingDriveMedia = false;
+      }
+      // Fallback sang trình phát mô phỏng có thanh tua nếu file không truy cập được
+      session.isRealAudio = false;
+      startSimulatedPlayback(session);
+    }
+  }
+
+  function seekSessionToSeconds(session, targetSec) {
+    const clamped = Math.max(0, Math.min(session.totalSeconds, targetSec));
+    session.currentSeconds = clamped;
+
+    if (session.isRealAudio && session.audioEl) {
+      try {
+        session.audioEl.currentTime = clamped;
+      } catch (e) {
+        // ignore
+      }
+    } else if (session.isPlaying) {
+      startSimulatedPlayback(session);
+      return;
+    }
+    syncPlayerDom(session.id);
+  }
+
+  // Lắng nghe sự kiện toàn cục cho mọi trình phát `.voice-player-bar`
+  if (typeof document !== 'undefined') {
+    document.addEventListener('click', function (ev) {
+      const actionBtn = ev.target.closest('[data-vp-action]');
+      if (!actionBtn) return;
+      const playerEl = actionBtn.closest('[data-voice-player]');
+      if (!playerEl) return;
+
+      const action = actionBtn.getAttribute('data-vp-action');
+      const session = getOrCreateSession(playerEl);
+
+      if (action === 'toggle') {
+        if (session.isPlaying) {
+          pauseSession(session.id);
+        } else {
+          playSession(session);
+        }
+      } else if (action === 'rewind') {
+        const nextSec = Math.max(0, session.currentSeconds - 5);
+        seekSessionToSeconds(session, nextSec);
+      }
+    });
+
+    document.addEventListener('input', function (ev) {
+      const slider = ev.target.closest('[data-vp-slider]');
+      if (!slider) return;
+      const playerEl = slider.closest('[data-voice-player]');
+      if (!playerEl) return;
+
+      const session = getOrCreateSession(playerEl);
+      session.isDraggingSlider = true;
+      const pct = parseFloat(slider.value) || 0;
+      const targetSec = (pct / 100) * session.totalSeconds;
+      session.currentSeconds = targetSec;
+
+      const curEl = playerEl.querySelector('[data-vp-current]');
+      if (curEl) curEl.textContent = formatDuration(targetSec);
+    });
+
+    document.addEventListener('change', function (ev) {
+      const slider = ev.target.closest('[data-vp-slider]');
+      if (!slider) return;
+      const playerEl = slider.closest('[data-voice-player]');
+      if (!playerEl) return;
+
+      const session = getOrCreateSession(playerEl);
+      session.isDraggingSlider = false;
+      const pct = parseFloat(slider.value) || 0;
+      const targetSec = (pct / 100) * session.totalSeconds;
+      seekSessionToSeconds(session, targetSec);
+    });
+  }
+
+  /**
+   * Bắt đầu thu âm bằng Microphone trình duyệt
+   */
+  async function startRecording(onTick, onComplete, onError) {
+    try {
+      pauseAllExcept(null);
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Trình duyệt hiện tại không hỗ trợ thu âm trực tiếp. Vui lòng chọn tải file lên.');
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordedChunks = [];
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/mp4';
+
+      activeRecorder = new MediaRecorder(stream);
+      activeRecorder.ondataavailable = function (e) {
+        if (e.data && e.data.size > 0) {
+          recordedChunks.push(e.data);
+        }
+      };
+
+      activeRecorder.onstop = function () {
+        clearInterval(timerInterval);
+        const elapsedSeconds = Math.max(1, Math.round((Date.now() - startTime) / 1000));
+        const durationText = formatDuration(elapsedSeconds);
+        const blob = new Blob(recordedChunks, { type: mimeType });
+
+        stream.getTracks().forEach(function (track) {
+          track.stop();
+        });
+
+        const reader = new FileReader();
+        reader.onloadend = function () {
+          if (typeof onComplete === 'function') {
+            onComplete({
+              dataUrl: reader.result,
+              mimeType: blob.type || 'audio/webm',
+              duration: durationText,
+              sizeKB: Math.round(blob.size / 1024)
+            });
+          }
+        };
+        reader.readAsDataURL(blob);
+      };
+
+      startTime = Date.now();
+      activeRecorder.start();
+
+      if (typeof onTick === 'function') {
+        onTick('00:00');
+      }
+      timerInterval = setInterval(function () {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        if (typeof onTick === 'function') {
+          onTick(formatDuration(elapsed));
+        }
+      }, 500);
+    } catch (err) {
+      if (typeof onError === 'function') {
+        onError(err && err.message ? err.message : 'Không thể truy cập Microphone.');
+      }
+    }
+  }
+
+  function stopRecording() {
+    if (activeRecorder && activeRecorder.state !== 'inactive') {
+      activeRecorder.stop();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Đọc file Audio/Video do học sinh hoặc giáo viên tải lên
+   */
+  function readUploadedMediaFile(file, callback) {
+    if (!file) return;
+    const isVideo = file.type && file.type.indexOf('video') === 0;
+    const mediaType = isVideo ? 'video' : 'audio';
+
+    const reader = new FileReader();
+    reader.onload = function (ev) {
+      const dataUrl = ev.target.result;
+      const tempEl = document.createElement(isVideo ? 'video' : 'audio');
+      tempEl.preload = 'metadata';
+      tempEl.onloadedmetadata = function () {
+        const dur = isFinite(tempEl.duration) && tempEl.duration > 0
+          ? formatDuration(tempEl.duration)
+          : '01:15';
+        callback({
+          mediaType: mediaType,
+          dataUrl: dataUrl,
+          mimeType: file.type || (isVideo ? 'video/mp4' : 'audio/webm'),
+          fileName: file.name,
+          duration: dur,
+          sizeKB: Math.round(file.size / 1024)
+        });
+      };
+      tempEl.onerror = function () {
+        callback({
+          mediaType: mediaType,
+          dataUrl: dataUrl,
+          mimeType: file.type || (isVideo ? 'video/mp4' : 'audio/webm'),
+          fileName: file.name,
+          duration: '01:10',
+          sizeKB: Math.round(file.size / 1024)
+        });
+      };
+      tempEl.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  /**
+   * Phát âm từ vựng tiếng Trung (zh-CN) bằng Web Speech API
+   */
+  function speakText(text, lang) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = lang || 'zh-CN';
+    utter.rate = 0.92;
+    window.speechSynthesis.speak(utter);
+  }
+
+  /**
+   * Phát file media thực tế hoặc giọng đọc minh họa (dùng cho nơi gọi trực tiếp)
+   */
+  function playMediaOrDemo(url, fallbackSpeechText, lang) {
+    if (!url) return;
+    if (url.indexOf('data:') === 0 || url.indexOf('http') === 0 || url.indexOf('blob:') === 0) {
+      const audio = new Audio(url);
+      audio.play().catch(function () {
+        speakText(fallbackSpeechText || '你好，老师！', lang || 'zh-CN');
+      });
+      return;
+    }
+    speakText(fallbackSpeechText, lang || 'zh-CN');
+  }
+
+  return {
+    startRecording: startRecording,
+    stopRecording: stopRecording,
+    readUploadedMediaFile: readUploadedMediaFile,
+    speakText: speakText,
+    playMediaOrDemo: playMediaOrDemo,
+    renderVoicePlayer: renderVoicePlayer,
+    pauseAll: function () { pauseAllExcept(null); }
+  };
+})();
