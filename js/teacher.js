@@ -1032,78 +1032,70 @@
 
     if (!ex.sections || ex.sections.length === 0) {
       listEl.innerHTML =
-        '<div style="padding:24px;text-align:center;background:var(--color-background);border:2px dashed var(--color-border-soft);border-radius:var(--radius-xl);">' +
-        '<p style="margin:0 0 12px;font-size:1rem;color:var(--color-muted-foreground);">' +
-        'Bài tập này chưa có câu hỏi nào. Hãy bấm vào các nút bên trên để thêm dạng bài tập (Nối từ, Trắc nghiệm, Điền từ, Sửa câu sai, Dịch)!' +
+        '<div style="padding:32px 20px;text-align:center;background:var(--color-surface);border:2px dashed var(--color-border-soft);border-radius:var(--radius-xl);">' +
+        '<div style="font-size:2rem;margin-bottom:8px;">📝</div>' +
+        '<p style="margin:0 0 12px;font-size:1rem;font-weight:600;color:var(--color-foreground);">' +
+        'Bài tập này chưa có câu hỏi nào' +
+        '</p>' +
+        '<p style="margin:0;font-size:0.875rem;color:var(--color-muted-foreground);">' +
+        'Hãy bấm vào các nút bên trên để chèn dạng bài tập bạn muốn (Nối từ, Trắc nghiệm, Điền từ, Sửa câu sai, Dịch)!' +
         '</p>' +
         '</div>';
       return;
     }
 
-    const typeLabels = {
+    const typeIcons = {
       matching: '1. Nối từ (matching)',
-      multiple_choice: '2. Trắc nghiệm (multiple_choice)',
-      fill_blank_wordbank: '3. Điền từ có ngân hàng từ (wordbank)',
-      error_correction: '4. Sửa câu sai (error_correction)',
+      multiple_choice: '2. Trắc nghiệm (multiple choice)',
+      fill_blank_wordbank: '3. Điền từ (wordbank)',
+      error_correction: '4. Sửa câu sai (correction)',
       translation: '5. Dịch câu (translation)'
     };
 
     listEl.innerHTML = ex.sections
       .map(function (sec, idx) {
+        const typeLabel = typeIcons[sec.type] || ('Phần ' + (idx + 1));
+        const currentScore = sec.max_score || (sec.type === 'matching' ? 10 : 5);
+
         return (
           '<div class="gform-section-card" data-sec-card="' +
           escapeHtml(sec.section_id) +
-          '">' +
-          '<div class="gform-section-header">' +
-          '<div style="flex:1;">' +
-          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">' +
-          '<span class="practice-section-num-badge">Phần ' +
-          (sec.section_num || idx + 1) +
-          ': ' +
-          escapeHtml(typeLabels[sec.type] || sec.type) +
+          '" style="margin-bottom: 20px; background: var(--color-surface); border: 1px solid var(--color-border-soft); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); overflow: hidden;">' +
+          '<!-- Header tinh gọn chuẩn Google Forms -->' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:var(--color-surface-muted);border-bottom:1px solid var(--color-border-soft);gap:12px;flex-wrap:wrap;">' +
+          '<div style="display:flex;align-items:center;gap:12px;">' +
+          '<span style="font-weight:800;color:var(--color-primary-deep);font-size:0.9375rem;">' +
+          'Phần ' + (sec.section_num || idx + 1) + ': ' + escapeHtml(typeLabel) +
           '</span>' +
-          '<span class="status-badge status-submitted">' +
-          escapeHtml(sec.type) +
-          '</span>' +
-          '</div>' +
-          '<div class="form-row-2">' +
-          '<div class="form-group" style="margin-bottom:8px;">' +
-          '<label class="form-label" style="font-size:0.8125rem;">Tiêu đề phần này:</label>' +
-          '<input type="text" class="form-control" data-sec-title value="' +
-          escapeHtml(sec.title) +
-          '">' +
-          '</div>' +
-          '<div class="form-group" style="margin-bottom:8px;">' +
-          '<label class="form-label" style="font-size:0.8125rem;">Điểm tối đa của phần này:</label>' +
-          '<input type="number" class="form-control tabular-nums" data-sec-score value="' +
-          (sec.max_score || 1) +
-          '" min="1">' +
+          '<div style="display:flex;align-items:center;gap:4px;background:var(--color-surface);padding:3px 8px;border-radius:var(--radius-md);border:1px solid var(--color-border-soft);">' +
+          '<span style="font-size:0.75rem;color:var(--color-muted-foreground);font-weight:600;">Điểm phần này:</span>' +
+          '<input type="number" class="tabular-nums" data-sec-score value="' +
+          currentScore +
+          '" min="1" max="100" style="width:48px;font-size:0.875rem;font-weight:700;border:none;background:transparent;padding:2px;text-align:center;color:var(--color-primary);">' +
+          '<span style="font-size:0.75rem;color:var(--color-muted-foreground);">đ</span>' +
           '</div>' +
           '</div>' +
-          '<div class="form-group" style="margin-bottom:0;">' +
-          '<label class="form-label" style="font-size:0.8125rem;">Lời dặn / Yêu cầu làm bài cho học sinh:</label>' +
-          '<input type="text" class="form-control" data-sec-desc value="' +
-          escapeHtml(sec.description) +
-          '">' +
-          '</div>' +
-          '</div>' +
-          '<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">' +
+          '<input type="hidden" data-sec-title value="' + escapeHtml(sec.title || ('Phần ' + (idx + 1) + ': ' + typeLabel)) + '">' +
+          '<input type="hidden" data-sec-desc value="' + escapeHtml(sec.description || '') + '">' +
+          '<div style="display:flex;align-items:center;gap:6px;">' +
           '<button type="button" class="btn btn-outline btn-sm" data-sec-move-up="' +
           idx +
           '"' +
           (idx === 0 ? ' disabled' : '') +
-          '>↑ Lên</button>' +
+          ' title="Di chuyển lên trên" style="padding:4px 8px;font-size:0.75rem;">↑ Lên</button>' +
           '<button type="button" class="btn btn-outline btn-sm" data-sec-move-down="' +
           idx +
           '"' +
           (idx === ex.sections.length - 1 ? ' disabled' : '') +
-          '>↓ Xuống</button>' +
+          ' title="Di chuyển xuống dưới" style="padding:4px 8px;font-size:0.75rem;">↓ Xuống</button>' +
           '<button type="button" class="btn btn-outline btn-sm" data-sec-delete="' +
           escapeHtml(sec.section_id) +
-          '" style="color:var(--color-destructive);border-color:var(--color-destructive);">✕ Xóa phần</button>' +
+          '" style="color:var(--color-destructive);border-color:var(--color-destructive);padding:4px 8px;font-size:0.75rem;" title="Xóa phần này khỏi bài tập">✕ Xóa</button>' +
           '</div>' +
           '</div>' +
+          '<div style="padding: 16px 18px;">' +
           renderTypeSpecificEditorHtml(sec) +
+          '</div>' +
           '</div>'
         );
       })
@@ -2434,25 +2426,11 @@
         e.preventDefault();
         const titleInp = document.getElementById('new-ex-title');
         const tagInp = document.getElementById('new-ex-tag');
-        const modeRadio = formCreateEx.querySelector('input[name="new_ex_mode"]:checked');
-        const mode = modeRadio ? modeRadio.value : 'template';
 
-        const title = (titleInp ? titleInp.value : '').trim() || 'Bài tập mới';
+        const title = (titleInp ? titleInp.value : '').trim() || 'Bài tập luyện tập';
         const tag = (tagInp ? tagInp.value : '').trim() || 'Bài mới';
 
-        let newEx;
-        if (mode === 'template') {
-          newEx = createTemplateExercise(title, tag);
-        } else {
-          newEx = {
-            exercise_id: 'EX_CUSTOM_' + Date.now(),
-            title: title,
-            lesson_tag: tag,
-            total_score: 0,
-            thresholds: { very_good: 31, good: 25 },
-            sections: []
-          };
-        }
+        const newEx = createTemplateExercise(title, tag);
 
         if (!Array.isArray(state.practiceExercises)) {
           state.practiceExercises = [];
@@ -2463,6 +2441,21 @@
         modalCreateEx.classList.remove('is-visible');
         renderTeacherPracticeTab();
         showToast('Đã tạo bài tập mới: ' + title);
+      });
+    }
+
+    // Top Bar Save Button Trigger
+    const btnSaveTop = document.getElementById('btn-save-top-bar');
+    if (btnSaveTop) {
+      btnSaveTop.addEventListener('click', function () {
+        const form = document.getElementById('teacher-exercise-meta-form');
+        if (form) {
+          if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+          } else {
+            form.dispatchEvent(new Event('submit', { cancelable: true }));
+          }
+        }
       });
     }
 
