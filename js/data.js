@@ -13,13 +13,20 @@ window.STUDYSNAP_INITIAL_DATA = {
     }
   ],
 
+  classes: [
+    { class_id: 'CLS01', class_name: 'Lớp Tiếng Trung HSK 2', created_at: '01/11/2026' },
+    { class_id: 'CLS02', class_name: 'Lớp Tiếng Trung HSK 1 - K24', created_at: '05/11/2026' }
+  ],
+
   students: [
     { student_id: 'HS01', full_name: 'Nguyễn Minh Anh', class_name: 'Lớp Tiếng Trung HSK 2', avatar_initials: 'MA', username: 'hs01', password: '123456', created_at: '01/11/2026' },
     { student_id: 'HS02', full_name: 'Trần Quốc Bảo', class_name: 'Lớp Tiếng Trung HSK 2', avatar_initials: 'QB', username: 'hs02', password: '123456', created_at: '01/11/2026' },
     { student_id: 'HS03', full_name: 'Lê Hoàng Châu', class_name: 'Lớp Tiếng Trung HSK 2', avatar_initials: 'HC', username: 'hs03', password: '123456', created_at: '01/11/2026' },
     { student_id: 'HS04', full_name: 'Phạm Gia Huy', class_name: 'Lớp Tiếng Trung HSK 2', avatar_initials: 'GH', username: 'hs04', password: '123456', created_at: '01/11/2026' },
     { student_id: 'HS05', full_name: 'Võ Khánh Linh', class_name: 'Lớp Tiếng Trung HSK 2', avatar_initials: 'KL', username: 'hs05', password: '123456', created_at: '01/11/2026' },
-    { student_id: 'HS06', full_name: 'Đặng Tuấn Kiệt', class_name: 'Lớp Tiếng Trung HSK 2', avatar_initials: 'TK', username: 'hs06', password: '123456', created_at: '01/11/2026' }
+    { student_id: 'HS06', full_name: 'Đặng Tuấn Kiệt', class_name: 'Lớp Tiếng Trung HSK 2', avatar_initials: 'TK', username: 'hs06', password: '123456', created_at: '01/11/2026' },
+    { student_id: 'HS07', full_name: 'Hoàng Phương Thảo', class_name: 'Lớp Tiếng Trung HSK 1 - K24', avatar_initials: 'PT', username: 'hs07', password: '123456', created_at: '05/11/2026' },
+    { student_id: 'HS08', full_name: 'Vũ Đức Nam', class_name: 'Lớp Tiếng Trung HSK 1 - K24', avatar_initials: 'DN', username: 'hs08', password: '123456', created_at: '05/11/2026' }
   ],
 
   assignments: [
@@ -27,6 +34,7 @@ window.STUDYSNAP_INITIAL_DATA = {
       assignment_id: 'BVN01',
       title: 'Bài 1: Thu âm giới thiệu bản thân bằng tiếng Trung & luyện 4 thanh điệu',
       lesson_tag: 'Bài 1',
+      class_name: 'Lớp Tiếng Trung HSK 2',
       due_date: '12/11/2026',
       description: 'Thu âm (60–90 giây) hoặc tải video giới thiệu họ tên, quốc tịch, nghề nghiệp bằng tiếng Trung. Chú ý quy tắc biến điệu thanh 3 (nǐ hǎo) và các âm bật hơi (p, t, k, q, ch).',
       require_media: 'audio_or_video'
@@ -35,6 +43,7 @@ window.STUDYSNAP_INITIAL_DATA = {
       assignment_id: 'BVN02',
       title: 'Bài 2: Đọc đoạn hội thoại học tiếng Hán & phân biệt âm uốn lưỡi zh, ch, sh',
       lesson_tag: 'Bài 2',
+      class_name: 'Lớp Tiếng Trung HSK 2',
       due_date: '14/11/2026',
       description: 'Thu âm đoạn hội thoại Bài 2 và đặt 3 câu hỏi với 吗 (ma) hoặc 呢 (ne). Chú ý biến điệu của chữ 不 (bù → bú khi đi trước thanh 4).',
       require_media: 'audio_or_video'
@@ -43,8 +52,18 @@ window.STUDYSNAP_INITIAL_DATA = {
       assignment_id: 'BVN03',
       title: 'Bài 3: Quay video hỏi giá mua sắm & nói lịch trình một ngày bằng tiếng Trung',
       lesson_tag: 'Bài 3',
+      class_name: 'all',
       due_date: '16/11/2026',
       description: 'Quay video hoặc thu âm kể về lịch trình buổi sáng và hội thoại mua hàng hỏi giá (多少钱), sử dụng ít nhất 4 từ vựng của Bài 3.',
+      require_media: 'audio_or_video'
+    },
+    {
+      assignment_id: 'BVN04',
+      title: 'Bài 1: Phát âm thanh mẫu & vận mẫu tiếng Hán cơ bản',
+      lesson_tag: 'Bài 1',
+      class_name: 'Lớp Tiếng Trung HSK 1 - K24',
+      due_date: '15/11/2026',
+      description: 'Thu âm 21 thanh mẫu và 36 vận mẫu cơ bản trong tiếng Trung. Chú ý phân biệt âm bật hơi p, t, k và không bật hơi b, d, g.',
       require_media: 'audio_or_video'
     }
   ],
@@ -297,6 +316,13 @@ window.STUDYSNAP_INITIAL_DATA = {
       example_en: '坚持每天听汉语录音。(Jiānchí měitiān tīng Hànyǔ lùyīn.)',
       example_vi: 'Kiên trì nghe băng ghi âm tiếng Trung mỗi ngày.'
     }
+  ],
+
+  lessons: [
+    { lesson_id: 'bai-1', tag: 'Bài 1', title: 'Bài 1: Chào hỏi & Làm quen', desc: 'Luyện 4 thanh điệu, biến điệu thanh 3 và mẫu câu làm quen cơ bản' },
+    { lesson_id: 'bai-2', tag: 'Bài 2', title: 'Bài 2: Học tập & Ngôn ngữ', desc: 'Phát âm thanh mẫu, vận mẫu và từ vựng học tiếng Hán' },
+    { lesson_id: 'bai-3', tag: 'Bài 3', title: 'Bài 3: Mua sắm & Đời sống', desc: 'Hội thoại mua sắm, hỏi giá cả và đếm số lượng trong tiếng Trung' },
+    { lesson_id: 'bai-4', tag: 'Bài 4', title: 'Bài 4: Đồ ăn & Nhà hàng', desc: 'Gọi món ăn Trung Hoa, khẩu vị và giao tiếp khi đi ăn' }
   ],
 
   exitTickets: [
@@ -859,6 +885,22 @@ window.StudySnapStore = (function () {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.students) && Array.isArray(parsed.teachers)) {
+          if (!Array.isArray(parsed.classes) || parsed.classes.length === 0) {
+            parsed.classes = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.classes || []));
+          }
+          (parsed.students || []).forEach(function (st) {
+            const c = (st.class_name || '').trim();
+            if (c && !parsed.classes.some(function (cls) { return cls.class_name.toLowerCase() === c.toLowerCase(); })) {
+              parsed.classes.push({
+                class_id: 'CLS_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                class_name: c,
+                created_at: st.created_at || '01/11/2026'
+              });
+            }
+          });
+          if (!Array.isArray(parsed.lessons)) {
+            parsed.lessons = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.lessons || []));
+          }
           if (!Array.isArray(parsed.practiceExercises)) {
             parsed.practiceExercises = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.practiceExercises || []));
           }

@@ -22,12 +22,15 @@
 
   let ui = {
     activeTab: 'grading',
+    selectedClass: 'all',
+    studentAccountsClassFilter: 'all',
     gradingStudentId: state.students[0] ? state.students[0].student_id : 'HS01',
     gradingAssignmentId: state.assignments[0] ? state.assignments[0].assignment_id : 'BVN01',
     matrixFilter: 'all',
     teacherDraftVoice: null,
     isTeacherRecording: false,
-    vocabFilter: 'all',
+    vocabFilter: 'bai-1',
+    selectedLesson: 'bai-1',
     selectedPracticeExId: (state.practiceExercises && state.practiceExercises[0]) ? state.practiceExercises[0].exercise_id : 'EX_HSK1_BAI_1',
     activeGradingSubId: null,
     practiceCurrentView: 'builder'
@@ -71,19 +74,103 @@
     });
   }
 
+  const DEFAULT_LESSONS = [
+    { lesson_id: 'bai-1', title: 'Bài 1: Chào hỏi cơ bản (HSK 1)', tag: 'Bài 1' },
+    { lesson_id: 'bai-2', title: 'Bài 2: Cảm ơn và Tạm biệt (HSK 1)', tag: 'Bài 2' },
+    { lesson_id: 'bai-3', title: 'Bài 3: Bạn tên là gì? (HSK 1)', tag: 'Bài 3' },
+    { lesson_id: 'bai-4', title: 'Bài 4: Cô ấy là giáo viên của tôi (HSK 1)', tag: 'Bài 4' }
+  ];
+
+  function getLessons() {
+    if (Array.isArray(state.lessons) && state.lessons.length > 0) {
+      return state.lessons;
+    }
+    return DEFAULT_LESSONS;
+  }
+
+  function getAvailableClasses() {
+    const classes = [];
+    if (Array.isArray(state.classes)) {
+      state.classes.forEach(function (cls) {
+        const c = (cls.class_name || '').trim();
+        if (c && classes.indexOf(c) === -1) {
+          classes.push(c);
+        }
+      });
+    }
+    (state.students || []).forEach(function (st) {
+      const c = (st.class_name || '').trim();
+      if (c && classes.indexOf(c) === -1) {
+        classes.push(c);
+      }
+    });
+    (state.assignments || []).forEach(function (asg) {
+      const c = (asg.class_name || '').trim();
+      if (c && c !== 'all' && classes.indexOf(c) === -1) {
+        classes.push(c);
+      }
+    });
+    return classes;
+  }
+
+  function generateNextUsername() {
+    let maxNum = 0;
+    (state.students || []).forEach(function (st) {
+      const u = (st.username || st.student_id || '').toLowerCase();
+      const match = u.match(/^hs(\d+)$/);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        if (n > maxNum) maxNum = n;
+      }
+    });
+    let counter = Math.max(maxNum + 1, (state.students || []).length + 1);
+    let candidate = 'hs' + String(counter).padStart(2, '0');
+    while ((state.students || []).some(function (s) {
+      return (s.username || s.student_id || '').toLowerCase() === candidate;
+    })) {
+      counter++;
+      candidate = 'hs' + String(counter).padStart(2, '0');
+    }
+    return candidate;
+  }
+
+  function generateRandomPassword() {
+    return String(Math.floor(100000 + Math.random() * 900000));
+  }
+
+  function getFilteredStudents() {
+    if (!ui.selectedClass || ui.selectedClass === 'all') {
+      return state.students;
+    }
+    return state.students.filter(function (st) {
+      return (st.class_name || '').trim() === ui.selectedClass;
+    });
+  }
+
+  function getFilteredAssignments() {
+    if (!ui.selectedClass || ui.selectedClass === 'all') {
+      return state.assignments;
+    }
+    return state.assignments.filter(function (asg) {
+      return !asg.class_name || asg.class_name === 'all' || asg.class_name.trim() === ui.selectedClass;
+    });
+  }
+
   function renderSummaryStats() {
     const profilePill = document.getElementById('teacher-profile-pill');
     if (profilePill) {
       profilePill.textContent = currentUser.full_name + ' • Giáo viên';
     }
 
-    const totalExpected = state.students.length * state.assignments.length;
+    const students = getFilteredStudents();
+    const assignments = getFilteredAssignments();
+    const totalExpected = students.length * assignments.length;
     let submittedOrGraded = 0;
     let gradedWithFeedback = 0;
     let missingCount = 0;
 
-    state.students.forEach(function (st) {
-      state.assignments.forEach(function (asg) {
+    students.forEach(function (st) {
+      assignments.forEach(function (asg) {
         const sub = findSubmission(asg.assignment_id, st.student_id);
         if (sub && (sub.status === 'submitted' || sub.status === 'graded')) {
           submittedOrGraded++;
@@ -101,38 +188,86 @@
     const elMissing = document.getElementById('stat-missing-count');
     const elGraded = document.getElementById('stat-graded-count');
 
-    if (elStudents) elStudents.textContent = state.students.length + ' học sinh';
+    if (elStudents) {
+      elStudents.textContent = ui.selectedClass === 'all'
+        ? students.length + ' học sinh'
+        : students.length + ' học sinh';
+    }
     if (elSubmitted) elSubmitted.textContent = submittedOrGraded + '/' + totalExpected;
     if (elMissing) elMissing.textContent = String(missingCount);
     if (elGraded) elGraded.textContent = String(gradedWithFeedback);
   }
 
   function renderGradingPanel() {
+    const classFilter = document.getElementById('teacher-class-filter');
+    const classBadge = document.getElementById('teacher-class-count-badge');
+    const availableClasses = getAvailableClasses();
+    const filteredStudents = getFilteredStudents();
+    const filteredAssignments = getFilteredAssignments();
+
+    if (classFilter) {
+      const optionsHtml = ['<option value="all">Tất cả lớp học (' + state.students.length + ' học sinh)</option>'];
+      availableClasses.forEach(function (cls) {
+        const countInClass = state.students.filter(function (s) { return (s.class_name || '').trim() === cls; }).length;
+        const sel = (cls === ui.selectedClass) ? ' selected' : '';
+        optionsHtml.push('<option value="' + escapeHtml(cls) + '"' + sel + '>' + escapeHtml(cls) + ' (' + countInClass + ' HS)</option>');
+      });
+      classFilter.innerHTML = optionsHtml.join('');
+      classFilter.value = ui.selectedClass;
+    }
+
+    if (classBadge) {
+      if (ui.selectedClass === 'all') {
+        classBadge.textContent = 'Toàn bộ ' + state.students.length + ' học sinh';
+      } else {
+        classBadge.textContent = ui.selectedClass + ' • ' + filteredStudents.length + ' học sinh';
+      }
+    }
+
+    const newAsgClassSelect = document.getElementById('new-asg-class');
+    if (newAsgClassSelect) {
+      const asgClassOpts = ['<option value="all">Tất cả các lớp học</option>'];
+      availableClasses.forEach(function (cls) {
+        asgClassOpts.push('<option value="' + escapeHtml(cls) + '">' + escapeHtml(cls) + '</option>');
+      });
+      newAsgClassSelect.innerHTML = asgClassOpts.join('');
+    }
+
+    const hasStudent = filteredStudents.some(function (st) { return st.student_id === ui.gradingStudentId; });
+    if (!hasStudent && filteredStudents.length > 0) {
+      ui.gradingStudentId = filteredStudents[0].student_id;
+    }
+
+    const hasAsg = filteredAssignments.some(function (asg) { return asg.assignment_id === ui.gradingAssignmentId; });
+    if (!hasAsg && filteredAssignments.length > 0) {
+      ui.gradingAssignmentId = filteredAssignments[0].assignment_id;
+    }
+
     const studentSelect = document.getElementById('grade-student-select');
     const assignmentSelect = document.getElementById('grade-assignment-select');
 
     if (studentSelect) {
-      studentSelect.innerHTML = state.students.length > 0
-        ? state.students.map(function (st) {
+      studentSelect.innerHTML = filteredStudents.length > 0
+        ? filteredStudents.map(function (st) {
             const sel = st.student_id === ui.gradingStudentId ? ' selected' : '';
             return '<option value="' + escapeHtml(st.student_id) + '"' + sel + '>' +
-              escapeHtml(st.full_name) + ' (' + escapeHtml(st.student_id) + ')</option>';
+              escapeHtml(st.full_name) + ' (' + escapeHtml(st.student_id) + ' - ' + escapeHtml(st.class_name || 'Lớp') + ')</option>';
           }).join('')
-        : '<option value="">-- Chưa có học sinh --</option>';
+        : '<option value="">-- Lớp này chưa có học sinh --</option>';
     }
 
     if (assignmentSelect) {
-      assignmentSelect.innerHTML = state.assignments.length > 0
-        ? state.assignments.map(function (asg) {
+      assignmentSelect.innerHTML = filteredAssignments.length > 0
+        ? filteredAssignments.map(function (asg) {
             const sel = asg.assignment_id === ui.gradingAssignmentId ? ' selected' : '';
             return '<option value="' + escapeHtml(asg.assignment_id) + '"' + sel + '>' +
               escapeHtml(asg.title) + '</option>';
           }).join('')
-        : '<option value="">-- Chưa có bài tập --</option>';
+        : '<option value="">-- Lớp này chưa có bài tập --</option>';
     }
 
-    const asg = findAssignment(ui.gradingAssignmentId) || state.assignments[0];
-    const st = findStudent(ui.gradingStudentId) || state.students[0];
+    const asg = findAssignment(ui.gradingAssignmentId) || filteredAssignments[0];
+    const st = findStudent(ui.gradingStudentId) || filteredStudents[0];
     const targetBadge = document.getElementById('grading-target-badge');
     const studentMediaBox = document.getElementById('grading-student-media-box');
     const scoreInput = document.getElementById('teacher-score-input');
@@ -140,13 +275,15 @@
     const voicePreview = document.getElementById('teacher-voice-preview');
 
     if (!asg || !st) {
-      if (targetBadge) targetBadge.textContent = 'Chưa có dữ liệu';
+      if (targetBadge) targetBadge.textContent = 'Chưa có dữ liệu cho lựa chọn này';
       if (studentMediaBox) {
         studentMediaBox.innerHTML =
           '<div class="assignment-brief-box">' +
-            '<span class="status-badge status-submitted">' + ICONS.clock + '<span>Hệ thống đang trống — Hãy tạo tài khoản học sinh thật và giao bài tập mới</span></span>' +
+            '<span class="status-badge status-missing">' + ICONS.alert + '<span>Lớp này chưa có học sinh hoặc bài tập nào. Hãy chọn lớp khác hoặc tạo tài khoản/bài tập mới.</span></span>' +
           '</div>';
       }
+      if (scoreInput) scoreInput.value = '';
+      if (commentInput) commentInput.value = '';
       if (voicePreview) voicePreview.innerHTML = '';
       return;
     }
@@ -157,7 +294,7 @@
     const sub = findSubmission(asg.assignment_id, st.student_id);
 
     if (targetBadge) {
-      targetBadge.textContent = st.full_name + ' • ' + asg.lesson_tag;
+      targetBadge.textContent = st.full_name + ' (' + (st.class_name || 'Lớp') + ') • ' + asg.lesson_tag;
     }
 
     if (studentMediaBox) {
@@ -232,10 +369,13 @@
     const tbody = document.getElementById('matrix-tbody');
     if (!thead || !tbody) return;
 
+    const filteredAssignments = getFilteredAssignments();
+    const studentsInClass = getFilteredStudents();
+
     thead.innerHTML =
       '<tr>' +
         '<th>Học sinh</th>' +
-        state.assignments.map(function (asg) {
+        filteredAssignments.map(function (asg) {
           return '<th>' +
             '<div>' + escapeHtml(asg.lesson_tag) + ': ' + escapeHtml(asg.title.replace(/^Bài \d+:\s*/i, '')) + '</div>' +
             '<div class="tabular-nums" style="font-size:0.8125rem;font-weight:500;color:var(--color-muted-foreground);margin-top:2px;">Hạn nộp: ' + escapeHtml(asg.due_date) + '</div>' +
@@ -244,17 +384,17 @@
         '<th>Tổng kết tiến độ</th>' +
       '</tr>';
 
-    if (state.students.length === 0) {
+    if (studentsInClass.length === 0) {
       tbody.innerHTML =
-        '<tr><td colspan="' + (state.assignments.length + 2) + '" style="text-align:center;padding:28px;color:var(--color-muted-foreground);">' +
-          'Hiện chưa có học sinh nào trong lớp. Hãy bấm <strong>"Tạo tài khoản cho học sinh mới"</strong> để bắt đầu danh sách lớp học thật.' +
+        '<tr><td colspan="' + (filteredAssignments.length + 2) + '" style="text-align:center;padding:28px;color:var(--color-muted-foreground);">' +
+          'Không có học sinh nào trong lựa chọn này. Hãy chọn lớp khác hoặc bấm <strong>"Tạo tài khoản học sinh mới"</strong>.' +
         '</td></tr>';
       return;
     }
 
-    const filteredStudents = state.students.filter(function (st) {
+    const filteredStudents = studentsInClass.filter(function (st) {
       if (ui.matrixFilter === 'all') return true;
-      const statuses = state.assignments.map(function (asg) {
+      const statuses = filteredAssignments.map(function (asg) {
         const sub = findSubmission(asg.assignment_id, st.student_id);
         return sub ? sub.status : 'missing';
       });
@@ -267,7 +407,7 @@
     tbody.innerHTML = filteredStudents.map(function (st) {
       let completedCount = 0;
 
-      const assignmentCells = state.assignments.map(function (asg) {
+      const assignmentCells = filteredAssignments.map(function (asg) {
         const sub = findSubmission(asg.assignment_id, st.student_id);
         const status = sub ? sub.status : 'missing';
         if (status === 'submitted' || status === 'graded') {
@@ -336,8 +476,8 @@
         '</td>';
       }).join('');
 
-      const progressRatio = completedCount + '/' + state.assignments.length;
-      const allDone = state.assignments.length > 0 && completedCount === state.assignments.length;
+      const progressRatio = completedCount + '/' + filteredAssignments.length;
+      const allDone = filteredAssignments.length > 0 && completedCount === filteredAssignments.length;
 
       return '<tr>' +
         '<td>' +
@@ -345,7 +485,9 @@
             '<span class="student-avatar">' + escapeHtml(st.avatar_initials) + '</span>' +
             '<div>' +
               '<div style="font-weight:700;color:var(--color-foreground);">' + escapeHtml(st.full_name) + '</div>' +
-              '<div class="tabular-nums" style="font-size:0.8125rem;color:var(--color-muted-foreground);">Tài khoản: ' + escapeHtml(st.username || st.student_id.toLowerCase()) + '</div>' +
+              '<div class="tabular-nums" style="font-size:0.8125rem;color:var(--color-muted-foreground);">' +
+                escapeHtml(st.class_name || 'Lớp') + ' • TK: ' + escapeHtml(st.username || st.student_id.toLowerCase()) +
+              '</div>' +
             '</div>' +
           '</div>' +
         '</td>' +
@@ -361,46 +503,143 @@
   }
 
   /**
-   * TAB 2: QUẢN LÝ & TẠO TÀI KHOẢN CHO HỌC SINH
+   * TAB 2: QUẢN LÝ LỚP HỌC & TÀI KHOẢN HỌC SINH
    */
-  function renderStudentAccountsTab() {
-    const nextNumber = state.students.length + 1;
-    const suggestedUsername = 'hs' + String(nextNumber).padStart(2, '0');
-    const usernameInput = document.getElementById('new-student-username');
-    if (usernameInput && !usernameInput.value) {
-      usernameInput.value = suggestedUsername;
+  function renderClassesManager() {
+    const badge = document.getElementById('classes-count-badge');
+    const grid = document.getElementById('classes-list-grid');
+    if (!Array.isArray(state.classes)) {
+      state.classes = [];
     }
+
+    if (badge) {
+      badge.textContent = state.classes.length + ' lớp học';
+    }
+
+    if (!grid) return;
+
+    if (state.classes.length === 0) {
+      grid.innerHTML =
+        '<div style="grid-column: 1 / -1; padding: 18px; text-align: center; color: var(--color-muted-foreground); background: var(--color-surface); border: 1px dashed var(--color-border-soft); border-radius: var(--radius-lg);">' +
+          'Chưa có lớp học nào. Hãy nhập tên lớp học ở trên để tạo lớp đầu tiên!' +
+        '</div>';
+      return;
+    }
+
+    grid.innerHTML = state.classes.map(function (cls) {
+      const studentCount = (state.students || []).filter(function (s) {
+        return (s.class_name || '').trim().toLowerCase() === cls.class_name.trim().toLowerCase();
+      }).length;
+      const asgCount = (state.assignments || []).filter(function (a) {
+        return (a.class_name || '').trim().toLowerCase() === cls.class_name.trim().toLowerCase();
+      }).length;
+
+      return (
+        '<div class="class-manage-card">' +
+          '<div>' +
+            '<div style="font-weight: 800; font-size: 0.9375rem; color: var(--color-primary-deep); display: flex; align-items: center; gap: 6px;">' +
+              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path><path d="M6 6h10"></path><path d="M6 10h10"></path></svg>' +
+              '<span>' + escapeHtml(cls.class_name) + '</span>' +
+            '</div>' +
+            '<div style="font-size: 0.8125rem; color: var(--color-muted-foreground); margin-top: 4px;">' +
+              '<strong style="color: var(--color-primary);">' + studentCount + '</strong> học sinh • <strong style="color: var(--color-accent);">' + asgCount + '</strong> bài tập' +
+            '</div>' +
+          '</div>' +
+          '<div style="display: flex; align-items: center; gap: 6px;">' +
+            '<button type="button" class="btn btn-outline btn-sm" data-filter-class-students="' + escapeHtml(cls.class_name) + '" title="Lọc danh sách học sinh theo lớp này">' +
+              '<span>Xem HS</span>' +
+            '</button>' +
+            '<button type="button" class="btn btn-outline btn-sm" data-delete-class-name="' + escapeHtml(cls.class_name) + '" style="color: var(--color-destructive); border-color: var(--color-destructive); padding: 4px 8px;" title="Xóa lớp này">' +
+              '<span>✕</span>' +
+            '</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function renderStudentAccountsTab() {
+    renderClassesManager();
+
+    const availableClasses = getAvailableClasses();
+
+    // 1. Điền danh sách lớp vào dropdown chọn lớp khi tạo học sinh
+    const newStudentClassSelect = document.getElementById('new-student-class');
+    if (newStudentClassSelect) {
+      if (availableClasses.length > 0) {
+        newStudentClassSelect.innerHTML = availableClasses.map(function (c) {
+          return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>';
+        }).join('');
+      } else {
+        newStudentClassSelect.innerHTML = '<option value="">-- Chưa có lớp học (Hãy tạo ở trên) --</option>';
+      }
+    }
+
+    // 2. Điền bộ lọc lớp học cho danh sách học sinh
+    const classFilterSelect = document.getElementById('student-accounts-class-filter');
+    if (classFilterSelect) {
+      const opts = ['<option value="all">Tất cả lớp học (' + state.students.length + ' HS)</option>'];
+      availableClasses.forEach(function (c) {
+        const count = state.students.filter(function (s) { return (s.class_name || '').trim().toLowerCase() === c.toLowerCase(); }).length;
+        const sel = (c === ui.studentAccountsClassFilter) ? ' selected' : '';
+        opts.push('<option value="' + escapeHtml(c) + '"' + sel + '>' + escapeHtml(c) + ' (' + count + ' HS)</option>');
+      });
+      classFilterSelect.innerHTML = opts.join('');
+      classFilterSelect.value = ui.studentAccountsClassFilter || 'all';
+    }
+
+    // 3. Tự động điền Tên đăng nhập & Mật khẩu tiếp theo
+    const usernameInput = document.getElementById('new-student-username');
+    if (usernameInput && (!usernameInput.value || /^hs\d+$/i.test(usernameInput.value.trim()))) {
+      usernameInput.value = generateNextUsername();
+    }
+    const passwordInput = document.getElementById('new-student-password');
+    if (passwordInput && !passwordInput.value) {
+      passwordInput.value = generateRandomPassword();
+    }
+
+    // 4. Lọc học sinh theo ui.studentAccountsClassFilter
+    const filteredStudents = state.students.filter(function (st) {
+      if (!ui.studentAccountsClassFilter || ui.studentAccountsClassFilter === 'all') return true;
+      return (st.class_name || '').trim().toLowerCase() === ui.studentAccountsClassFilter.toLowerCase();
+    });
 
     const countBadge = document.getElementById('student-accounts-count-badge');
     if (countBadge) {
-      countBadge.textContent = state.students.length + ' tài khoản học sinh';
+      countBadge.textContent = filteredStudents.length + ' học sinh';
     }
 
     const listEl = document.getElementById('student-accounts-list');
     if (!listEl) return;
 
-    if (state.students.length === 0) {
+    if (filteredStudents.length === 0) {
       listEl.innerHTML =
         '<div class="quick-account-row" style="color:var(--color-muted-foreground);">' +
-          'Chưa có tài khoản học sinh nào. Hãy nhập Họ tên và bấm <strong>"Tạo tài khoản Học sinh"</strong> ở khung bên trái.' +
+          'Chưa có học sinh nào trong lựa chọn này. Hãy chọn lớp khác hoặc nhập Họ tên để thêm học sinh mới.' +
         '</div>';
       return;
     }
 
-    listEl.innerHTML = state.students.map(function (st) {
+    listEl.innerHTML = filteredStudents.map(function (st) {
       const uname = st.username || st.student_id.toLowerCase();
       const pwd = st.password || '123456';
       return '<div class="quick-account-row">' +
         '<div class="student-cell-info">' +
           '<span class="student-avatar">' + escapeHtml(st.avatar_initials) + '</span>' +
           '<div>' +
-            '<div style="font-weight:700;">' + escapeHtml(st.full_name) + ' (' + escapeHtml(st.student_id) + ') • ' + escapeHtml(st.class_name || 'Lớp Tiếng Trung HSK 2') + '</div>' +
-            '<div class="tabular-nums" style="font-size:0.8125rem;color:var(--color-muted-foreground);">' +
+            '<div style="font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+              '<span>' + escapeHtml(st.full_name) + ' (' + escapeHtml(st.student_id) + ')</span>' +
+              '<span class="status-badge status-submitted" style="font-size:0.75rem;">' + escapeHtml(st.class_name || 'Chưa xếp lớp') + '</span>' +
+            '</div>' +
+            '<div class="tabular-nums" style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-top:2px;">' +
               'Tên đăng nhập: <strong>' + escapeHtml(uname) + '</strong> • Mật khẩu: <strong>' + escapeHtml(pwd) + '</strong>' +
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+          '<button type="button" class="btn btn-outline btn-sm" data-change-student-class="' + escapeHtml(st.student_id) + '" title="Chuyển lớp cho học sinh này">' +
+            '<span>Đổi lớp</span>' +
+          '</button>' +
           '<button type="button" class="btn btn-outline btn-sm" data-copy-credentials="' + escapeHtml(st.full_name) + '|' + escapeHtml(uname) + '|' + escapeHtml(pwd) + '">' +
             '<span>Sao chép TK</span>' +
           '</button>' +
@@ -421,8 +660,8 @@
     if (!tbody) return;
 
     const filtered = state.vocabulary.filter(function (v) {
-      if (ui.vocabFilter === 'all') return true;
-      return v.lesson_id === ui.vocabFilter;
+      if (ui.selectedLesson === 'all') return true;
+      return v.lesson_id === ui.selectedLesson;
     });
 
     if (badge) {
@@ -432,7 +671,7 @@
     if (filtered.length === 0) {
       tbody.innerHTML =
         '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--color-muted-foreground);">' +
-          'Chưa có từ vựng nào trong danh mục này. Hãy nhập từ vựng mới ở biểu mẫu phía trên.' +
+          'Chưa có từ vựng nào trong bài học này. Hãy nhập từ vựng mới ở biểu mẫu phía trên.' +
         '</td></tr>';
       return;
     }
@@ -456,6 +695,111 @@
   }
 
   function renderContentAndExitLogsTab() {
+    const lessons = getLessons();
+    const lessonSelect = document.getElementById('teacher-lesson-select');
+    const lessonVocabBadge = document.getElementById('lesson-vocab-count-badge');
+    const lessonPracticeBadge = document.getElementById('lesson-practice-status-badge');
+    const syncedCard = document.getElementById('synced-lesson-practice-card');
+
+    if (lessonSelect) {
+      const opts = lessons.map(function (ls) {
+        const sel = (ls.lesson_id === ui.selectedLesson) ? ' selected' : '';
+        return '<option value="' + escapeHtml(ls.lesson_id) + '"' + sel + '>' + escapeHtml(ls.title) + '</option>';
+      });
+      opts.push('<option value="all"' + (ui.selectedLesson === 'all' ? ' selected' : '') + '>Tất cả bài học (Toàn bộ kho từ vựng)</option>');
+      lessonSelect.innerHTML = opts.join('');
+      lessonSelect.value = ui.selectedLesson;
+    }
+
+    const currentVocabCount = state.vocabulary.filter(function (v) {
+      if (ui.selectedLesson === 'all') return true;
+      return v.lesson_id === ui.selectedLesson;
+    }).length;
+    if (lessonVocabBadge) {
+      lessonVocabBadge.textContent = currentVocabCount + ' từ vựng';
+    }
+
+    const activeLesson = lessons.find(function (ls) { return ls.lesson_id === ui.selectedLesson; });
+    let matchedEx = null;
+    if (activeLesson && Array.isArray(state.practiceExercises)) {
+      matchedEx = state.practiceExercises.find(function (ex) {
+        return (ex.lesson_tag && ex.lesson_tag.trim().toLowerCase() === activeLesson.tag.toLowerCase()) ||
+               (ex.title && ex.title.toLowerCase().indexOf(activeLesson.tag.toLowerCase()) >= 0);
+      });
+    }
+
+    if (lessonPracticeBadge) {
+      if (ui.selectedLesson === 'all') {
+        lessonPracticeBadge.className = 'status-badge status-submitted';
+        lessonPracticeBadge.textContent = (state.practiceExercises || []).length + ' đề luyện tập đã soạn';
+      } else if (matchedEx) {
+        lessonPracticeBadge.className = 'status-badge status-graded';
+        lessonPracticeBadge.textContent = 'Đã có đề luyện tập (' + (matchedEx.total_score || 0) + 'đ)';
+      } else {
+        lessonPracticeBadge.className = 'status-badge status-missing';
+        lessonPracticeBadge.textContent = 'Chưa tạo đề luyện tập';
+      }
+    }
+
+    if (syncedCard) {
+      if (ui.selectedLesson === 'all') {
+        syncedCard.innerHTML =
+          '<div style="background:var(--color-surface);border:1px solid var(--color-border-soft);border-radius:var(--radius-xl);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">' +
+            '<div style="font-size:0.875rem;color:var(--color-muted-foreground);">' +
+              '💡 Chọn một bài học cụ thể (ví dụ <strong>Bài 1, Bài 2</strong>...) để quản lý đồng bộ cả <strong>Từ vựng</strong> và <strong>Đề luyện tập cuối buổi</strong> của bài đó.' +
+            '</div>' +
+            '<button type="button" class="btn btn-outline btn-sm" id="btn-quick-jump-practice-tab">' +
+              '<span>Xem tất cả đề luyện tập (Tab 4) →</span>' +
+            '</button>' +
+          '</div>';
+      } else if (matchedEx) {
+        const secCount = (matchedEx.sections || []).length;
+        syncedCard.innerHTML =
+          '<div class="synced-practice-box" style="display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--color-surface);border:1.5px solid var(--color-primary-soft);border-radius:var(--radius-xl);padding:16px 20px;box-shadow:var(--shadow-sm);flex-wrap:wrap;">' +
+            '<div style="display:flex;align-items:center;gap:14px;">' +
+              '<div style="width:44px;height:44px;border-radius:12px;background:var(--color-primary-soft);color:var(--color-primary-deep);display:flex;align-items:center;justify-content:center;font-size:1.25rem;">' +
+                '📝' +
+              '</div>' +
+              '<div>' +
+                '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+                  '<span style="font-weight:800;color:var(--color-primary-deep);font-size:1rem;">' + escapeHtml(matchedEx.title) + '</span>' +
+                  '<span class="status-badge status-graded tabular-nums" style="font-size:0.75rem;">' + (matchedEx.total_score || 0) + ' điểm</span>' +
+                '</div>' +
+                '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-top:3px;">' +
+                  'Đề gồm <strong>' + secCount + ' phần</strong> • Xếp loại: Rất tốt ≥ ' + ((matchedEx.thresholds && matchedEx.thresholds.very_good) || 31) + 'đ, Khá ≥ ' + ((matchedEx.thresholds && matchedEx.thresholds.good) || 25) + 'đ' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+              '<button type="button" class="btn btn-outline btn-sm" id="btn-synced-edit-practice" data-ex-id="' + escapeHtml(matchedEx.exercise_id) + '">' +
+                '<span>✏️ Soạn / Sửa đề</span>' +
+              '</button>' +
+              '<button type="button" class="btn btn-primary btn-sm" id="btn-synced-assign-practice" data-ex-id="' + escapeHtml(matchedEx.exercise_id) + '" style="font-weight:700;">' +
+                '<span>🚀 Giao bài cho lớp</span>' +
+              '</button>' +
+            '</div>' +
+          '</div>';
+      } else {
+        const lsTag = activeLesson ? activeLesson.tag : 'Bài này';
+        const lsTitle = activeLesson ? activeLesson.title : 'Bài học';
+        syncedCard.innerHTML =
+          '<div class="synced-practice-box" style="display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--color-surface-muted);border:1.5px dashed var(--color-border-soft);border-radius:var(--radius-xl);padding:16px 20px;flex-wrap:wrap;">' +
+            '<div style="display:flex;align-items:center;gap:14px;">' +
+              '<div style="width:44px;height:44px;border-radius:12px;background:var(--color-surface);color:var(--color-muted-foreground);display:flex;align-items:center;justify-content:center;font-size:1.25rem;">' +
+                '📋' +
+              '</div>' +
+              '<div>' +
+                '<div style="font-weight:700;color:var(--color-foreground);">' + escapeHtml(lsTag) + ' chưa có đề kiểm tra luyện tập cuối bài</div>' +
+                '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-top:2px;">Tạo bài tập gồm các dạng: Nối từ, Trắc nghiệm, Điền từ, Sửa câu sai, Dịch câu.</div>' +
+              '</div>' +
+            '</div>' +
+            '<button type="button" class="btn btn-primary btn-sm" id="btn-synced-create-practice" data-lesson-tag="' + escapeHtml(lsTag) + '" data-lesson-title="' + escapeHtml(lsTitle) + '">' +
+              '<span>+ Tạo đề luyện tập cho ' + escapeHtml(lsTag) + '</span>' +
+            '</button>' +
+          '</div>';
+      }
+    }
+
     renderTeacherVocabTable();
 
     const logsContainer = document.getElementById('teacher-exit-ticket-logs');
@@ -573,12 +917,12 @@
         max_score: 2,
         data: {
           left: [
-            { id: 1, hanzi: '你好', pinyin: 'nǐ hǎo' },
-            { id: 2, hanzi: '谢谢', pinyin: 'xièxie' }
+            { id: 1, hanzi: '', pinyin: '' },
+            { id: 2, hanzi: '', pinyin: '' }
           ],
           right: [
-            { id: 'A', text: 'Xin chào' },
-            { id: 'B', text: 'Cảm ơn' }
+            { id: 'A', text: '' },
+            { id: 'B', text: '' }
           ],
           answer: { '1': 'A', '2': 'B' }
         }
@@ -588,18 +932,18 @@
         section_id: 'sec_mc_' + timeId,
         section_num: sectionNum,
         type: 'multiple_choice',
-        title: 'Phần ' + sectionNum + ': Trắc nghiệm (multiple_choice)',
+        title: 'Phần ' + sectionNum + ': Trắc nghiệm (multiple choice)',
         description: 'Chọn đáp án chính xác nhất cho từng câu hỏi.',
         max_score: 1,
         data: {
           items: [
             {
               id: 'MC_' + timeId,
-              prompt: 'Điền câu hỏi trắc nghiệm tiếng Trung vào đây...',
+              prompt: '',
               speakWord: '',
-              options: ['Đáp án A (Đúng)', 'Đáp án B', 'Đáp án C', 'Đáp án D'],
+              options: ['', '', '', ''],
               correctIndex: 0,
-              explanation: 'Giải thích lý do vì sao đáp án A đúng...'
+              explanation: ''
             }
           ]
         }
@@ -613,13 +957,13 @@
         description: 'Chọn từ trong ngân hàng từ để điền vào chỗ trống "____".',
         max_score: 1,
         data: {
-          wordbank: ['您', '好', '谢谢'],
+          wordbank: [],
           items: [
             {
               id: 'FB_' + timeId,
-              text: '李老师，____好！',
-              hint: 'Chào cô Lý ạ! (kính trọng)',
-              answer: '您'
+              text: '',
+              hint: '',
+              answer: ''
             }
           ]
         }
@@ -629,17 +973,17 @@
         section_id: 'sec_err_' + timeId,
         section_num: sectionNum,
         type: 'error_correction',
-        title: 'Phần ' + sectionNum + ': Sửa câu sai (error_correction)',
+        title: 'Phần ' + sectionNum + ': Sửa câu sai (correction)',
         description: 'Mỗi câu có một lỗi sai ngữ pháp, viết lại câu đúng vào ô nhập.',
         max_score: 1,
         data: {
           items: [
             {
               id: 'ERR_' + timeId,
-              wrong: '大家们好！',
-              situation: 'Chào mọi người trong lớp học',
-              accepted: ['大家好！', '大家好'],
-              explanation: 'Chữ 大家 đã mang nghĩa số nhiều, không thêm hậu tố 们.'
+              wrong: '',
+              situation: '',
+              accepted: [],
+              explanation: ''
             }
           ]
         }
@@ -658,10 +1002,10 @@
               id: 'TR_' + timeId,
               direction: 'vi->zh',
               mode: 'exact',
-              prompt: 'Xin chào các bạn!',
-              accepted: ['你们好！', '大家好！', '你们好', '大家好'],
-              grading_note: 'Dịch đúng chữ 你们好 hoặc 大家好.',
-              explanation: 'Chào các bạn là 你们好 hoặc 大家好.'
+              prompt: '',
+              accepted: [],
+              grading_note: '',
+              explanation: ''
             }
           ]
         }
@@ -880,7 +1224,7 @@
             id: itemId,
             prompt: prompt.trim(),
             speakWord: speak.trim(),
-            options: options.length > 0 ? options : ['Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D'],
+            options: options.length > 0 ? options : ['', '', '', ''],
             correctIndex: correctIdx,
             explanation: exp.trim()
           });
@@ -1203,14 +1547,17 @@
       const items = (sec.data && sec.data.items) || [];
       const questionsHtml = items
         .map(function (item, idx) {
-          const opts = item.options || ['Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D'];
+          const opts = item.options || ['', '', '', ''];
           const optLetters = ['A', 'B', 'C', 'D'];
           const optionsHtml = optLetters
             .map(function (letter, optIdx) {
+              const rawOpt = opts[optIdx] || '';
+              const isGeneric = /^Đáp án [ABCD](\s*\(Đúng\))?$/i.test(rawOpt.trim());
+              const val = isGeneric ? '' : rawOpt;
               const isChecked = Number(item.correctIndex) === optIdx;
               return (
                 '<div class="gform-option-row">' +
-                '<label class="gform-option-radio-wrap" title="Tích chọn nếu đây là đáp án đúng">' +
+                '<label class="gform-option-radio-wrap" title="Tích chọn để đặt làm đáp án đúng">' +
                 '<input type="radio" name="mc_correct_' +
                 sec.section_id +
                 '_' +
@@ -1219,10 +1566,19 @@
                 optIdx +
                 '"' +
                 (isChecked ? ' checked' : '') +
-                '>' +
-                '<span>' +
+                ' data-mc-radio="' +
+                sec.section_id +
+                ':' +
+                item.id +
+                ':' +
+                optIdx +
+                '">' +
+                '<span class="gform-opt-label">' +
+                '<strong class="gform-opt-letter">' +
                 letter +
-                ' (Đúng)</span>' +
+                '</strong>' +
+                '<span class="gform-opt-badge">(Đáp án đúng)</span>' +
+                '</span>' +
                 '</label>' +
                 '<input type="text" class="form-control" data-mc-opt="' +
                 sec.section_id +
@@ -1231,14 +1587,19 @@
                 ':' +
                 optIdx +
                 '" value="' +
-                escapeHtml(opts[optIdx] || '') +
-                '" placeholder="Nội dung đáp án ' +
+                escapeHtml(val) +
+                '" placeholder="Nhập đáp án ' +
                 letter +
                 '...">' +
                 '</div>'
               );
             })
             .join('');
+
+          const isGenericPrompt = /^(Điền câu hỏi|Câu hỏi trắc nghiệm)/i.test((item.prompt || '').trim());
+          const promptVal = isGenericPrompt ? '' : (item.prompt || '');
+          const isGenericExp = /^(Giải thích lý do|Lời giải thích)/i.test((item.explanation || '').trim());
+          const expVal = isGenericExp ? '' : (item.explanation || '');
 
           return (
             '<div class="gform-question-card" data-mc-qcard="' +
@@ -1263,7 +1624,7 @@
             ':' +
             item.id +
             '" rows="2" placeholder="Ví dụ: Khi hai âm tiết mang thanh 3 đi liền nhau như 你好 (nǐ hǎo), quy tắc biến điệu phát âm chuẩn là gì?">' +
-            escapeHtml(item.prompt) +
+            escapeHtml(promptVal) +
             '</textarea>' +
             '</div>' +
             '<div>' +
@@ -1274,10 +1635,10 @@
             item.id +
             '" value="' +
             escapeHtml(item.speakWord || '') +
-            '" placeholder="Ví dụ: 你好">' +
+            '" placeholder="Ví dụ: 你好 (tùy chọn để học sinh nghe phát âm)">' +
             '</div>' +
             '<div style="display:flex;flex-direction:column;gap:8px;">' +
-            '<label class="form-label" style="font-size:0.8125rem;margin-bottom:0;">4 Lựa chọn đáp án (Tích chọn nút tròn trước chữ cái là đáp án đúng):</label>' +
+            '<label class="form-label" style="font-size:0.8125rem;margin-bottom:0;">4 Lựa chọn đáp án (Tích chọn nút tròn trước chữ cái để đặt làm đáp án đúng):</label>' +
             optionsHtml +
             '</div>' +
             '<div>' +
@@ -1287,7 +1648,7 @@
             ':' +
             item.id +
             '" value="' +
-            escapeHtml(item.explanation || '') +
+            escapeHtml(expVal) +
             '" placeholder="Ví dụ: Quy tắc biến điệu hai thanh 3: âm tiết thứ nhất biến âm thành thanh 2 (ní hǎo)...">' +
             '</div>' +
             '</div>'
@@ -1337,7 +1698,7 @@
             ':' +
             item.id +
             '" value="' +
-            escapeHtml(item.text) +
+            escapeHtml(item.text || '') +
             '" placeholder="Ví dụ: 李老师，____好！">' +
             '</div>' +
             '<div>' +
@@ -1347,7 +1708,7 @@
             ':' +
             item.id +
             '" value="' +
-            escapeHtml(item.answer) +
+            escapeHtml(item.answer || '') +
             '" placeholder="Ví dụ: 您">' +
             '</div>' +
             '</div>' +
@@ -1358,7 +1719,7 @@
             ':' +
             item.id +
             '" value="' +
-            escapeHtml(item.hint) +
+            escapeHtml((item.hint || '').trim() === 'Gợi ý nghĩa tiếng Việt...' ? '' : (item.hint || '')) +
             '" placeholder="Ví dụ: Chào cô Lý ạ! (kính trọng)">' +
             '</div>' +
             '</div>'
@@ -1416,7 +1777,7 @@
             ':' +
             item.id +
             '" value="' +
-            escapeHtml(item.wrong) +
+            escapeHtml(item.wrong || '') +
             '" placeholder="Ví dụ: 大家们好！">' +
             '</div>' +
             '<div>' +
@@ -1426,7 +1787,7 @@
             ':' +
             item.id +
             '" value="' +
-            escapeHtml(item.situation) +
+            escapeHtml((item.situation || '').trim() === 'Tình huống giao tiếp...' ? '' : (item.situation || '')) +
             '" placeholder="Ví dụ: Chào mọi người trong lớp học">' +
             '</div>' +
             '</div>' +
@@ -1447,7 +1808,7 @@
             ':' +
             item.id +
             '" value="' +
-            escapeHtml(item.explanation) +
+            escapeHtml(item.explanation || '') +
             '" placeholder="Ví dụ: Chữ 大家 đã mang nghĩa số nhiều, không thêm 们.">' +
             '</div>' +
             '</div>'
@@ -1713,7 +2074,7 @@
       });
     });
 
-    // 3. Multiple Choice: Add Question / Delete Question
+    // 3. Multiple Choice: Add Question / Delete Question / Radio Change
     document.querySelectorAll('[data-add-mc-q]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         collectExerciseFromDom();
@@ -1728,7 +2089,7 @@
           id: 'MC_' + Date.now(),
           prompt: '',
           speakWord: '',
-          options: ['Đáp án A (Đúng)', 'Đáp án B', 'Đáp án C', 'Đáp án D'],
+          options: ['', '', '', ''],
           correctIndex: 0,
           explanation: ''
         });
@@ -1761,6 +2122,13 @@
       });
     });
 
+    document.querySelectorAll('[data-mc-radio]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        collectExerciseFromDom();
+        window.StudySnapStore.savePracticeExercise(state, ex);
+      });
+    });
+
     // 4. Fill Blank: Add Question / Delete Question
     document.querySelectorAll('[data-add-fb-q]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -1774,9 +2142,9 @@
 
         sec.data.items.push({
           id: 'FB_' + Date.now(),
-          text: '李老师，____好！',
-          hint: 'Gợi ý nghĩa tiếng Việt...',
-          answer: '您'
+          text: '',
+          hint: '',
+          answer: ''
         });
         sec.max_score = sec.data.items.length;
 
@@ -1820,9 +2188,9 @@
 
         sec.data.items.push({
           id: 'ERR_' + Date.now(),
-          wrong: '大家们好！',
-          situation: 'Tình huống giao tiếp...',
-          accepted: ['大家好！', '大家好'],
+          wrong: '',
+          situation: '',
+          accepted: [],
           explanation: ''
         });
         sec.max_score = sec.data.items.length;
@@ -1869,8 +2237,8 @@
           id: 'TR_' + Date.now(),
           direction: 'vi->zh',
           mode: 'exact',
-          prompt: 'Xin chào các bạn!',
-          accepted: ['你们好！', '大家好！'],
+          prompt: '',
+          accepted: [],
           grading_note: '',
           explanation: ''
         });
@@ -2479,7 +2847,14 @@
         const title = (titleInp ? titleInp.value : '').trim() || ('Bài ' + nextNum);
         const tag = (tagInp ? tagInp.value : '').trim() || ('Bài ' + nextNum);
 
-        const newEx = createTemplateExercise(title, tag);
+        const newEx = {
+          exercise_id: 'EX_' + Date.now(),
+          title: title,
+          lesson_tag: tag,
+          total_score: 0,
+          thresholds: { very_good: 31, good: 25 },
+          sections: []
+        };
 
         if (!Array.isArray(state.practiceExercises)) {
           state.practiceExercises = [];
@@ -2491,6 +2866,34 @@
         renderTeacherPracticeTab();
         showToast('Đã tạo bài tập mới: ' + title);
       });
+    }
+
+    // Title & Tag live-sync to active exercise and dropdown
+    const metaTitleInput = document.getElementById('ex-meta-title');
+    const metaTagInput = document.getElementById('ex-meta-tag');
+    function syncMetaInputsToActiveEx() {
+      const ex = getActivePracticeExercise();
+      if (!ex) return;
+      if (metaTitleInput && metaTitleInput.value.trim()) {
+        ex.title = metaTitleInput.value.trim();
+      }
+      if (metaTagInput && metaTagInput.value.trim()) {
+        ex.lesson_tag = metaTagInput.value.trim();
+      }
+      window.StudySnapStore.savePracticeExercise(state, ex);
+      const sel = document.getElementById('teacher-practice-select');
+      if (sel) {
+        const opt = sel.querySelector('option[value="' + ex.exercise_id + '"]');
+        if (opt) {
+          opt.textContent = (ex.lesson_tag ? '[' + ex.lesson_tag + '] ' : '') + ex.title + ' (' + (ex.total_score || 0) + 'đ)';
+        }
+      }
+    }
+    if (metaTitleInput) {
+      metaTitleInput.addEventListener('input', syncMetaInputsToActiveEx);
+    }
+    if (metaTagInput) {
+      metaTagInput.addEventListener('input', syncMetaInputsToActiveEx);
     }
 
     // Top Bar Save Button Trigger
@@ -2790,6 +3193,14 @@
     });
     if (tabId === 'practice') {
       renderTeacherPracticeTab();
+    } else if (tabId === 'content') {
+      renderContentAndExitLogsTab();
+    } else if (tabId === 'grading') {
+      renderSummaryStats();
+      renderGradingPanel();
+      renderProgressMatrix();
+    } else if (tabId === 'accounts') {
+      renderStudentAccountsTab();
     }
   }
 
@@ -2838,6 +3249,145 @@
     if (logoutBtn) {
       logoutBtn.addEventListener('click', function () {
         window.StudySnapAuth.logout();
+      });
+    }
+
+    // Bộ lọc chọn Lớp học ở Tab 1
+    const classFilter = document.getElementById('teacher-class-filter');
+    if (classFilter) {
+      classFilter.addEventListener('change', function () {
+        ui.selectedClass = classFilter.value;
+        ui.teacherDraftVoice = null;
+        renderSummaryStats();
+        renderGradingPanel();
+        renderProgressMatrix();
+      });
+    }
+
+    // Bộ chọn Bài học đồng bộ ở Tab 3 (Từ vựng + Đề kiểm tra cuối buổi)
+    const teacherLessonSelect = document.getElementById('teacher-lesson-select');
+    if (teacherLessonSelect) {
+      teacherLessonSelect.addEventListener('change', function () {
+        ui.selectedLesson = teacherLessonSelect.value;
+        ui.vocabFilter = teacherLessonSelect.value;
+        renderContentAndExitLogsTab();
+      });
+    }
+
+    // Modal Giao bài cho lớp học
+    function openAssignPracticeModal(ex) {
+      if (!ex) return;
+      const modal = document.getElementById('modal-assign-practice');
+      const titleInp = document.getElementById('assign-practice-title');
+      const classSel = document.getElementById('assign-practice-class');
+      const dueInp = document.getElementById('assign-practice-due');
+      const noteInp = document.getElementById('assign-practice-note');
+      const form = document.getElementById('form-assign-practice-to-class');
+
+      if (titleInp) titleInp.value = (ex.lesson_tag ? '[' + ex.lesson_tag + '] ' : '') + ex.title;
+
+      if (classSel) {
+        const availableClasses = getAvailableClasses();
+        const opts = ['<option value="all">Tất cả các lớp học (' + state.students.length + ' học sinh)</option>'];
+        availableClasses.forEach(function (cls) {
+          const countInClass = state.students.filter(function (s) { return (s.class_name || '').trim() === cls; }).length;
+          const sel = (cls === ui.selectedClass && cls !== 'all') ? ' selected' : '';
+          opts.push('<option value="' + escapeHtml(cls) + '"' + sel + '>' + escapeHtml(cls) + ' (' + countInClass + ' HS)</option>');
+        });
+        classSel.innerHTML = opts.join('');
+      }
+
+      if (dueInp && !dueInp.value) {
+        const now = new Date();
+        now.setDate(now.getDate() + 3);
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        dueInp.value = day + '/' + month + '/' + year;
+      }
+
+      if (noteInp && !noteInp.value) {
+        noteInp.value = 'Làm bài luyện tập cuối bài cẩn thận, mục tiêu đạt từ ' + ((ex.thresholds && ex.thresholds.good) || 25) + ' điểm trở lên nhé các em!';
+      }
+
+      if (form) {
+        form.setAttribute('data-target-ex-id', ex.exercise_id);
+      }
+
+      if (modal) {
+        modal.classList.add('is-open', 'is-visible');
+      }
+    }
+
+    function closeAssignPracticeModal() {
+      const modal = document.getElementById('modal-assign-practice');
+      if (modal) {
+        modal.classList.remove('is-open', 'is-visible');
+      }
+    }
+
+    const btnAssignPracticeTop = document.getElementById('btn-assign-practice-to-class');
+    if (btnAssignPracticeTop) {
+      btnAssignPracticeTop.addEventListener('click', function () {
+        const ex = getActivePracticeExercise();
+        if (ex) {
+          openAssignPracticeModal(ex);
+        } else {
+          showToast('Vui lòng tạo hoặc chọn một bài tập trước khi giao cho lớp!');
+        }
+      });
+    }
+
+    const btnCloseAssignModal = document.getElementById('btn-close-assign-modal');
+    if (btnCloseAssignModal) btnCloseAssignModal.addEventListener('click', closeAssignPracticeModal);
+
+    const btnCancelAssignModal = document.getElementById('btn-cancel-assign-modal');
+    if (btnCancelAssignModal) btnCancelAssignModal.addEventListener('click', closeAssignPracticeModal);
+
+    const formAssignPractice = document.getElementById('form-assign-practice-to-class');
+    if (formAssignPractice) {
+      formAssignPractice.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        const targetExId = formAssignPractice.getAttribute('data-target-ex-id');
+        const ex = (state.practiceExercises || []).find(function (e) { return e.exercise_id === targetExId; }) || getActivePracticeExercise();
+        if (!ex) return;
+
+        const classVal = document.getElementById('assign-practice-class').value;
+        const dueVal = document.getElementById('assign-practice-due').value.trim();
+        const noteVal = document.getElementById('assign-practice-note').value.trim();
+
+        const newAsg = {
+          assignment_id: 'ASG_PRAC_' + Date.now(),
+          title: 'Luyện tập cuối bài: ' + ex.title.replace(/^Bài tập luyện tập cuối bài\s*—\s*/i, ''),
+          lesson_tag: ex.lesson_tag || 'Bài tập',
+          lesson_id: ui.selectedLesson || 'bai-1',
+          due_date: dueVal || '20/11/2026',
+          description: noteVal || 'Làm bài kiểm tra luyện tập cuối bài trực tiếp trên hệ thống.',
+          require_media: 'practice',
+          exercise_id: ex.exercise_id,
+          class_name: classVal
+        };
+
+        if (!Array.isArray(state.assignments)) state.assignments = [];
+        state.assignments.push(newAsg);
+        ui.gradingAssignmentId = newAsg.assignment_id;
+        window.StudySnapStore.saveState(state);
+
+        closeAssignPracticeModal();
+        renderAll();
+        showToast('Đã giao bài "' + ex.title + '" cho ' + (classVal === 'all' ? 'tất cả các lớp' : classVal) + ' thành công!');
+
+        window.StudySnapStore.syncPostToGas(state, {
+          action: 'addAssignment',
+          assignment_id: newAsg.assignment_id,
+          title: newAsg.title,
+          lesson_tag: newAsg.lesson_tag,
+          due_date: newAsg.due_date,
+          description: newAsg.description,
+          class_name: newAsg.class_name,
+          require_media: 'practice',
+          exercise_id: newAsg.exercise_id
+        });
       });
     }
 
@@ -2973,6 +3523,7 @@
         const due = document.getElementById('new-asg-due').value.trim();
         const title = document.getElementById('new-asg-title').value.trim();
         const desc = document.getElementById('new-asg-desc').value.trim();
+        const asgClass = document.getElementById('new-asg-class') ? document.getElementById('new-asg-class').value : 'all';
         if (!title) return;
 
         const newId = 'BVN0' + (state.assignments.length + 1);
@@ -2982,7 +3533,8 @@
           lesson_tag: tag || ('Bài ' + (state.assignments.length + 1)),
           due_date: due || '20/11/2026',
           description: desc,
-          require_media: 'audio_or_video'
+          require_media: 'audio_or_video',
+          class_name: asgClass
         };
 
         state.assignments.push(newAsg);
@@ -2990,7 +3542,7 @@
         window.StudySnapStore.saveState(state);
         createAsgForm.reset();
         renderAll();
-        showToast('Đã giao bài tập mới "' + newAsg.lesson_tag + '" và thêm cột vào Bảng tổng hợp!');
+        showToast('Đã giao bài tập mới "' + newAsg.lesson_tag + '" cho ' + (asgClass === 'all' ? 'tất cả các lớp' : asgClass) + '!');
 
         window.StudySnapStore.syncPostToGas(state, {
           action: 'addAssignment',
@@ -2998,8 +3550,82 @@
           title: newAsg.title,
           lesson_tag: newAsg.lesson_tag,
           due_date: newAsg.due_date,
-          description: newAsg.description
+          description: newAsg.description,
+          class_name: newAsg.class_name
         });
+      });
+    }
+
+    // Giáo viên Tạo Lớp học mới
+    const createClassForm = document.getElementById('create-class-form');
+    if (createClassForm) {
+      createClassForm.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        const nameInput = document.getElementById('new-class-name');
+        const className = (nameInput ? nameInput.value : '').trim();
+        if (!className) return;
+
+        if (!Array.isArray(state.classes)) state.classes = [];
+
+        const exists = state.classes.some(function (c) {
+          return c.class_name.trim().toLowerCase() === className.toLowerCase();
+        });
+        if (exists) {
+          showToast('Lớp học "' + className + '" đã có trong danh sách!');
+          return;
+        }
+
+        const newClass = {
+          class_id: 'CLS_' + Date.now(),
+          class_name: className,
+          created_at: new Date().toLocaleDateString('vi-VN')
+        };
+        state.classes.push(newClass);
+        window.StudySnapStore.saveState(state);
+        if (nameInput) nameInput.value = '';
+
+        ui.studentAccountsClassFilter = className;
+        renderAll();
+        showToast('Đã tạo lớp học mới: ' + className + '! Bạn có thể chọn lớp này ở dropdown bên dưới.');
+
+        window.StudySnapStore.syncPostToGas(state, {
+          action: 'createClass',
+          class_id: newClass.class_id,
+          class_name: newClass.class_name
+        });
+      });
+    }
+
+    // Bộ lọc danh sách học sinh theo lớp
+    const studentAccountsFilter = document.getElementById('student-accounts-class-filter');
+    if (studentAccountsFilter) {
+      studentAccountsFilter.addEventListener('change', function () {
+        ui.studentAccountsClassFilter = studentAccountsFilter.value;
+        renderStudentAccountsTab();
+      });
+    }
+
+    // Nút đổi mã tên đăng nhập ngẫu nhiên / tiếp theo
+    const btnRegenUsername = document.getElementById('btn-regen-username');
+    if (btnRegenUsername) {
+      btnRegenUsername.addEventListener('click', function () {
+        const usernameInput = document.getElementById('new-student-username');
+        if (usernameInput) {
+          usernameInput.value = generateNextUsername();
+          showToast('Đã sinh Tên đăng nhập mới: ' + usernameInput.value);
+        }
+      });
+    }
+
+    // Nút sinh mật khẩu ngẫu nhiên
+    const btnRegenPassword = document.getElementById('btn-regen-password');
+    if (btnRegenPassword) {
+      btnRegenPassword.addEventListener('click', function () {
+        const passwordInput = document.getElementById('new-student-password');
+        if (passwordInput) {
+          passwordInput.value = generateRandomPassword();
+          showToast('Đã sinh Mật khẩu ngẫu nhiên: ' + passwordInput.value);
+        }
       });
     }
 
@@ -3008,20 +3634,27 @@
     if (createStudentForm) {
       createStudentForm.addEventListener('submit', function (ev) {
         ev.preventDefault();
-        const fullName = document.getElementById('new-student-name').value.trim();
-        const className = document.getElementById('new-student-class').value.trim() || 'Lớp Tiếng Trung HSK 2';
-        const username = document.getElementById('new-student-username').value.trim().toLowerCase();
-        const password = document.getElementById('new-student-password').value.trim() || '123456';
+        const nameInput = document.getElementById('new-student-name');
+        const fullName = (nameInput ? nameInput.value : '').trim();
+        const classSelect = document.getElementById('new-student-class');
+        const className = (classSelect ? classSelect.value : '').trim() || 'Lớp Tiếng Trung HSK 2';
+        let username = (document.getElementById('new-student-username').value || '').trim().toLowerCase();
+        let password = (document.getElementById('new-student-password').value || '').trim();
 
-        if (!fullName || !username) return;
+        if (!fullName) return;
 
-        // Kiểm tra trùng username
-        const exists = state.students.some(function (s) {
-          return String(s.username || '').toLowerCase() === username || String(s.student_id || '').toLowerCase() === username;
-        });
-        if (exists) {
-          showToast('Tên đăng nhập "' + username + '" đã tồn tại. Vui lòng chọn tên đăng nhập khác.');
-          return;
+        if (!username) {
+          username = generateNextUsername();
+        }
+        if (!password) {
+          password = generateRandomPassword();
+        }
+
+        // Tự động kiểm tra trùng username, nếu trùng thì sinh mã kế tiếp
+        if (state.students.some(function (s) {
+          return String(s.username || s.student_id || '').toLowerCase() === username;
+        })) {
+          username = generateNextUsername();
         }
 
         const nextId = 'HS' + String(state.students.length + 1).padStart(2, '0');
@@ -3038,10 +3671,23 @@
 
         state.students.push(newStudent);
         window.StudySnapStore.saveState(state);
-        document.getElementById('new-student-name').value = '';
-        document.getElementById('new-student-username').value = 'hs' + String(state.students.length + 1).padStart(2, '0');
+
+        // Reset form: chỉ cần xóa tên học sinh, tự động sinh username kế tiếp và sinh mật khẩu ngẫu nhiên mới
+        if (nameInput) {
+          nameInput.value = '';
+          nameInput.focus();
+        }
+        const usernameInput = document.getElementById('new-student-username');
+        if (usernameInput) {
+          usernameInput.value = generateNextUsername();
+        }
+        const passwordInput = document.getElementById('new-student-password');
+        if (passwordInput) {
+          passwordInput.value = generateRandomPassword();
+        }
+
         renderAll();
-        showToast('Đã tạo tài khoản cho học sinh ' + fullName + ' (TK: ' + username + ' / MK: ' + password + ')!');
+        showToast('Đã thêm học sinh ' + fullName + ' vào ' + className + ' (TK: ' + username + ' / MK: ' + password + ')!');
 
         window.StudySnapStore.syncPostToGas(state, {
           action: 'createStudentAccount',
@@ -3193,6 +3839,74 @@
         return;
       }
 
+      // Lọc danh sách học sinh theo lớp từ thẻ lớp học
+      const filterClassBtn = ev.target.closest('[data-filter-class-students]');
+      if (filterClassBtn) {
+        const clsName = filterClassBtn.getAttribute('data-filter-class-students');
+        ui.studentAccountsClassFilter = clsName;
+        renderStudentAccountsTab();
+        const listEl = document.getElementById('student-accounts-list');
+        if (listEl) listEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+      }
+
+      // Xóa lớp học
+      const deleteClassBtn = ev.target.closest('[data-delete-class-name]');
+      if (deleteClassBtn) {
+        const clsName = deleteClassBtn.getAttribute('data-delete-class-name');
+        const studentsInClass = (state.students || []).filter(function (s) {
+          return (s.class_name || '').trim().toLowerCase() === clsName.trim().toLowerCase();
+        });
+        if (studentsInClass.length > 0) {
+          const confirmDel = window.confirm(
+            'Lớp "' + clsName + '" hiện đang có ' + studentsInClass.length + ' học sinh!\n\n' +
+            'Bạn có chắc chắn muốn xóa lớp này? (Các học sinh trong lớp sẽ được chuyển thành "Chưa xếp lớp")'
+          );
+          if (!confirmDel) return;
+          studentsInClass.forEach(function (s) { s.class_name = 'Chưa xếp lớp'; });
+        }
+        state.classes = (state.classes || []).filter(function (c) {
+          return c.class_name.trim().toLowerCase() !== clsName.trim().toLowerCase();
+        });
+        window.StudySnapStore.saveState(state);
+        if (ui.studentAccountsClassFilter === clsName) ui.studentAccountsClassFilter = 'all';
+        renderAll();
+        showToast('Đã xóa lớp học "' + clsName + '"!');
+        return;
+      }
+
+      // Đổi lớp cho học sinh
+      const changeClassBtn = ev.target.closest('[data-change-student-class]');
+      if (changeClassBtn) {
+        const stId = changeClassBtn.getAttribute('data-change-student-class');
+        const st = findStudent(stId);
+        if (!st) return;
+        const available = getAvailableClasses();
+        if (available.length === 0) {
+          showToast('Chưa có lớp học nào. Hãy tạo lớp học mới trước!');
+          return;
+        }
+        const classListStr = available.map(function (c, idx) { return (idx + 1) + '. ' + c; }).join('\n');
+        const chosen = window.prompt(
+          'Chọn lớp học mới cho học sinh ' + st.full_name + ':\n\n' +
+          classListStr + '\n\n' +
+          'Nhập số thứ tự hoặc tên lớp mới:',
+          st.class_name || available[0]
+        );
+        if (chosen && chosen.trim()) {
+          let targetClass = chosen.trim();
+          const num = parseInt(targetClass, 10);
+          if (!isNaN(num) && num >= 1 && num <= available.length) {
+            targetClass = available[num - 1];
+          }
+          st.class_name = targetClass;
+          window.StudySnapStore.saveState(state);
+          renderAll();
+          showToast('Đã chuyển học sinh ' + st.full_name + ' sang ' + targetClass + '!');
+        }
+        return;
+      }
+
       // Nút chèn nhanh dấu thanh điệu Pinyin
       const toneBtn = ev.target.closest('[data-insert-tone]');
       if (toneBtn) {
@@ -3218,6 +3932,56 @@
           b.classList.toggle('is-active', b === vocabFilterBtn);
         });
         renderTeacherVocabTable();
+        return;
+      }
+
+      // Chuyển sang sửa đề bài tập luyện tập đồng bộ từ Tab 3
+      const editPracticeBtn = ev.target.closest('#btn-synced-edit-practice');
+      if (editPracticeBtn) {
+        const exId = editPracticeBtn.getAttribute('data-ex-id');
+        ui.selectedPracticeExId = exId;
+        switchTeacherTab('practice');
+        renderTeacherPracticeTab();
+        return;
+      }
+
+      // Mở modal giao đề bài tập luyện tập đồng bộ từ Tab 3
+      const assignPracticeBtn = ev.target.closest('#btn-synced-assign-practice');
+      if (assignPracticeBtn) {
+        const exId = assignPracticeBtn.getAttribute('data-ex-id');
+        const ex = (state.practiceExercises || []).find(function (e) { return e.exercise_id === exId; });
+        if (ex) openAssignPracticeModal(ex);
+        return;
+      }
+
+      // Tạo nhanh đề bài tập luyện tập cho bài học từ Tab 3
+      const createPracticeBtn = ev.target.closest('#btn-synced-create-practice');
+      if (createPracticeBtn) {
+        const tag = createPracticeBtn.getAttribute('data-lesson-tag') || 'Bài 1';
+        const title = createPracticeBtn.getAttribute('data-lesson-title') || ('Bài tập luyện tập ' + tag);
+        const newEx = {
+          exercise_id: 'EX_' + Date.now(),
+          title: 'Bài tập luyện tập cuối bài — ' + title,
+          lesson_tag: tag,
+          total_score: 0,
+          thresholds: { very_good: 31, good: 25 },
+          sections: []
+        };
+        if (!Array.isArray(state.practiceExercises)) state.practiceExercises = [];
+        state.practiceExercises.push(newEx);
+        ui.selectedPracticeExId = newEx.exercise_id;
+        window.StudySnapStore.savePracticeExercise(state, newEx);
+        switchTeacherTab('practice');
+        renderTeacherPracticeTab();
+        showToast('Đã khởi tạo đề mới cho ' + tag + '! Hãy bấm chọn dạng bài bên dưới để soạn câu hỏi.');
+        return;
+      }
+
+      // Nút nhảy nhanh sang Tab 4 từ thông báo Tab 3
+      const jumpPracticeBtn = ev.target.closest('#btn-quick-jump-practice-tab');
+      if (jumpPracticeBtn) {
+        switchTeacherTab('practice');
+        renderTeacherPracticeTab();
         return;
       }
 

@@ -48,6 +48,7 @@
     practiceAnswers: {},
     selectedMatchingLeft: null,
     selectedWordBankChip: null,
+    selectedTargetBlank: null,
     matchingShuffledRight: {},
     practiceViewingResult: false,
 
@@ -234,38 +235,54 @@
   // =========================================================================
   // 2. TAB 1: HOMEWORK SUBMISSION & TEACHER VOICE FEEDBACK VIEWER
   // =========================================================================
+  function getStudentAssignments(student) {
+    if (!student) return state.assignments;
+    const sClass = (student.class_name || '').trim();
+    return state.assignments.filter(function (asg) {
+      if (!asg.class_name || asg.class_name === 'all') return true;
+      return asg.class_name.trim() === sClass;
+    });
+  }
+
   function renderHomeworkSection() {
     const student = getActiveStudent();
     const selectEl = document.getElementById('student-assignment-select');
+    const studentAssignments = getStudentAssignments(student);
+
+    if (studentAssignments.length > 0 && !studentAssignments.some(function (a) { return a.assignment_id === ui.selectedAssignmentId; })) {
+      ui.selectedAssignmentId = studentAssignments[0].assignment_id;
+    }
 
     if (selectEl) {
-      selectEl.innerHTML = state.assignments
-        .map(function (asg) {
-          const sub = findSubmission(asg.assignment_id, student.student_id);
-          let statusLabel = 'Chưa nộp';
-          if (sub && sub.status === 'graded') {
-            statusLabel = 'Đã chấm: ' + sub.score + '/10';
-          } else if (sub) {
-            statusLabel = 'Đã nộp • Chờ chấm';
-          }
-          const selected = asg.assignment_id === ui.selectedAssignmentId ? ' selected' : '';
-          return (
-            '<option value="' +
-            escapeHtml(asg.assignment_id) +
-            '"' +
-            selected +
-            '>' +
-            escapeHtml(asg.title + ' (' + statusLabel + ')') +
-            '</option>'
-          );
-        })
-        .join('');
+      selectEl.innerHTML = studentAssignments.length > 0
+        ? studentAssignments
+            .map(function (asg) {
+              const sub = findSubmission(asg.assignment_id, student.student_id);
+              let statusLabel = 'Chưa nộp';
+              if (sub && sub.status === 'graded') {
+                statusLabel = 'Đã chấm: ' + sub.score + (asg.require_media === 'practice' ? 'đ' : '/10');
+              } else if (sub) {
+                statusLabel = 'Đã nộp • Chờ chấm';
+              }
+              const selected = asg.assignment_id === ui.selectedAssignmentId ? ' selected' : '';
+              return (
+                '<option value="' +
+                escapeHtml(asg.assignment_id) +
+                '"' +
+                selected +
+                '>' +
+                escapeHtml(asg.title + ' (' + statusLabel + ')') +
+                '</option>'
+              );
+            })
+            .join('')
+        : '<option value="">-- Chưa có bài tập cho lớp của em --</option>';
     }
 
     const currentAsg =
-      state.assignments.find(function (a) {
+      studentAssignments.find(function (a) {
         return a.assignment_id === ui.selectedAssignmentId;
-      }) || state.assignments[0];
+      }) || studentAssignments[0] || state.assignments[0];
 
     if (currentAsg) {
       const briefTitle = document.getElementById('student-brief-title');
@@ -275,6 +292,49 @@
       }
       if (briefDesc) {
         briefDesc.textContent = currentAsg.description;
+      }
+
+      // Check if assignment is a practice test
+      const recorderZone = document.getElementById('student-recorder-zone');
+      const submitBtn = document.querySelector('#student-submit-hw-form button[type="submit"]');
+      let practiceCallout = document.getElementById('practice-asg-callout');
+
+      if (currentAsg.require_media === 'practice') {
+        if (recorderZone) recorderZone.style.display = 'none';
+        if (submitBtn) submitBtn.style.display = 'none';
+        if (!practiceCallout && recorderZone && recorderZone.parentNode) {
+          practiceCallout = document.createElement('div');
+          practiceCallout.id = 'practice-asg-callout';
+          recorderZone.parentNode.insertBefore(practiceCallout, recorderZone);
+        }
+        if (practiceCallout) {
+          practiceCallout.style.display = 'block';
+          practiceCallout.innerHTML =
+            '<div style="background:var(--color-primary-soft);border:1.5px solid var(--color-primary);border-radius:var(--radius-xl);padding:18px 20px;margin-bottom:16px;">' +
+              '<div style="font-weight:800;color:var(--color-primary-deep);font-size:1rem;margin-bottom:4px;">' +
+                '📝 Đây là Bài tập luyện tập cuối bài (Làm trực tiếp trên Web)' +
+              '</div>' +
+              '<p style="font-size:0.875rem;color:var(--color-muted-foreground);margin-bottom:14px;line-height:1.5;">' +
+                'Bài tập bao gồm các phần câu hỏi tương tác (Nối từ, Trắc nghiệm, Điền từ, Sửa câu sai, Dịch câu). Hệ thống sẽ tự chấm điểm và xếp loại kết quả ngay sau khi nộp bài.' +
+              '</p>' +
+              '<button type="button" class="btn btn-primary" id="btn-student-do-practice-now" data-ex-id="' + escapeHtml(currentAsg.exercise_id || '') + '" style="font-weight:700;width:100%;">' +
+                '<span>🚀 Bắt đầu làm bài luyện tập ngay ➔</span>' +
+              '</button>' +
+            '</div>';
+          const btnDo = practiceCallout.querySelector('#btn-student-do-practice-now');
+          if (btnDo) {
+            btnDo.addEventListener('click', function () {
+              const exId = btnDo.getAttribute('data-ex-id');
+              if (exId) ui.selectedExerciseId = exId;
+              switchTab('practice');
+              renderPracticeSection();
+            });
+          }
+        }
+      } else {
+        if (recorderZone) recorderZone.style.display = 'block';
+        if (submitBtn) submitBtn.style.display = 'block';
+        if (practiceCallout) practiceCallout.style.display = 'none';
       }
     }
 
@@ -398,32 +458,34 @@
     const summaryBadge = document.getElementById('student-table-summary-badge');
     if (!tbody) return;
 
-    if (state.assignments.length === 0) {
+    const studentAssignments = getStudentAssignments(student);
+
+    if (studentAssignments.length === 0) {
       tbody.innerHTML =
         '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--color-muted-foreground);">' +
-          'Hiện giáo viên chưa giao bài tập về nhà mới.' +
+          'Hiện giáo viên chưa giao bài tập về nhà cho lớp của em.' +
         '</td></tr>';
       if (summaryBadge) summaryBadge.textContent = '0/0 bài tập';
       return;
     }
 
     let completed = 0;
-    tbody.innerHTML = state.assignments
+    tbody.innerHTML = studentAssignments
       .map(function (asg) {
         const sub = findSubmission(asg.assignment_id, student.student_id);
         let statusHtml = '<span class="status-badge status-missing">Chưa làm</span>';
         let scoreHtml = '<span class="mono-text tabular-nums" style="color: var(--color-muted-foreground);">—</span>';
         let feedbackHtml =
-          '<p class="matrix-teacher-note">Em chưa nộp bài này. Hãy thu âm hoặc tải video nộp trước hạn ' +
+          '<p class="matrix-teacher-note">Em chưa nộp bài này. Hãy hoàn thành trước hạn ' +
           escapeHtml(asg.due_date) +
           '.</p>';
-        let btnText = 'Làm & Nộp bài';
+        let btnText = asg.require_media === 'practice' ? 'Làm bài luyện tập' : 'Làm & Nộp bài';
 
         if (sub) {
           completed++;
           if (sub.status === 'graded') {
             statusHtml = '<span class="status-badge status-graded">Đã chữa &amp; Có phản hồi</span>';
-            scoreHtml = '<strong class="mono-text tabular-nums">' + escapeHtml(sub.score) + ' / 10</strong>';
+            scoreHtml = '<strong class="mono-text tabular-nums">' + escapeHtml(sub.score) + (asg.require_media === 'practice' ? 'đ' : ' / 10') + '</strong>';
             feedbackHtml =
               '<div class="matrix-cell-content">' +
               '<p class="matrix-teacher-note">' +
@@ -489,7 +551,7 @@
       .join('');
 
     if (summaryBadge) {
-      summaryBadge.textContent = 'Đã hoàn thành ' + completed + '/' + state.assignments.length + ' bài tập';
+      summaryBadge.textContent = 'Đã hoàn thành ' + completed + '/' + studentAssignments.length + ' bài tập';
     }
 
     tbody.querySelectorAll('[data-select-hw-row]').forEach(function (btn) {
@@ -1126,6 +1188,8 @@
           ui.practiceAnswers = {};
           ui.selectedMatchingLeft = null;
           ui.selectedWordBankChip = null;
+          ui.selectedTargetBlank = null;
+          ui.selectedTargetBlank = null;
           ui.practiceViewingResult = false;
           renderPracticeSection();
         });
@@ -1389,6 +1453,9 @@
                   '<span class="option-text">' +
                   escapeHtml(optText) +
                   '</span>' +
+                  '<span class="option-check" aria-hidden="true">' +
+                  '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>' +
+                  '</span>' +
                   '</div>'
                 );
               })
@@ -1413,13 +1480,17 @@
       return secAns[k];
     });
 
+    const isChipActive = Boolean(
+      ui.selectedWordBankChip && ui.selectedWordBankChip.secId === sec.section_id
+    );
+    const isTargetActive = Boolean(
+      ui.selectedTargetBlank && ui.selectedTargetBlank.secId === sec.section_id
+    );
+
     const wordbankChipsHtml = wordbank
       .map(function (word) {
         const isUsed = usedWords.indexOf(word) >= 0;
-        const isActive =
-          ui.selectedWordBankChip &&
-          ui.selectedWordBankChip.secId === sec.section_id &&
-          ui.selectedWordBankChip.word === word;
+        const isActive = isChipActive && ui.selectedWordBankChip.word === word;
 
         let chipClass = 'wordbank-chip';
         if (isUsed) chipClass += ' is-used';
@@ -1434,7 +1505,7 @@
           escapeHtml(word) +
           '"' +
           (isUsed ? ' disabled' : '') +
-          '>' +
+          ' title="' + (isUsed ? 'Từ này đã được sử dụng' : 'Bấm để chọn từ này') + '">' +
           escapeHtml(word) +
           '</button>'
         );
@@ -1445,26 +1516,33 @@
       .map(function (item, idx) {
         const currentVal = secAns[item.id];
         const isFilled = Boolean(currentVal);
+        const isTargeted = isTargetActive && ui.selectedTargetBlank.itemId === item.id;
 
         // Replace ____ with clickable blank slot
+        let slotClass = 'blank-slot-target';
+        if (isFilled) slotClass += ' is-filled';
+        if (isTargeted) slotClass += ' is-targeted';
+
         const blankSlotHtml = isFilled
-          ? '<span class="blank-slot-target is-filled" data-blank-sec="' +
+          ? '<span class="' + slotClass + '" data-blank-sec="' +
             escapeHtml(sec.section_id) +
             '" data-blank-id="' +
             escapeHtml(item.id) +
             '" title="Bấm để gỡ từ này ra trả về ngân hàng">' +
             escapeHtml(currentVal) +
             '<button type="button" class="blank-remove-btn" aria-label="Gỡ từ">✕</button></span>'
-          : '<span class="blank-slot-target" data-blank-sec="' +
+          : '<span class="' + slotClass + '" data-blank-sec="' +
             escapeHtml(sec.section_id) +
             '" data-blank-id="' +
             escapeHtml(item.id) +
-            '" title="Bấm để đặt từ đang chọn vào chỗ trống">____</span>';
+            '" title="' +
+            (isChipActive ? 'Bấm để điền từ đang chọn vào đây' : 'Bấm để chọn ô này trước rồi chọn từ ở trên') +
+            '">' + (isTargeted ? '📍 Chọn từ ở trên' : '____') + '</span>';
 
         const sentenceWithSlot = escapeHtml(item.text).replace(/____/g, blankSlotHtml);
 
         return (
-          '<div class="fill-blank-item">' +
+          '<div class="fill-blank-item" id="fb-item-' + escapeHtml(item.id) + '">' +
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
           '<span class="practice-section-num-badge" style="font-size:0.75rem;">Câu ' +
           (idx + 1) +
@@ -1473,24 +1551,45 @@
           '<div class="fill-sentence-row">' +
           sentenceWithSlot +
           '</div>' +
-          '<div class="fill-hint-text">Gợi ý nghĩa: ' +
-          escapeHtml(item.hint) +
-          '</div>' +
+          (item.hint
+            ? '<div class="fill-hint-text">Gợi ý nghĩa: ' + escapeHtml(item.hint) + '</div>'
+            : '') +
           '</div>'
         );
       })
       .join('');
 
+    let statusHintHtml = '';
+    if (isChipActive) {
+      statusHintHtml =
+        '<span class="status-badge status-submitted" style="font-size:0.75rem;">' +
+        'Đang chọn từ: <strong>&ldquo;' +
+        escapeHtml(ui.selectedWordBankChip.word) +
+        '&rdquo;</strong> &rarr; Nhấp vào chỗ trống [ ____ ] trong câu bên dưới</span>';
+    } else if (isTargetActive) {
+      const targetIdx = items.findIndex(function (it) { return it.id === ui.selectedTargetBlank.itemId; });
+      const targetLabel = targetIdx >= 0 ? 'Câu ' + (targetIdx + 1) : 'ô trống';
+      statusHintHtml =
+        '<span class="status-badge status-submitted" style="font-size:0.75rem; background: var(--color-accent-soft); color: var(--color-accent); border-color: var(--color-accent);">' +
+        'Đang chọn chỗ trống ' + targetLabel + ' &rarr; Nhấp vào từ trong ngân hàng để điền</span>';
+    } else {
+      statusHintHtml =
+        '<span style="font-size:0.75rem; color:var(--color-muted-foreground);">' +
+        'Gợi ý: Nhấp từ &rarr; Nhấp ô trống, hoặc nhấp ô trống &rarr; Nhấp từ</span>';
+    }
+
     return (
-      '<div>' +
+      '<div class="fill-blank-container">' +
       '<div class="wordbank-bar">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;">' +
-      '<span class="wordbank-label">Ngân hàng từ vựng (Nhấn để chọn từ):</span>' +
-      (ui.selectedWordBankChip && ui.selectedWordBankChip.secId === sec.section_id
-        ? '<span class="status-badge status-submitted" style="font-size:0.75rem;">Đang chọn: "' +
-          escapeHtml(ui.selectedWordBankChip.word) +
-          '" &rarr; Hãy bấm vào chỗ trống</span>'
-        : '') +
+      '<div class="wordbank-bar-header">' +
+      '<div style="display:flex;align-items:center;gap:8px;">' +
+      '<span class="wordbank-label">Ngân hàng từ vựng</span>' +
+      '<span class="wordbank-sticky-badge" title="Ngân hàng từ luôn cố định theo màn hình khi cuộn">' +
+      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>' +
+      'Cuộn theo trang' +
+      '</span>' +
+      '</div>' +
+      statusHintHtml +
       '</div>' +
       '<div class="wordbank-chips-group">' +
       wordbankChipsHtml +
@@ -1670,17 +1769,38 @@
       });
     });
 
-    // 2. Multiple Choice Options Click
+    // 2. Multiple Choice Options Click & Keyboard Select
     document.querySelectorAll('[data-mc-opt-sec]').forEach(function (card) {
-      card.addEventListener('click', function () {
+      function chooseOption() {
         const secId = card.getAttribute('data-mc-opt-sec');
         const itemId = card.getAttribute('data-mc-item-id');
         const optIdx = parseInt(card.getAttribute('data-mc-opt-idx'), 10);
+        if (!secId || !itemId || isNaN(optIdx)) return;
 
         if (!ui.practiceAnswers[secId]) ui.practiceAnswers[secId] = {};
         ui.practiceAnswers[secId][itemId] = optIdx;
         savePracticeDraft();
-        renderPracticeSection();
+
+        // Update active selection classes in DOM immediately
+        const grid = card.closest('.mc-options-grid') || card.parentElement;
+        if (grid) {
+          grid.querySelectorAll('[data-mc-opt-sec]').forEach(function (other) {
+            const isThis = other === card;
+            other.classList.toggle('is-selected', isThis);
+            other.setAttribute('aria-checked', isThis ? 'true' : 'false');
+          });
+        }
+
+        const exercise = getActiveExercise();
+        if (exercise) updatePracticeProgressBar(exercise);
+      }
+
+      card.addEventListener('click', chooseOption);
+      card.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          chooseOption();
+        }
       });
     });
 
@@ -1699,6 +1819,20 @@
         const secId = chip.getAttribute('data-wordbank-sec');
         const word = chip.getAttribute('data-wordbank-word');
 
+        // Case A: A blank slot was already targeted -> place word directly into it!
+        if (ui.selectedTargetBlank && ui.selectedTargetBlank.secId === secId) {
+          if (!ui.practiceAnswers[secId]) ui.practiceAnswers[secId] = {};
+          ui.practiceAnswers[secId][ui.selectedTargetBlank.itemId] = word;
+          ui.selectedTargetBlank = null;
+          ui.selectedWordBankChip = null;
+          savePracticeDraft();
+          const prevScroll = window.scrollY;
+          renderPracticeSection();
+          window.scrollTo({ top: prevScroll });
+          return;
+        }
+
+        // Case B: Toggle active selection on word chip
         if (
           ui.selectedWordBankChip &&
           ui.selectedWordBankChip.secId === secId &&
@@ -1707,12 +1841,15 @@
           ui.selectedWordBankChip = null;
         } else {
           ui.selectedWordBankChip = { secId: secId, word: word };
+          ui.selectedTargetBlank = null;
         }
+        const prevScroll = window.scrollY;
         renderPracticeSection();
+        window.scrollTo({ top: prevScroll });
       });
     });
 
-    // 3. Blank Slot Targets Click (Fill or Remove)
+    // 3. Blank Slot Targets Click (Fill, Remove, or Target)
     document.querySelectorAll('[data-blank-sec]').forEach(function (slot) {
       slot.addEventListener('click', function () {
         const secId = slot.getAttribute('data-blank-sec');
@@ -1720,23 +1857,43 @@
         if (!ui.practiceAnswers[secId]) ui.practiceAnswers[secId] = {};
         const secAns = ui.practiceAnswers[secId];
 
-        // If blank already has a word: click to remove it and return to bank
+        // Case 1: Slot already has a word -> click to remove word and return to bank
         if (secAns[itemId]) {
           delete secAns[itemId];
+          ui.selectedTargetBlank = null;
           savePracticeDraft();
+          const prevScroll = window.scrollY;
           renderPracticeSection();
+          window.scrollTo({ top: prevScroll });
           return;
         }
 
-        // If blank is empty and a wordbank chip is selected: place it
+        // Case 2: A word chip is currently selected -> place it immediately!
         if (ui.selectedWordBankChip && ui.selectedWordBankChip.secId === secId) {
           secAns[itemId] = ui.selectedWordBankChip.word;
           ui.selectedWordBankChip = null;
+          ui.selectedTargetBlank = null;
           savePracticeDraft();
+          const prevScroll = window.scrollY;
           renderPracticeSection();
-        } else {
-          showToast('Hãy bấm chọn một từ trong Ngân hàng từ bên trên trước!');
+          window.scrollTo({ top: prevScroll });
+          return;
         }
+
+        // Case 3: No word is selected -> mark this blank slot as targeted so picking a word fills it!
+        if (
+          ui.selectedTargetBlank &&
+          ui.selectedTargetBlank.secId === secId &&
+          ui.selectedTargetBlank.itemId === itemId
+        ) {
+          ui.selectedTargetBlank = null;
+        } else {
+          ui.selectedTargetBlank = { secId: secId, itemId: itemId };
+          ui.selectedWordBankChip = null;
+        }
+        const prevScroll = window.scrollY;
+        renderPracticeSection();
+        window.scrollTo({ top: prevScroll });
       });
     });
 
@@ -2185,6 +2342,7 @@
           ui.practiceAnswers = {};
           ui.selectedMatchingLeft = null;
           ui.selectedWordBankChip = null;
+          ui.selectedTargetBlank = null;
           try {
             localStorage.removeItem(getPracticeDraftKey(exercise.exercise_id));
           } catch (e) {
@@ -2548,6 +2706,59 @@
             toggleMasteredVocab(vId);
           });
         });
+      }
+    }
+
+    // Render Synced Practice CTA Banner under Vocabulary
+    const practiceCta = document.getElementById('student-vocab-practice-cta');
+    if (practiceCta) {
+      const activeLessonId = ui.selectedVocabLessonId;
+      let matchedEx = null;
+      if (activeLessonId && activeLessonId !== 'all') {
+        const g = lessonGroups.find(function (item) { return item.lesson_id === activeLessonId; });
+        const tag = g ? g.lesson_title.split(':')[0].trim() : '';
+        if (Array.isArray(state.practiceExercises)) {
+          matchedEx = state.practiceExercises.find(function (e) {
+            return (tag && e.lesson_tag && e.lesson_tag.toLowerCase() === tag.toLowerCase()) ||
+                   (e.exercise_id && e.exercise_id.toLowerCase().indexOf(activeLessonId.replace('-', '_')) >= 0);
+          });
+        }
+      } else if (Array.isArray(state.practiceExercises) && state.practiceExercises.length > 0) {
+        matchedEx = state.practiceExercises[0];
+      }
+
+      if (matchedEx) {
+        practiceCta.innerHTML =
+          '<div class="synced-practice-banner" style="display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--color-surface);border:1.5px solid var(--color-primary);border-radius:var(--radius-xl);padding:18px 24px;box-shadow:var(--shadow-sm);flex-wrap:wrap;">' +
+            '<div style="display:flex;align-items:center;gap:14px;">' +
+              '<div style="width:46px;height:46px;border-radius:12px;background:var(--color-primary-soft);color:var(--color-primary-deep);display:flex;align-items:center;justify-content:center;font-size:1.25rem;">' +
+                '🎯' +
+              '</div>' +
+              '<div>' +
+                '<div style="font-weight:800;color:var(--color-primary-deep);font-size:1rem;">' +
+                  'Đã ôn xong từ vựng? Thử sức với: ' + escapeHtml(matchedEx.title) +
+                '</div>' +
+                '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-top:2px;">' +
+                  'Đề gồm <strong>' + (matchedEx.sections || []).length + ' phần</strong> • Tổng điểm: <strong class="tabular-nums" style="color:var(--color-accent);">' + (matchedEx.total_score || 0) + 'đ</strong> • Tự động chấm điểm và xếp loại tức thì.' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<button type="button" class="btn btn-primary" id="btn-jump-to-lesson-practice" data-ex-id="' + escapeHtml(matchedEx.exercise_id) + '" style="font-weight:700;">' +
+              '<span>🚀 Làm bài kiểm tra ' + escapeHtml(matchedEx.lesson_tag || '') + ' ngay ➔</span>' +
+            '</button>' +
+          '</div>';
+
+        const btnJump = practiceCta.querySelector('#btn-jump-to-lesson-practice');
+        if (btnJump) {
+          btnJump.addEventListener('click', function () {
+            const exId = btnJump.getAttribute('data-ex-id');
+            if (exId) ui.selectedExerciseId = exId;
+            switchTab('practice');
+            renderPracticeSection();
+          });
+        }
+      } else {
+        practiceCta.innerHTML = '';
       }
     }
   }
