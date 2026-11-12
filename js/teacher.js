@@ -2139,7 +2139,7 @@
     }
 
     const modal = document.getElementById('modal-manual-grading');
-    if (modal) modal.classList.add('is-visible');
+    if (modal) modal.classList.add('is-open', 'is-visible');
   }
 
   function exportPracticeSubmissionsToCsv() {
@@ -2424,25 +2424,48 @@
         const nextNum = (state.practiceExercises || []).length + 1;
         const titleInp = document.getElementById('new-ex-title');
         const tagInp = document.getElementById('new-ex-tag');
+        const currentTitleInp = document.getElementById('ex-meta-title');
+        const currentTagInp = document.getElementById('ex-meta-tag');
+
+        const currentTitle = currentTitleInp ? currentTitleInp.value.trim() : '';
+        const currentTag = currentTagInp ? currentTagInp.value.trim() : '';
+
         if (titleInp) {
-          titleInp.value = 'Bài tập luyện tập cuối bài — HSK 1: Bài ' + nextNum;
+          titleInp.value = currentTitle && currentTitle !== 'Bài tập luyện tập cuối bài — HSK 1: Bài 1'
+            ? currentTitle
+            : 'Bài tập luyện tập cuối bài — HSK 1: Bài ' + nextNum;
         }
         if (tagInp) {
-          tagInp.value = 'Bài ' + nextNum;
+          tagInp.value = currentTag && currentTag !== 'Bài 1'
+            ? currentTag
+            : 'Bài ' + nextNum;
         }
-        modalCreateEx.classList.add('is-visible');
+
+        modalCreateEx.classList.add('is-open', 'is-visible');
+        setTimeout(function () {
+          if (titleInp) {
+            titleInp.focus();
+            titleInp.select();
+          }
+        }, 60);
+      });
+
+      modalCreateEx.addEventListener('click', function (e) {
+        if (e.target === modalCreateEx) {
+          modalCreateEx.classList.remove('is-open', 'is-visible');
+        }
       });
     }
 
     if (btnCloseCreateEx && modalCreateEx) {
       btnCloseCreateEx.addEventListener('click', function () {
-        modalCreateEx.classList.remove('is-visible');
+        modalCreateEx.classList.remove('is-open', 'is-visible');
       });
     }
 
     if (btnCancelCreateEx && modalCreateEx) {
       btnCancelCreateEx.addEventListener('click', function () {
-        modalCreateEx.classList.remove('is-visible');
+        modalCreateEx.classList.remove('is-open', 'is-visible');
       });
     }
 
@@ -2452,8 +2475,9 @@
         const titleInp = document.getElementById('new-ex-title');
         const tagInp = document.getElementById('new-ex-tag');
 
-        const title = (titleInp ? titleInp.value : '').trim() || 'Bài tập luyện tập';
-        const tag = (tagInp ? tagInp.value : '').trim() || 'Bài mới';
+        const nextNum = (state.practiceExercises || []).length + 1;
+        const title = (titleInp ? titleInp.value : '').trim() || ('Bài ' + nextNum);
+        const tag = (tagInp ? tagInp.value : '').trim() || ('Bài ' + nextNum);
 
         const newEx = createTemplateExercise(title, tag);
 
@@ -2463,7 +2487,7 @@
         window.StudySnapStore.savePracticeExercise(state, newEx);
         ui.selectedPracticeExId = newEx.exercise_id;
         ui.practiceCurrentView = 'builder';
-        modalCreateEx.classList.remove('is-visible');
+        modalCreateEx.classList.remove('is-open', 'is-visible');
         renderTeacherPracticeTab();
         showToast('Đã tạo bài tập mới: ' + title);
       });
@@ -2672,12 +2696,12 @@
 
     if (btnCloseManual && modalManual) {
       btnCloseManual.addEventListener('click', function () {
-        modalManual.classList.remove('is-visible');
+        modalManual.classList.remove('is-open', 'is-visible');
       });
     }
     if (btnCancelManual && modalManual) {
       btnCancelManual.addEventListener('click', function () {
-        modalManual.classList.remove('is-visible');
+        modalManual.classList.remove('is-open', 'is-visible');
       });
     }
 
@@ -2749,7 +2773,7 @@
           newRating
         );
 
-        if (modalManual) modalManual.classList.remove('is-visible');
+        if (modalManual) modalManual.classList.remove('is-open', 'is-visible');
         renderTeacherPracticeTab();
         showToast('Đã lưu điểm và nhận xét cho câu Dịch của học sinh thành công!');
       });

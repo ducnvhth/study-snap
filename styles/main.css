@@ -1093,7 +1093,8 @@ textarea.form-control {
   padding: 20px;
 }
 
-.modal-backdrop.is-open {
+.modal-backdrop.is-open,
+.modal-backdrop.is-visible {
   display: flex;
 }
 
