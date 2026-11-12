@@ -526,11 +526,26 @@
   // TAB 4: QUẢN LÝ BÀI TẬP LUYỆN TẬP CUỐI BÀI (5 DẠNG BÀI - GOOGLE FORM BUILDER)
   // =========================================================================
   function getActivePracticeExercise() {
-    const exercises = state.practiceExercises || [];
-    const found = exercises.find(function (e) {
+    if (!Array.isArray(state.practiceExercises) || state.practiceExercises.length === 0) {
+      const titleInp = document.getElementById('ex-meta-title');
+      const tagInp = document.getElementById('ex-meta-tag');
+      const title = (titleInp && titleInp.value.trim()) || 'Bài tập luyện tập cuối bài — HSK 1: Bài 1';
+      const tag = (tagInp && tagInp.value.trim()) || 'Bài 1';
+
+      const initialEx = createTemplateExercise(title, tag);
+      state.practiceExercises = [initialEx];
+      ui.selectedPracticeExId = initialEx.exercise_id;
+      window.StudySnapStore.savePracticeExercise(state, initialEx);
+      return initialEx;
+    }
+
+    const found = state.practiceExercises.find(function (e) {
       return e.exercise_id === ui.selectedPracticeExId;
     });
-    return found || exercises[0] || null;
+    if (found) return found;
+
+    ui.selectedPracticeExId = state.practiceExercises[0].exercise_id;
+    return state.practiceExercises[0];
   }
 
   function switchPracticeSubView(view) {
@@ -801,7 +816,8 @@
     const veryGoodInp = document.getElementById('ex-meta-thresh-verygood');
 
     if (titleInp && titleInp.value.trim()) ex.title = titleInp.value.trim();
-    if (tagInp) ex.lesson_tag = tagInp.value.trim();
+    if (tagInp && tagInp.value.trim()) ex.lesson_tag = tagInp.value.trim();
+    if (!ex.thresholds) ex.thresholds = { good: 25, very_good: 31 };
     if (goodInp) ex.thresholds.good = parseInt(goodInp.value, 10) || 25;
     if (veryGoodInp) ex.thresholds.very_good = parseInt(veryGoodInp.value, 10) || 31;
 
@@ -962,11 +978,13 @@
 
   function renderTeacherPracticeTab() {
     const ex = getActivePracticeExercise();
+    if (!ex) return;
+
     const selectEl = document.getElementById('teacher-practice-select');
     if (selectEl) {
       selectEl.innerHTML = (state.practiceExercises || [])
         .map(function (e) {
-          const isSel = ex && e.exercise_id === ex.exercise_id ? ' selected' : '';
+          const isSel = e.exercise_id === ex.exercise_id ? ' selected' : '';
           return (
             '<option value="' +
             escapeHtml(e.exercise_id) +
@@ -976,24 +994,12 @@
             (e.lesson_tag ? '[' + escapeHtml(e.lesson_tag) + '] ' : '') +
             escapeHtml(e.title) +
             ' (' +
-            (e.total_score || 35) +
+            (e.total_score || 0) +
             'đ)' +
             '</option>'
           );
         })
         .join('');
-    }
-
-    if (!ex) {
-      const listEl = document.getElementById('teacher-builder-sections-list');
-      if (listEl) {
-        listEl.innerHTML =
-          '<div style="text-align:center;padding:32px;color:var(--color-muted-foreground);">' +
-          '<p style="font-size:1.125rem;font-weight:700;">Chưa có bài tập nào!</p>' +
-          '<p>Hãy bấm nút <strong>"+ Tạo bài tập mới"</strong> ở trên để bắt đầu tạo bài.</p>' +
-          '</div>';
-      }
-      return;
     }
 
     // Populate Exercise Meta Form
@@ -1003,11 +1009,15 @@
     const threshVeryGoodInput = document.getElementById('ex-meta-thresh-verygood');
     const maxScoreBadge = document.getElementById('teacher-practice-maxscore-badge');
 
-    if (titleInput) titleInput.value = ex.title || '';
-    if (tagInput) tagInput.value = ex.lesson_tag || '';
+    if (titleInput && document.activeElement !== titleInput) {
+      titleInput.value = ex.title || '';
+    }
+    if (tagInput && document.activeElement !== tagInput) {
+      tagInput.value = ex.lesson_tag || '';
+    }
     if (threshGoodInput) threshGoodInput.value = (ex.thresholds && ex.thresholds.good) || 25;
     if (threshVeryGoodInput) threshVeryGoodInput.value = (ex.thresholds && ex.thresholds.very_good) || 31;
-    if (maxScoreBadge) maxScoreBadge.textContent = 'Tổng ' + (ex.total_score || 35) + ' điểm';
+    if (maxScoreBadge) maxScoreBadge.textContent = 'Tổng ' + (ex.total_score || 0) + ' điểm';
 
     // Update submissions pill count
     const subs = (state.practiceSubmissions || []).filter(function (s) {
@@ -1032,15 +1042,30 @@
 
     if (!ex.sections || ex.sections.length === 0) {
       listEl.innerHTML =
-        '<div style="padding:32px 20px;text-align:center;background:var(--color-surface);border:2px dashed var(--color-border-soft);border-radius:var(--radius-xl);">' +
+        '<div style="padding:32px 20px;text-align:center;background:var(--color-surface);border:2px dashed var(--color-primary);border-radius:var(--radius-xl);margin:16px 0;">' +
         '<div style="font-size:2rem;margin-bottom:8px;">📝</div>' +
-        '<p style="margin:0 0 12px;font-size:1rem;font-weight:600;color:var(--color-foreground);">' +
+        '<p style="margin:0 0 8px;font-size:1rem;font-weight:700;color:var(--color-primary-deep);">' +
         'Bài tập này chưa có câu hỏi nào' +
         '</p>' +
-        '<p style="margin:0;font-size:0.875rem;color:var(--color-muted-foreground);">' +
-        'Hãy bấm vào các nút bên trên để chèn dạng bài tập bạn muốn (Nối từ, Trắc nghiệm, Điền từ, Sửa câu sai, Dịch)!' +
+        '<p style="margin:0 0 16px;font-size:0.875rem;color:var(--color-muted-foreground);">' +
+        'Hãy bấm vào các nút bên trên (+ 1. Nối từ, + 2. Trắc nghiệm, + 3. Điền từ...) hoặc bấm nút dưới đây để nạp sẵn 5 câu hỏi mẫu chuẩn:' +
         '</p>' +
+        '<button type="button" class="btn btn-primary" id="btn-quick-fill-template">' +
+        '<span>✨ Nạp sẵn 5 dạng câu hỏi mẫu chuẩn HSK</span>' +
+        '</button>' +
         '</div>';
+
+      const btnFill = document.getElementById('btn-quick-fill-template');
+      if (btnFill) {
+        btnFill.addEventListener('click', function () {
+          const tpl = createTemplateExercise(ex.title, ex.lesson_tag);
+          ex.sections = tpl.sections;
+          ex.total_score = tpl.total_score;
+          window.StudySnapStore.savePracticeExercise(state, ex);
+          renderTeacherPracticeTab();
+          showToast('Đã nạp sẵn 5 câu hỏi mẫu vào bài tập!');
+        });
+      }
       return;
     }
 
@@ -2463,10 +2488,6 @@
     document.querySelectorAll('[data-quick-add-type]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         const ex = getActivePracticeExercise();
-        if (!ex) {
-          showToast('Vui lòng tạo bài tập trước khi thêm câu hỏi!');
-          return;
-        }
         collectExerciseFromDom();
         const type = btn.getAttribute('data-quick-add-type');
         const nextNum = (ex.sections || []).length + 1;
@@ -2482,7 +2503,7 @@
 
         window.StudySnapStore.savePracticeExercise(state, ex);
         renderTeacherPracticeTab();
-        showToast('Đã chèn mẫu form: ' + newSec.title);
+        showToast('Đã thêm mẫu ' + newSec.title + ' vào bài tập!');
 
         setTimeout(function () {
           const newCard = document.querySelector('[data-sec-card="' + newSec.section_id + '"]');
@@ -2499,7 +2520,6 @@
       metaForm.addEventListener('submit', function (e) {
         e.preventDefault();
         const ex = getActivePracticeExercise();
-        if (!ex) return;
 
         collectExerciseFromDom();
 
@@ -2508,12 +2528,11 @@
         const threshGood = document.getElementById('ex-meta-thresh-good');
         const threshVeryGood = document.getElementById('ex-meta-thresh-verygood');
 
-        if (titleInput) ex.title = titleInput.value.trim();
-        if (tagInput) ex.lesson_tag = tagInput.value.trim();
-        ex.thresholds = {
-          good: parseInt(threshGood ? threshGood.value : 25, 10) || 25,
-          very_good: parseInt(threshVeryGood ? threshVeryGood.value : 31, 10) || 31
-        };
+        if (titleInput && titleInput.value.trim()) ex.title = titleInput.value.trim();
+        if (tagInput && tagInput.value.trim()) ex.lesson_tag = tagInput.value.trim();
+        if (!ex.thresholds) ex.thresholds = { good: 25, very_good: 31 };
+        ex.thresholds.good = parseInt(threshGood ? threshGood.value : 25, 10) || 25;
+        ex.thresholds.very_good = parseInt(threshVeryGood ? threshVeryGood.value : 31, 10) || 31;
 
         let total = 0;
         (ex.sections || []).forEach(function (s) {
@@ -2523,7 +2542,7 @@
 
         window.StudySnapStore.savePracticeExercise(state, ex);
         renderTeacherPracticeTab();
-        showToast('💾 Đã lưu toàn bộ bài tập và câu hỏi thành công!');
+        showToast('💾 Đã lưu bài tập "' + ex.title + '" thành công!');
       });
     }
 
