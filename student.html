@@ -42,7 +42,7 @@
             <line x1="16" y1="17" x2="8" y2="17"></line>
             <polyline points="10 9 9 9 8 9"></polyline>
           </svg>
-          <span>2. Luyện Tập Cuối Bài (5 Dạng Bài)</span>
+          <span>2. Luyện Tập Cuối Buổi</span>
         </button>
 
         <button type="button" class="nav-tab" data-student-tab="vocabulary">
@@ -50,7 +50,7 @@
             <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
             <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
           </svg>
-          <span>3. Ôn Từ Vựng (Bài 1, 2... &amp; Tổng Hợp)</span>
+          <span>3. Ôn Từ Vựng</span>
         </button>
       </nav>
 
@@ -65,7 +65,7 @@
       <div>
         <h1 id="student-welcome-heading">Xin chào Nguyễn Minh Anh!</h1>
         <p id="student-welcome-desc">
-          Nộp bài tập về nhà bằng thu âm trực tiếp hoặc tải video, nghe giáo viên nhận xét bằng giọng nói (Voice Feedback), làm Bài tập luyện tập cuối bài (5 dạng) có hệ thống tự chấm và ôn từ vựng theo bài hoặc tổng hợp.
+          Nộp bài tập về nhà bằng thu âm trực tiếp hoặc tải video, nghe giáo viên nhận xét bằng giọng nói (Voice Feedback), làm bài tập luyện tập cuối buổi có hệ thống tự chấm và ôn tập từ vựng tương tác.
         </p>
         <div class="banner-actions">
           <button type="button" class="btn btn-primary" id="btn-banner-go-practice">
@@ -227,9 +227,9 @@
       </section>
 
       <!-- ====================================================================
-           TAB 2: BÀI TẬP LUYỆN TẬP CUỐI BÀI (5 DẠNG BÀI)
+           TAB 2: BÀI TẬP LUYỆN TẬP CUỐI BUỔI
            ==================================================================== -->
-      <section id="student-tab-practice" class="module-section" aria-label="Bài tập luyện tập cuối bài đa dạng 5 phần">
+      <section id="student-tab-practice" class="module-section" aria-label="Bài tập luyện tập cuối buổi">
         <div class="surface-panel">
           <div class="panel-header">
             <div class="panel-title-row">
@@ -266,10 +266,10 @@
           <!-- Vùng kết quả sau khi nộp bài -->
           <div id="student-practice-results-box" style="display: none;"></div>
 
-          <!-- Vùng hiển thị 5 phần câu hỏi -->
+          <!-- Vùng hiển thị câu hỏi -->
           <form id="student-practice-form">
             <div id="student-practice-sections-container">
-              <!-- Populated by js/student.js (Phần 1: Nối cặp, Phần 2: Trắc nghiệm, Phần 3: Điền từ, Phần 4: Sửa câu sai, Phần 5: Dịch) -->
+              <!-- Populated by js/student.js -->
             </div>
 
             <div class="banner-actions" style="margin-top: 24px; justify-content: flex-end;">
@@ -285,9 +285,9 @@
       </section>
 
       <!-- ====================================================================
-           TAB 3: WEB ÔN TỪ VỰNG THEO BÀI (BÀI 1, BÀI 2...) & TỔNG HỢP
+           TAB 3: ÔN TỪ VỰNG THEO BÀI & TỔNG HỢP
            ==================================================================== -->
-      <section id="student-tab-vocabulary" class="module-section" aria-label="Web ôn từ vựng theo từng bài và tổng hợp toàn khóa">
+      <section id="student-tab-vocabulary" class="module-section" aria-label="Ôn tập từ vựng tương tác">
         <div class="surface-panel">
           <div class="panel-header">
             <div class="panel-title-row">
@@ -295,16 +295,16 @@
                 <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
                 <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
               </svg>
-              <h2>Web Ôn Từ Vựng Theo Bài Học &amp; Tổng Hợp Toàn Khóa</h2>
+              <h2>Ôn Từ Vựng Theo Bài Học</h2>
             </div>
             <span class="status-badge status-graded" id="student-vocab-scope-badge">Đang mở: Bài 1</span>
           </div>
 
           <p style="margin-top: 0; margin-bottom: 16px; color: var(--color-muted-foreground);">
-            Muốn ôn từ vựng bài nào chỉ cần ấn vào <strong>Bài 1</strong>, <strong>Bài 2</strong>, <strong>Bài 3</strong> là ra ngay; cuối khóa muốn ôn lại tất cả từ vựng thì bấm nút <strong>Tổng hợp tất cả các bài</strong>.
+            Chọn bài học để xem từ vựng tương ứng hoặc chọn <strong>Tổng hợp tất cả</strong> để ôn tập toàn khóa.
           </p>
 
-          <!-- Thanh chọn Bài 1, Bài 2, Bài 3... và nút "Tổng hợp" -->
+          <!-- Thanh chọn bài từ vựng và nút "Tổng hợp" -->
           <div class="lesson-selector-bar" id="student-vocab-lesson-bar" role="tablist" aria-label="Chọn bài từ vựng cần ôn">
             <!-- Populated by js/student.js -->
           </div>

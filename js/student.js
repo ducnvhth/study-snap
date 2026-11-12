@@ -43,7 +43,7 @@
     selectedAssignmentId: state.assignments[0] ? state.assignments[0].assignment_id : 'BVN01',
     pendingMedia: null,
 
-    // Practice (5 dạng bài) state
+    // Practice state
     selectedExerciseId: (state.practiceExercises && state.practiceExercises[0]) ? state.practiceExercises[0].exercise_id : 'EX_HSK1_BAI_1',
     practiceAnswers: {},
     selectedMatchingLeft: null,
@@ -1008,7 +1008,7 @@
   }
 
   // =========================================================================
-  // 3. TAB 2: BÀI TẬP LUYỆN TẬP CUỐI BÀI (5 DẠNG BÀI - TỰ ĐỘNG CHẤM & ĐÁNH GIÁ)
+  // 3. TAB 2: BÀI TẬP LUYỆN TẬP CUỐI BUỔI (TỰ ĐỘNG CHẤM & ĐÁNH GIÁ)
   // =========================================================================
   function getPracticeDraftKey(exerciseId) {
     const student = getActiveStudent();
@@ -1715,7 +1715,9 @@
           delete secAns[leftId];
           ui.selectedMatchingLeft = null;
           savePracticeDraft();
+          const prevScroll = window.scrollY;
           renderPracticeSection();
+          window.scrollTo({ top: prevScroll });
           return;
         }
 
@@ -1729,7 +1731,9 @@
         } else {
           ui.selectedMatchingLeft = { secId: secId, leftId: leftId };
         }
+        const prevScroll = window.scrollY;
         renderPracticeSection();
+        window.scrollTo({ top: prevScroll });
       });
     });
 
@@ -1750,7 +1754,9 @@
           secAns[leftId] = rightId;
           ui.selectedMatchingLeft = null;
           savePracticeDraft();
+          const prevScroll = window.scrollY;
           renderPracticeSection();
+          window.scrollTo({ top: prevScroll });
           return;
         }
 
@@ -1762,7 +1768,9 @@
         if (pairedLeft) {
           delete secAns[pairedLeft];
           savePracticeDraft();
+          const prevScroll = window.scrollY;
           renderPracticeSection();
+          window.scrollTo({ top: prevScroll });
         } else {
           showToast('Hãy bấm chọn một chữ Hán ở Cột trái trước nhé!');
         }
@@ -2497,7 +2505,7 @@
   }
 
   // =========================================================================
-  // 4. TAB 3: VOCABULARY WEB APP BY LESSON (BÀI 1, BÀI 2...) & "TỔNG HỢP"
+  // 4. TAB 3: ÔN TẬP TỪ VỰNG THEO BÀI & TỔNG HỢP
   // =========================================================================
   function getLessonGroups() {
     const groups = [];

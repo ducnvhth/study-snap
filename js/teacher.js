@@ -594,7 +594,7 @@
       usernameInput.value = generateNextUsername();
     }
     const passwordInput = document.getElementById('new-student-password');
-    if (passwordInput && !passwordInput.value) {
+    if (passwordInput && (!passwordInput.value || passwordInput.value === '123456')) {
       passwordInput.value = generateRandomPassword();
     }
 
@@ -867,7 +867,7 @@
   }
 
   // =========================================================================
-  // TAB 4: QUẢN LÝ BÀI TẬP LUYỆN TẬP CUỐI BÀI (5 DẠNG BÀI - GOOGLE FORM BUILDER)
+  // TAB 4: QUẢN LÝ BÀI TẬP LUYỆN TẬP CUỐI BÀI (FORM BUILDER)
   // =========================================================================
   function getActivePracticeExercise() {
     if (!Array.isArray(state.practiceExercises) || state.practiceExercises.length === 0) {
@@ -1392,10 +1392,10 @@
         'Bài tập này chưa có câu hỏi nào' +
         '</p>' +
         '<p style="margin:0 0 16px;font-size:0.875rem;color:var(--color-muted-foreground);">' +
-        'Hãy bấm vào các nút bên trên (+ 1. Nối từ, + 2. Trắc nghiệm, + 3. Điền từ...) hoặc bấm nút dưới đây để nạp sẵn 5 câu hỏi mẫu chuẩn:' +
+        'Hãy bấm vào các nút dạng bài bên trên hoặc bấm nút dưới đây để nạp sẵn bộ câu hỏi mẫu:' +
         '</p>' +
         '<button type="button" class="btn btn-primary" id="btn-quick-fill-template">' +
-        '<span>✨ Nạp sẵn 5 dạng câu hỏi mẫu chuẩn HSK</span>' +
+        '<span>Nạp sẵn câu hỏi mẫu chuẩn HSK</span>' +
         '</button>' +
         '</div>';
 
