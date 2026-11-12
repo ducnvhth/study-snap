@@ -205,11 +205,30 @@
     const elGraded = document.getElementById('student-stat-hw-graded');
     const elAvg = document.getElementById('student-stat-avg-score');
     const elVocab = document.getElementById('student-stat-vocab-mastered');
+    const elPracticeScore = document.getElementById('student-stat-practice-score');
+    const elPracticeRating = document.getElementById('student-stat-practice-rating');
 
     if (elSubmitted) elSubmitted.textContent = submittedCount + '/' + totalAssignments;
     if (elGraded) elGraded.textContent = String(gradedWithVoiceCount);
     if (elAvg) elAvg.textContent = String(avgScore);
     if (elVocab) elVocab.textContent = validMasteredCount + '/' + totalVocab;
+
+    const currentEx = getActiveExercise();
+    const practiceSub = currentEx ? findStudentPracticeSubmission(currentEx.exercise_id) : null;
+    if (elPracticeScore) {
+      elPracticeScore.textContent = practiceSub
+        ? practiceSub.total_score + '/' + (practiceSub.max_score || (currentEx && currentEx.total_score) || 35)
+        : '—';
+    }
+    if (elPracticeRating) {
+      if (practiceSub) {
+        const r = practiceSub.rating;
+        elPracticeRating.textContent =
+          r === 'very_good' ? 'Rất tốt 🌟' : r === 'good' ? 'Khá 👍' : 'Cần ôn 📚';
+      } else {
+        elPracticeRating.textContent = 'Chưa làm';
+      }
+    }
   }
 
   // =========================================================================
@@ -2629,6 +2648,14 @@
         if (tab) switchTab(tab);
       });
     });
+
+    const btnGoPractice = document.getElementById('btn-banner-go-practice');
+    if (btnGoPractice) {
+      btnGoPractice.addEventListener('click', function () {
+        switchTab('practice');
+        renderPracticeSection();
+      });
+    }
 
     const btnGoVocabAll = document.getElementById('btn-banner-go-vocab-all');
     if (btnGoVocabAll) {
