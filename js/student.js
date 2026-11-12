@@ -1080,7 +1080,18 @@
 
   function renderPracticeSection() {
     const exercise = getActiveExercise();
-    if (!exercise) return;
+    if (!exercise) {
+      const container = document.getElementById('student-practice-sections-container');
+      if (container) {
+        container.innerHTML =
+          '<div style="text-align:center;padding:48px 20px;color:var(--color-muted-foreground);">' +
+          '<div style="font-size:2.5rem;margin-bottom:12px;">📚</div>' +
+          '<h3 style="color:var(--color-foreground);margin-bottom:8px;">Chưa có bài tập nào được giao</h3>' +
+          '<p>Giáo viên sẽ sớm cập nhật bài tập luyện tập cuối bài cho bạn tại đây.</p>' +
+          '</div>';
+      }
+      return;
+    }
 
     loadPracticeDraftOrInit(exercise);
 
