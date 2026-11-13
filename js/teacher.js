@@ -2749,7 +2749,14 @@
         if (activeEx) markPracticeExerciseDirty(activeEx, false);
       });
       builderListEl.addEventListener('change', function (ev) {
-        if (!ev.target || ev.target.hasAttribute('data-sec-score')) return;
+        if (
+          !ev.target ||
+          ev.target.type === 'file' ||
+          ev.target.hasAttribute('data-ls-audio-upload') ||
+          ev.target.hasAttribute('data-sec-score')
+        ) {
+          return;
+        }
         const activeEx = getActivePracticeExercise();
         if (activeEx) {
           collectExerciseFromDom();
@@ -3084,12 +3091,13 @@
     });
 
     // 7. Listening MC: Switch Mode, Add / Delete Question, Upload Audio, Record Mic, Preview TTS, Clear Audio
-    function resolveListeningAudioTarget(targetKey) {
+    function resolveListeningAudioTarget(targetKey, exerciseObj) {
+      const targetEx = exerciseObj || ex;
       const key = String(targetKey || '');
       const sepIdx = key.indexOf(':');
       const secId = sepIdx >= 0 ? key.slice(0, sepIdx) : key;
       const itemId = sepIdx >= 0 ? key.slice(sepIdx + 1) : '';
-      const sec = (ex.sections || []).find(function (s) {
+      const sec = ((targetEx && targetEx.sections) || []).find(function (s) {
         return s.section_id === secId;
       });
       if (!sec || !sec.data) return null;
@@ -3117,6 +3125,79 @@
         defaultLabelPrefix: 'Câu ' + (itemIdx + 1),
         loadingTitle: 'Đang lưu tệp âm thanh Câu ' + (itemIdx + 1) + '...'
       };
+    }
+
+    async function persistListeningAudioCapture(targetExId, targetKey, opts) {
+      const dataUrl = opts && opts.dataUrl ? String(opts.dataUrl).trim() : '';
+      if (!dataUrl) {
+        showToast('Không đọc được dữ liệu âm thanh. Vui lòng thử chọn hoặc ghi âm lại.');
+        return;
+      }
+
+      const activeEx = getActivePracticeExercise();
+      const liveEx =
+        (activeEx && activeEx.exercise_id === targetExId ? activeEx : null) ||
+        (state.practiceExercises || []).find(function (e) {
+          return e.exercise_id === targetExId;
+        }) ||
+        ex;
+
+      if (activeEx && liveEx && activeEx.exercise_id === liveEx.exercise_id) {
+        collectExerciseFromDom();
+      }
+
+      const resolved = resolveListeningAudioTarget(targetKey, liveEx);
+      if (!resolved) {
+        showToast('Không tìm thấy phần nghe để gắn file âm thanh. Vui lòng thử lại.');
+        return;
+      }
+
+      resolved.targetObj.audio_url = dataUrl;
+      resolved.targetObj.audio_duration = (opts && opts.duration) || resolved.defaultDuration;
+      if (opts && opts.suggestedLabel && !resolved.targetObj.audio_label) {
+        resolved.targetObj.audio_label = resolved.defaultLabelPrefix || opts.suggestedLabel;
+      }
+
+      const urlInputEl = document.querySelector('[data-ls-audio-url="' + targetKey + '"]');
+      if (urlInputEl) {
+        urlInputEl.value = dataUrl;
+      }
+      savePracticeDraftLocally(liveEx);
+
+      const saveRes = await runWithLoading(
+        (opts && opts.triggerBtn) || null,
+        (opts && opts.btnLoadingText) || null,
+        async function () {
+          return await window.StudySnapStore.savePracticeExercise(state, liveEx);
+        },
+        {
+          title: resolved.loadingTitle,
+          desc: (opts && opts.loadingDesc) || 'Hệ thống đang tải lên Google Drive và đồng bộ tệp âm thanh cho bài tập.'
+        }
+      );
+
+      const latestEx =
+        (state.practiceExercises || []).find(function (e) {
+          return e.exercise_id === liveEx.exercise_id;
+        }) || liveEx;
+      const verifiedTarget = resolveListeningAudioTarget(targetKey, latestEx);
+      const hasSavedAudio = Boolean(
+        verifiedTarget && verifiedTarget.targetObj && String(verifiedTarget.targetObj.audio_url || '').trim()
+      );
+
+      if (saveRes && saveRes.ok === true && hasSavedAudio) {
+        clearPracticeExerciseDirty(liveEx.exercise_id);
+        renderTeacherPracticeTab();
+        showToast((opts && opts.successToast) || 'Đã tải lên và lưu file nghe!');
+      } else {
+        markPracticeExerciseDirty(latestEx, true);
+        renderTeacherPracticeTab();
+        const errMsg =
+          (saveRes && saveRes.error) ||
+          (opts && opts.fallbackError) ||
+          'Chưa thể tải file nghe lên Google Drive / máy chủ (tệp đang giữ tạm để nghe thử trên máy này — hãy thử bấm "Lưu đề nhanh").';
+        showToast(errMsg);
+      }
     }
 
     document.querySelectorAll('[data-ls-mode-btn]').forEach(function (btn) {
@@ -3213,44 +3294,26 @@
     });
 
     document.querySelectorAll('[data-ls-audio-upload]').forEach(function (inp) {
-      inp.addEventListener('change', function () {
+      inp.addEventListener('change', function (ev) {
+        if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
         const file = inp.files && inp.files[0];
         if (!file || !window.StudySnapAudio) return;
         const targetKey = inp.getAttribute('data-ls-audio-upload');
+        const targetExId = ex.exercise_id;
+        inp.value = '';
         collectExerciseFromDom();
-        const resolved = resolveListeningAudioTarget(targetKey);
-        if (!resolved) return;
+        if (!resolveListeningAudioTarget(targetKey, ex)) return;
 
         window.StudySnapAudio.readUploadedMediaFile(file, async function (mediaInfo) {
-          resolved.targetObj.audio_url = mediaInfo.dataUrl;
-          resolved.targetObj.audio_duration = mediaInfo.duration || resolved.defaultDuration;
-          if (!resolved.targetObj.audio_label) {
-            resolved.targetObj.audio_label =
-              resolved.defaultLabelPrefix || file.name.replace(/\.[^/.]+$/, '');
-          }
-          const saveAudioRes = await runWithLoading(
-            null,
-            null,
-            async function () {
-              return await window.StudySnapStore.savePracticeExercise(state, ex);
-            },
-            {
-              title: resolved.loadingTitle,
-              desc: 'Hệ thống đang tải lên Google Drive và đồng bộ tệp âm thanh cho bài tập.'
-            }
-          );
-          if (saveAudioRes && saveAudioRes.ok === true) {
-            clearPracticeExerciseDirty(ex.exercise_id);
-            renderTeacherPracticeTab();
-            showToast('Đã tải lên và lưu file nghe: ' + file.name);
-          } else {
-            markPracticeExerciseDirty(ex, true);
-            renderTeacherPracticeTab();
-            const errMsg =
-              (saveAudioRes && saveAudioRes.error) ||
-              'Chưa thể tải file nghe lên Google Drive / máy chủ (tệp đang giữ tạm để nghe thử trên máy này — hãy thử bấm "Lưu đề nhanh").';
-            showToast(errMsg);
-          }
+          await persistListeningAudioCapture(targetExId, targetKey, {
+            dataUrl: mediaInfo && mediaInfo.dataUrl,
+            duration: mediaInfo && mediaInfo.duration,
+            suggestedLabel: file.name.replace(/\.[^/.]+$/, ''),
+            loadingDesc: 'Hệ thống đang tải lên Google Drive và đồng bộ tệp âm thanh cho bài tập.',
+            successToast: 'Đã tải lên và lưu file nghe: ' + file.name,
+            fallbackError:
+              'Chưa thể tải file nghe lên Google Drive / máy chủ (tệp đang giữ tạm để nghe thử trên máy này — hãy thử bấm "Lưu đề nhanh").'
+          });
         });
       });
     });
@@ -3271,6 +3334,7 @@
       btn.addEventListener('click', function () {
         if (!window.StudySnapAudio) return;
         const targetKey = btn.getAttribute('data-ls-audio-rec');
+        const targetExId = ex.exercise_id;
         const labelSpan = btn.querySelector('span');
         if (btn.getAttribute('data-recording') === '1') {
           btn.disabled = true;
@@ -3281,8 +3345,7 @@
         }
 
         collectExerciseFromDom();
-        const resolved = resolveListeningAudioTarget(targetKey);
-        if (!resolved) return;
+        if (!resolveListeningAudioTarget(targetKey, ex)) return;
 
         btn.setAttribute('data-recording', '1');
         window.StudySnapAudio.startRecording(
@@ -3293,35 +3356,18 @@
             btn.disabled = false;
             btn.setAttribute('data-recording', '0');
             if (labelSpan) labelSpan.textContent = 'Ghi âm trực tiếp';
-            resolved.targetObj.audio_url = recInfo.dataUrl;
-            resolved.targetObj.audio_duration = recInfo.duration || '00:30';
-            const recSaveRes = await runWithLoading(
-              btn,
-              'Đang lưu bản thu...',
-              async function () {
-                return await window.StudySnapStore.savePracticeExercise(state, ex);
-              },
-              {
-                title: resolved.loadingTitle,
-                desc: 'Hệ thống đang đồng bộ bản ghi âm lên máy chủ.'
-              }
-            );
-            if (recSaveRes && recSaveRes.ok === true) {
-              clearPracticeExerciseDirty(ex.exercise_id);
-              renderTeacherPracticeTab();
-              showToast(
-                recInfo.trimmedSeconds >= 1
+            await persistListeningAudioCapture(targetExId, targetKey, {
+              triggerBtn: btn,
+              btnLoadingText: 'Đang lưu bản thu...',
+              dataUrl: recInfo && recInfo.dataUrl,
+              duration: (recInfo && recInfo.duration) || '00:30',
+              loadingDesc: 'Hệ thống đang đồng bộ bản ghi âm lên máy chủ.',
+              successToast:
+                recInfo && recInfo.trimmedSeconds >= 1
                   ? 'Đã ghi âm, lọc tạp âm & cắt ' + recInfo.trimmedSeconds + 's khoảng trống (' + recInfo.duration + ')!'
-                  : 'Đã ghi âm & lọc tạp âm (' + recInfo.duration + ')!'
-              );
-            } else {
-              markPracticeExerciseDirty(ex, true);
-              renderTeacherPracticeTab();
-              showToast(
-                (recSaveRes && recSaveRes.error) ||
-                'Chưa đồng bộ được bản ghi âm lên máy chủ. Hãy bấm "Lưu đề nhanh" để thử lại.'
-              );
-            }
+                  : 'Đã ghi âm & lọc tạp âm (' + (recInfo ? recInfo.duration : '00:30') + ')!',
+              fallbackError: 'Chưa đồng bộ được bản ghi âm lên máy chủ. Hãy bấm "Lưu đề nhanh" để thử lại.'
+            });
           },
           function (errMsg) {
             btn.disabled = false;

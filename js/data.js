@@ -2568,6 +2568,9 @@ window.StudySnapStore = (function () {
             chunk[j].target.audio_url = results[j].media_url;
           }
         }
+        if (exSource && exSource !== stateObj && Array.isArray(exSource.sections)) {
+          exSource.sections = JSON.parse(JSON.stringify(exClone.sections));
+        }
         if (stateObj && Array.isArray(stateObj.practiceExercises)) {
           const idx = stateObj.practiceExercises.findIndex(function (e) {
             return e.exercise_id === exClone.exercise_id;
