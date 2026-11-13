@@ -1204,27 +1204,90 @@ window.StudySnapAudio = (function () {
     return false;
   }
 
+  const AUDIO_EXT_MIME_MAP = {
+    m4a: 'audio/mp4',
+    m4b: 'audio/mp4',
+    aac: 'audio/aac',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    ogg: 'audio/ogg',
+    oga: 'audio/ogg',
+    opus: 'audio/opus',
+    weba: 'audio/webm',
+    webm: 'audio/webm',
+    flac: 'audio/flac',
+    caf: 'audio/x-caf',
+    amr: 'audio/amr',
+    '3gp': 'audio/3gpp'
+  };
+
+  function inferUploadedMediaMeta(file) {
+    const rawName = String(file && file.name ? file.name : '');
+    const extMatch = rawName.match(/\.([a-z0-9]+)$/i);
+    const ext = extMatch ? extMatch[1].toLowerCase() : '';
+    const rawType = String(file && file.type ? file.type : '').trim().toLowerCase();
+
+    if (ext && AUDIO_EXT_MIME_MAP[ext] && ext !== 'webm') {
+      return {
+        isVideo: false,
+        mediaType: 'audio',
+        mimeType:
+          !rawType || rawType === 'application/octet-stream' || rawType === 'audio/x-m4a' || rawType === 'audio/m4a' || rawType === 'video/mp4'
+            ? AUDIO_EXT_MIME_MAP[ext]
+            : rawType
+      };
+    }
+
+    const isVideo = rawType.indexOf('video/') === 0 || ext === 'mp4' || ext === 'mov' || ext === 'm4v' || ext === 'avi';
+    const mediaType = isVideo ? 'video' : 'audio';
+    let mimeType = rawType;
+    if (!mimeType || mimeType === 'application/octet-stream') {
+      mimeType = isVideo ? 'video/mp4' : (AUDIO_EXT_MIME_MAP[ext] || 'audio/webm');
+    } else if (mimeType === 'audio/x-m4a' || mimeType === 'audio/m4a') {
+      mimeType = 'audio/mp4';
+    }
+    return { isVideo: isVideo, mediaType: mediaType, mimeType: mimeType };
+  }
+
+  function normalizeUploadedDataUrlMime(dataUrl, resolvedMime) {
+    const s = String(dataUrl || '');
+    if (!s || !resolvedMime || s.indexOf('data:') !== 0) return s;
+    const commaIdx = s.indexOf(',');
+    if (commaIdx < 0) return s;
+    const header = s.slice(0, commaIdx).toLowerCase();
+    if (
+      header === 'data:;base64' ||
+      header === 'data:base64' ||
+      header.indexOf('application/octet-stream') >= 0 ||
+      header.indexOf('audio/x-m4a') >= 0 ||
+      header.indexOf('audio/m4a') >= 0 ||
+      (resolvedMime === 'audio/mp4' && header.indexOf('video/mp4') >= 0)
+    ) {
+      return 'data:' + resolvedMime + ';base64,' + s.slice(commaIdx + 1);
+    }
+    return s;
+  }
+
   /**
-   * Đọc file Audio/Video do học sinh hoặc giáo viên tải lên
+   * Đọc file Audio/Video do học sinh hoặc giáo viên tải lên (hỗ trợ chuẩn .m4a Apple MPEG-4 Audio)
    */
   function readUploadedMediaFile(file, callback) {
     if (!file) return;
-    const isVideo = file.type && file.type.indexOf('video') === 0;
-    const mediaType = isVideo ? 'video' : 'audio';
+    const meta = inferUploadedMediaMeta(file);
 
     const reader = new FileReader();
     reader.onload = function (ev) {
-      const dataUrl = ev.target.result;
-      const tempEl = document.createElement(isVideo ? 'video' : 'audio');
+      const dataUrl = normalizeUploadedDataUrlMime(ev.target.result, meta.mimeType);
+      const tempEl = document.createElement(meta.isVideo ? 'video' : 'audio');
       tempEl.preload = 'metadata';
       tempEl.onloadedmetadata = function () {
         const dur = isFinite(tempEl.duration) && tempEl.duration > 0
           ? formatDuration(tempEl.duration)
           : '01:15';
         callback({
-          mediaType: mediaType,
+          mediaType: meta.mediaType,
           dataUrl: dataUrl,
-          mimeType: file.type || (isVideo ? 'video/mp4' : 'audio/webm'),
+          mimeType: meta.mimeType,
           fileName: file.name,
           duration: dur,
           sizeKB: Math.round(file.size / 1024)
@@ -1232,9 +1295,9 @@ window.StudySnapAudio = (function () {
       };
       tempEl.onerror = function () {
         callback({
-          mediaType: mediaType,
+          mediaType: meta.mediaType,
           dataUrl: dataUrl,
-          mimeType: file.type || (isVideo ? 'video/mp4' : 'audio/webm'),
+          mimeType: meta.mimeType,
           fileName: file.name,
           duration: '01:10',
           sizeKB: Math.round(file.size / 1024)

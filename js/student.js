@@ -823,6 +823,7 @@
           ui.pendingMedia = {
             media_type: mediaInfo.mediaType,
             media_url: mediaInfo.dataUrl,
+            mimeType: mediaInfo.mimeType || (mediaInfo.mediaType === 'video' ? 'video/mp4' : 'audio/webm'),
             media_duration: mediaInfo.duration
           };
           if (recStatusText) {
