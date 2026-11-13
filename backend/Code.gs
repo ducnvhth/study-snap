@@ -292,11 +292,13 @@ function doGet(e) {
       }
       const file = DriveApp.getFileById(fileId);
       const blob = file.getBlob();
-      const mimeType = blob.getContentType() || 'audio/webm';
+      const fileName = typeof file.getName === 'function' ? file.getName() : '';
+      const mimeType = inferMediaMimeType_(fileName, blob.getContentType());
       const base64 = Utilities.base64Encode(blob.getBytes());
       const resObj = {
         ok: true,
         fileId: fileId,
+        fileName: fileName,
         mimeType: mimeType,
         dataUrl: 'data:' + mimeType + ';base64,' + base64
       };
@@ -416,9 +418,10 @@ function doPost(e) {
         media_url: mediaUrl
       });
     } catch (uploadErr) {
+      const errDetail = uploadErr && uploadErr.message ? String(uploadErr.message) : '';
       return jsonResponse({
         ok: false,
-        error: 'Không thể lưu tệp lên Google Drive lúc này.'
+        error: 'Không thể lưu tệp lên Google Drive lúc này' + (errDetail ? ': ' + errDetail : '.')
       });
     }
   }
@@ -1396,14 +1399,51 @@ function getOrCreateUploadFolder_() {
   return folder;
 }
 
+function inferMediaMimeType_(fileName, rawMime) {
+  const mime = String(rawMime || '').trim().toLowerCase();
+  const extMatch = String(fileName || '').match(/\.([a-z0-9]+)$/i);
+  const ext = extMatch ? extMatch[1].toLowerCase() : '';
+  const extMap = {
+    m4a: 'audio/mp4',
+    m4b: 'audio/mp4',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    aac: 'audio/aac',
+    ogg: 'audio/ogg',
+    oga: 'audio/ogg',
+    opus: 'audio/opus',
+    flac: 'audio/flac',
+    weba: 'audio/webm',
+    webm: 'audio/webm',
+    '3gp': 'audio/3gpp',
+    mp4: 'video/mp4'
+  };
+  if (ext && extMap[ext] && ext !== 'webm' && ext !== 'mp4') {
+    if (!mime || mime === 'application/octet-stream' || mime === 'binary/octet-stream' || mime === 'audio/x-m4a' || mime === 'audio/m4a' || mime === 'audio/mp3' || (ext === 'm4a' && mime === 'video/mp4')) {
+      return extMap[ext];
+    }
+  }
+  if (mime === 'audio/x-m4a' || mime === 'audio/m4a') return 'audio/mp4';
+  if (mime === 'audio/mp3') return 'audio/mpeg';
+  if (!mime || mime === 'application/octet-stream' || mime === 'binary/octet-stream') {
+    return (ext && extMap[ext]) || 'audio/webm';
+  }
+  return mime;
+}
+
 function saveBase64MediaToDrive_(base64Data, mimeType, fileName) {
   const cleaned = base64Data.indexOf(',') >= 0 ? base64Data.split(',')[1] : base64Data;
   const bytes = Utilities.base64Decode(cleaned);
-  const blob = Utilities.newBlob(bytes, mimeType, fileName);
+  const resolvedMime = inferMediaMimeType_(fileName, mimeType);
+  const blob = Utilities.newBlob(bytes, resolvedMime, fileName);
 
   const folder = getOrCreateUploadFolder_();
   const file = folder.createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  try {
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (shareErr) {
+    // Workspace policies may restrict public sharing; GAS getMedia still serves via owner auth.
+  }
 
   return 'https://drive.google.com/uc?export=download&id=' + file.getId();
 }

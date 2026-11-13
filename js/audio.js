@@ -13,8 +13,164 @@ window.StudySnapAudio = (function () {
   const playerSessions = {};
   const resolvedMediaCache = {};
   const inflightMediaFetches = {};
-  const MEDIA_CACHE_NAME = 'studysnap-drive-media-v1';
+  const driveMediaErrors = {};
+  const dataBlobUrlCache = {};
+  const MEDIA_CACHE_NAME = 'studysnap-drive-media-v2';
   let activePlayerId = null;
+
+  const AUDIO_EXT_MIME_MAP = {
+    m4a: 'audio/mp4',
+    m4b: 'audio/mp4',
+    aac: 'audio/aac',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    ogg: 'audio/ogg',
+    oga: 'audio/ogg',
+    opus: 'audio/opus',
+    weba: 'audio/webm',
+    webm: 'audio/webm',
+    flac: 'audio/flac',
+    caf: 'audio/x-caf',
+    amr: 'audio/amr',
+    '3gp': 'audio/3gpp'
+  };
+
+  function showGlobalAudioToast(msg) {
+    if (typeof document === 'undefined' || !msg) return;
+    const toast = document.getElementById('toast-banner');
+    const text = document.getElementById('toast-message');
+    if (toast && text) {
+      text.textContent = msg;
+      toast.classList.add('is-visible');
+      clearTimeout(window.__audioToastTimer);
+      window.__audioToastTimer = setTimeout(function () {
+        toast.classList.remove('is-visible');
+      }, 4200);
+    }
+  }
+
+  function normalizePlayableMime(rawMime, fallbackMime, fileName) {
+    const clean = String(rawMime || '').split(';')[0].trim().toLowerCase();
+    const extMatch = String(fileName || '').match(/\.([a-z0-9]+)$/i);
+    const ext = extMatch ? extMatch[1].toLowerCase() : '';
+    if (clean === 'audio/x-m4a' || clean === 'audio/m4a') return 'audio/mp4';
+    if (clean === 'audio/mp3') return 'audio/mpeg';
+    if (clean === 'video/mp4' && (ext === 'm4a' || ext === 'm4b' || fallbackMime === 'audio/mp4')) return 'audio/mp4';
+    if (!clean || clean === 'application/octet-stream' || clean === 'binary/octet-stream') {
+      if (ext && AUDIO_EXT_MIME_MAP[ext]) return AUDIO_EXT_MIME_MAP[ext];
+      return fallbackMime || 'audio/webm';
+    }
+    return clean;
+  }
+
+  function sniffAudioMimeFromBytes(bytes, currentMime) {
+    const normalizedCur = normalizePlayableMime(currentMime, '', '');
+    if (bytes && bytes.length >= 12) {
+      // RIFF....WAVE -> WAV
+      if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+          bytes[8] === 0x57 && bytes[9] === 0x41 && bytes[10] === 0x56 && bytes[11] === 0x45) {
+        return 'audio/wav';
+      }
+      // ID3 or MPEG ADTS/MP3 frame sync
+      if ((bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) ||
+          (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)) {
+        return 'audio/mpeg';
+      }
+      // ISO Base Media (.m4a / .mp4) -> ....ftyp
+      if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
+        return currentMime && String(currentMime).toLowerCase().indexOf('video/') === 0 ? 'video/mp4' : 'audio/mp4';
+      }
+      // OggS
+      if (bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) {
+        return 'audio/ogg';
+      }
+      // fLaC
+      if (bytes[0] === 0x66 && bytes[1] === 0x4c && bytes[2] === 0x61 && bytes[3] === 0x43) {
+        return 'audio/flac';
+      }
+      // EBML / WebM
+      if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) {
+        return currentMime && String(currentMime).toLowerCase().indexOf('video/') === 0 ? 'video/webm' : 'audio/webm';
+      }
+    }
+    return normalizedCur || 'audio/webm';
+  }
+
+  async function ensurePlayableAudioBlob(blob, hintName) {
+    if (!blob || blob.size === 0) return null;
+    const rawType = String(blob.type || '').trim().toLowerCase();
+    const needsSniff =
+      !rawType ||
+      rawType === 'application/octet-stream' ||
+      rawType === 'binary/octet-stream' ||
+      rawType === 'audio/x-m4a' ||
+      rawType === 'audio/m4a' ||
+      rawType === 'audio/mp3';
+    if (!needsSniff) return blob;
+    let detected = normalizePlayableMime(rawType, '', hintName);
+    if (typeof blob.slice === 'function') {
+      try {
+        const headerBuf = await blob.slice(0, 16).arrayBuffer();
+        detected = sniffAudioMimeFromBytes(new Uint8Array(headerBuf), rawType);
+      } catch (e) {}
+    }
+    if (detected && detected !== rawType && typeof Blob !== 'undefined') {
+      return new Blob([blob], { type: detected });
+    }
+    return blob;
+  }
+
+  function dataUrlToBlobSync(dataUrl, hintName) {
+    const s = String(dataUrl || '');
+    if (s.indexOf('data:') !== 0 || typeof atob !== 'function' || typeof Uint8Array === 'undefined' || typeof Blob === 'undefined') {
+      return null;
+    }
+    const commaIdx = s.indexOf(',');
+    if (commaIdx < 0) return null;
+    const meta = s.slice(5, commaIdx);
+    const b64 = s.slice(commaIdx + 1);
+    const rawMime = meta.split(';')[0] || '';
+    try {
+      const binary = atob(b64);
+      const len = binary.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const mimeType = sniffAudioMimeFromBytes(bytes, normalizePlayableMime(rawMime, '', hintName));
+      return new Blob([bytes], { type: mimeType });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function dataUrlToBlobUrlSync(dataUrl, hintName) {
+    const s = String(dataUrl || '');
+    if (!s || s.indexOf('data:') !== 0) return '';
+    if (dataBlobUrlCache[s]) return dataBlobUrlCache[s];
+    const blob = dataUrlToBlobSync(s, hintName);
+    if (blob && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+      const objUrl = URL.createObjectURL(blob);
+      dataBlobUrlCache[s] = objUrl;
+      return objUrl;
+    }
+    return '';
+  }
+
+  function cacheDriveMediaFromDataUrl(urlOrId, dataUrl, hintName) {
+    const fileId = extractDriveFileId(urlOrId) || String(urlOrId || '').trim();
+    if (!fileId || !dataUrl || String(dataUrl).indexOf('data:') !== 0) return '';
+    const blob = dataUrlToBlobSync(dataUrl, hintName);
+    if (!blob) return '';
+    writeBrowserCachedMedia(fileId, blob);
+    if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+      const objUrl = URL.createObjectURL(blob);
+      resolvedMediaCache[fileId] = objUrl;
+      delete driveMediaErrors[fileId];
+      return objUrl;
+    }
+    return '';
+  }
 
   async function readBrowserCachedMedia(fileId) {
     if (!fileId || typeof caches === 'undefined') return '';
@@ -22,7 +178,8 @@ window.StudySnapAudio = (function () {
       const cache = await caches.open(MEDIA_CACHE_NAME);
       const cached = await cache.match('https://studysnap-media-cache.local/drive/' + encodeURIComponent(fileId));
       if (!cached) return '';
-      const blob = await cached.blob();
+      const rawBlob = await cached.blob();
+      const blob = await ensurePlayableAudioBlob(rawBlob, '');
       if (!blob || blob.size === 0) return '';
       if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
         return URL.createObjectURL(blob);
@@ -37,7 +194,7 @@ window.StudySnapAudio = (function () {
     if (!fileId || !blob || typeof caches === 'undefined' || typeof Response === 'undefined') return;
     try {
       const cache = await caches.open(MEDIA_CACHE_NAME);
-      const headers = { 'Content-Type': blob.type || 'audio/webm' };
+      const headers = { 'Content-Type': normalizePlayableMime(blob.type, 'audio/webm', '') };
       await cache.put(
         'https://studysnap-media-cache.local/drive/' + encodeURIComponent(fileId),
         new Response(blob, { status: 200, headers: headers })
@@ -48,9 +205,11 @@ window.StudySnapAudio = (function () {
   }
 
   async function dataUrlToBlob(dataUrl) {
+    const syncBlob = dataUrlToBlobSync(dataUrl);
+    if (syncBlob) return syncBlob;
     try {
       const res = await fetch(dataUrl);
-      return await res.blob();
+      return await ensurePlayableAudioBlob(await res.blob(), '');
     } catch (e) {
       return null;
     }
@@ -61,7 +220,10 @@ window.StudySnapAudio = (function () {
     if (resolvedMediaCache[driveFileId]) return resolvedMediaCache[driveFileId];
     if (inflightMediaFetches[driveFileId]) return await inflightMediaFetches[driveFileId];
 
+    delete driveMediaErrors[driveFileId];
+
     inflightMediaFetches[driveFileId] = (async function () {
+      let lastErrMsg = '';
       try {
         const cachedObjUrl = await readBrowserCachedMedia(driveFileId);
         if (cachedObjUrl) {
@@ -69,20 +231,23 @@ window.StudySnapAudio = (function () {
           return cachedObjUrl;
         }
 
+        const backendMode =
+          window.StudySnapStore && typeof window.StudySnapStore.getBackendMode === 'function'
+            ? window.StudySnapStore.getBackendMode()
+            : '';
         const canUseEdgeMedia =
           typeof window !== 'undefined' &&
           window.location &&
           /^https?:$/i.test(window.location.protocol) &&
-          window.StudySnapStore &&
-          typeof window.StudySnapStore.isUsingD1 === 'function' &&
-          window.StudySnapStore.isUsingD1();
+          backendMode !== 'gas';
 
         if (canUseEdgeMedia) {
           try {
             const edgeRes = await fetch('/api?action=media&fileId=' + encodeURIComponent(driveFileId));
             const ct = String(edgeRes.headers.get('content-type') || '').toLowerCase();
             if (edgeRes.ok && ct.indexOf('application/json') === -1 && ct.indexOf('text/html') === -1) {
-              const blob = await edgeRes.blob();
+              const rawBlob = await edgeRes.blob();
+              const blob = await ensurePlayableAudioBlob(rawBlob, '');
               if (blob && blob.size > 0) {
                 await writeBrowserCachedMedia(driveFileId, blob);
                 const objUrl =
@@ -104,7 +269,10 @@ window.StudySnapAudio = (function () {
           window.StudySnapStore && window.StudySnapStore.getGasUrl
             ? window.StudySnapStore.getGasUrl()
             : '';
-        if (!gasUrl) return '';
+        if (!gasUrl) {
+          driveMediaErrors[driveFileId] = 'Chưa cấu hình cầu nối Google Drive (GAS) để tải âm thanh.';
+          return '';
+        }
 
         const fetchReq = fetch(gasUrl + '?action=getMedia&fileId=' + encodeURIComponent(driveFileId)).then(function (r) {
           return r.json();
@@ -126,8 +294,13 @@ window.StudySnapAudio = (function () {
           resolvedMediaCache[driveFileId] = json.dataUrl;
           return json.dataUrl;
         }
+        if (json && json.error) {
+          lastErrMsg = String(json.error);
+        }
+        driveMediaErrors[driveFileId] = lastErrMsg || 'Không thể đọc file âm thanh từ Google Drive.';
         return '';
       } catch (err) {
+        driveMediaErrors[driveFileId] = 'Lỗi kết nối khi tải file âm thanh từ Google Drive.';
         return '';
       } finally {
         delete inflightMediaFetches[driveFileId];
@@ -174,10 +347,16 @@ window.StudySnapAudio = (function () {
 
   function extractDriveFileId(url) {
     if (!url || typeof url !== 'string') return '';
-    if (url.indexOf('drive.google.com') === -1 && url.indexOf('docs.google.com') === -1) {
+    const trimmed = url.trim();
+    const isDriveHost =
+      trimmed.indexOf('drive.google.com') !== -1 ||
+      trimmed.indexOf('docs.google.com') !== -1 ||
+      trimmed.indexOf('drive.usercontent.google.com') !== -1;
+    const isMediaProxy = trimmed.indexOf('action=media') !== -1 && trimmed.indexOf('fileId=') !== -1;
+    if (!isDriveHost && !isMediaProxy) {
       return '';
     }
-    const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    const idMatch = trimmed.match(/[?&](?:id|fileId)=([a-zA-Z0-9_-]+)/) || trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
     return idMatch && idMatch[1] ? idMatch[1] : '';
   }
 
@@ -195,16 +374,20 @@ window.StudySnapAudio = (function () {
    */
   function renderVoicePlayer(opts) {
     const id = opts.id || ('vp-' + Math.random().toString(36).slice(2, 9));
-    const url = opts.url || 'demo:voice';
+    const requireReal = Boolean(opts.requireRealAudio);
+    const url = opts.url !== undefined && opts.url !== null && String(opts.url).trim() !== ''
+      ? String(opts.url).trim()
+      : (requireReal ? '' : 'demo:voice');
     const durationStr = formatDuration(parseDurationToSeconds(opts.duration || '00:40'));
     const label = opts.label || 'Bản thu âm';
-    const fallbackText = opts.fallbackText || '你好，老师！我是越南学生。';
+    const fallbackText = opts.fallbackText !== undefined ? String(opts.fallbackText) : '你好，老师！我是越南学生。';
     const lang = opts.lang || 'zh-CN';
     const compactClass = opts.compact ? ' is-compact' : '';
     const variantClass = opts.variant === 'teacher' ? ' is-teacher-voice' : ' is-student-voice';
 
     const existing = playerSessions[id];
     const isPlaying = existing && existing.isPlaying;
+    const errText = existing && existing.errorMessage ? existing.errorMessage : '';
     const currentSec = existing ? existing.currentSeconds : 0;
     const totalSec = existing && existing.totalSeconds ? existing.totalSeconds : parseDurationToSeconds(durationStr);
     const playbackRate = existing && existing.playbackRate ? existing.playbackRate : 1;
@@ -219,12 +402,13 @@ window.StudySnapAudio = (function () {
       : '';
 
     return (
-      '<div class="voice-player-bar' + compactClass + variantClass + (isPlaying ? ' is-playing' : '') + '" ' +
+      '<div class="voice-player-bar' + compactClass + variantClass + (isPlaying ? ' is-playing' : '') + (errText ? ' has-error' : '') + '" ' +
         'data-voice-player="' + escapeAttr(id) + '" ' +
         'data-voice-url="' + escapeAttr(url) + '" ' +
         'data-voice-duration="' + escapeAttr(totalStr) + '" ' +
         'data-voice-fallback="' + escapeAttr(fallbackText) + '" ' +
-        'data-voice-lang="' + escapeAttr(lang) + '">' +
+        'data-voice-lang="' + escapeAttr(lang) + '"' +
+        (requireReal ? ' data-voice-require-real="1"' : '') + '>' +
         '<button type="button" class="voice-ctrl-btn voice-play-toggle" data-vp-action="toggle" ' +
           'title="' + (isPlaying ? 'Tạm dừng (Pause)' : 'Phát (Play)') + '" ' +
           'aria-label="' + (isPlaying ? 'Tạm dừng âm thanh' : 'Phát âm thanh') + '">' +
@@ -249,6 +433,7 @@ window.StudySnapAudio = (function () {
           '<input type="range" class="voice-seek-slider" data-vp-slider ' +
             'min="0" max="100" step="0.5" value="' + percent + '" ' +
             'aria-label="Thanh tua thời gian nghe ' + escapeAttr(label) + '">' +
+          '<div class="voice-error-note" data-vp-error role="status"' + (errText ? '' : ' hidden') + '>' + escapeAttr(errText) + '</div>' +
         '</div>' +
       '</div>'
     );
@@ -256,19 +441,27 @@ window.StudySnapAudio = (function () {
 
   function syncPlayerDom(playerId) {
     const session = playerSessions[playerId];
-    if (!session) return;
-    const containers = document.querySelectorAll('[data-voice-player="' + CSS.escape(playerId) + '"]');
+    if (!session || typeof document === 'undefined') return;
+    const escapedId = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(playerId) : playerId;
+    const containers = document.querySelectorAll('[data-voice-player="' + escapedId + '"]');
     containers.forEach(function (el) {
       const isLoading = Boolean(session.fetchingDriveMedia);
+      const errMsg = session.errorMessage || '';
       el.classList.toggle('is-playing', Boolean(session.isPlaying) && !isLoading);
       el.classList.toggle('is-loading', isLoading);
+      el.classList.toggle('has-error', Boolean(errMsg));
       const playIcon = el.querySelector('.vp-icon-play');
       const pauseIcon = el.querySelector('.vp-icon-pause');
       const loadingIcon = el.querySelector('.vp-icon-loading');
       const toggleBtn = el.querySelector('[data-vp-action="toggle"]');
+      const errEl = el.querySelector('[data-vp-error]');
       if (playIcon) playIcon.style.display = !isLoading && !session.isPlaying ? '' : 'none';
       if (pauseIcon) pauseIcon.style.display = !isLoading && session.isPlaying ? '' : 'none';
       if (loadingIcon) loadingIcon.style.display = isLoading ? 'inline-flex' : 'none';
+      if (errEl) {
+        errEl.textContent = errMsg;
+        errEl.hidden = !errMsg;
+      }
       if (toggleBtn) {
         toggleBtn.disabled = isLoading;
         toggleBtn.setAttribute('aria-busy', isLoading ? 'true' : 'false');
@@ -297,13 +490,23 @@ window.StudySnapAudio = (function () {
     });
   }
 
+  function isAudioUrlLikelyReal(url) {
+    const s = String(url || '').trim();
+    if (!s || s.indexOf('demo:') === 0) return false;
+    return true;
+  }
+
   function getOrCreateSession(playerEl) {
     const id = playerEl.getAttribute('data-voice-player');
-    const rawUrl = playerEl.getAttribute('data-voice-url') || '';
+    const rawUrl = (playerEl.getAttribute('data-voice-url') || '').trim();
+    const requireReal = playerEl.getAttribute('data-voice-require-real') === '1';
     const driveId = extractDriveFileId(rawUrl);
-    const effectiveUrl = (driveId && resolvedMediaCache[driveId]) ? resolvedMediaCache[driveId] : rawUrl;
+    let effectiveUrl = (driveId && resolvedMediaCache[driveId]) ? resolvedMediaCache[driveId] : rawUrl;
+    if (!driveId && effectiveUrl.indexOf('data:') === 0) {
+      effectiveUrl = dataUrlToBlobUrlSync(effectiveUrl) || effectiveUrl;
+    }
     const durStr = playerEl.getAttribute('data-voice-duration') || '00:40';
-    const fallbackText = playerEl.getAttribute('data-voice-fallback') || '你好，老师！';
+    const fallbackText = playerEl.getAttribute('data-voice-fallback') || '';
     const lang = playerEl.getAttribute('data-voice-lang') || 'zh-CN';
     const totalSec = parseDurationToSeconds(durStr);
 
@@ -317,17 +520,20 @@ window.StudySnapAudio = (function () {
         url: effectiveUrl,
         fallbackText: fallbackText,
         lang: lang,
+        requireReal: requireReal,
         totalSeconds: totalSec,
         currentSeconds: 0,
         playbackRate: 1,
         isPlaying: false,
         audioEl: null,
         simTimer: null,
-        isRealAudio: effectiveUrl.indexOf('data:') === 0 || effectiveUrl.indexOf('blob:') === 0 || effectiveUrl.indexOf('http') === 0,
-        fetchingDriveMedia: false
+        isRealAudio: isAudioUrlLikelyReal(effectiveUrl),
+        fetchingDriveMedia: false,
+        errorMessage: ''
       };
     } else {
       playerSessions[id].fallbackText = fallbackText;
+      playerSessions[id].requireReal = requireReal;
       if (driveId && resolvedMediaCache[driveId] && playerSessions[id].url !== resolvedMediaCache[driveId]) {
         playerSessions[id].url = resolvedMediaCache[driveId];
       }
@@ -443,43 +649,93 @@ window.StudySnapAudio = (function () {
     });
   }
 
-  async function playSession(session) {
-    pauseAllExcept(session.id);
+  function notifyPlayerError(session, message) {
+    if (!session) return;
+    session.isPlaying = false;
+    session.fetchingDriveMedia = false;
+    session.errorMessage = String(message || 'Không phát được tệp âm thanh.');
+    if (activePlayerId === session.id) activePlayerId = null;
+    syncPlayerDom(session.id);
+    showGlobalAudioToast(session.errorMessage);
+  }
 
-    if (!session.isRealAudio) {
-      startSimulatedPlayback(session);
-      return;
-    }
-
+  function configureAudioElementSource(session, srcUrl) {
     if (!session.audioEl) {
       const audio = new Audio();
       audio.preload = 'metadata';
       attachRealAudioEvents(session, audio);
-      audio.src = session.url;
       session.audioEl = audio;
+    }
+    if (session.loadedSrcUrl !== srcUrl) {
+      session.audioEl.src = srcUrl;
+      session.loadedSrcUrl = srcUrl;
     }
     try {
       session.audioEl.playbackRate = session.playbackRate || 1;
     } catch (e) {
       // ignore
     }
-
     if (session.currentSeconds >= session.totalSeconds) {
       session.currentSeconds = 0;
-      try {
-        session.audioEl.currentTime = 0;
-      } catch (e) {
-        // ignore
+    }
+    if (session.audioEl.readyState >= 1) {
+      if (Math.abs((session.audioEl.currentTime || 0) - session.currentSeconds) > 0.5) {
+        try {
+          session.audioEl.currentTime = session.currentSeconds;
+        } catch (e) {}
       }
-    } else if (Math.abs((session.audioEl.currentTime || 0) - session.currentSeconds) > 0.5) {
-      try {
-        session.audioEl.currentTime = session.currentSeconds;
-      } catch (e) {
-        // ignore
-      }
+    } else if (session.currentSeconds > 0) {
+      const targetSec = session.currentSeconds;
+      session.audioEl.addEventListener(
+        'loadedmetadata',
+        function onMetaSeek() {
+          session.audioEl.removeEventListener('loadedmetadata', onMetaSeek);
+          try {
+            if (targetSec > 0) session.audioEl.currentTime = targetSec;
+          } catch (e) {}
+        },
+        { once: true }
+      );
+    }
+  }
+
+  async function playSession(session) {
+    pauseAllExcept(session.id);
+    session.errorMessage = '';
+
+    const rawUrl = String(session.rawUrl || '').trim();
+    const isExplicitDemo = rawUrl.indexOf('demo:') === 0;
+    if (!rawUrl || (session.requireReal && isExplicitDemo)) {
+      notifyPlayerError(session, 'Chưa có tệp âm thanh để phát. Hãy tải file audio hoặc dán đường dẫn hợp lệ.');
+      return;
+    }
+
+    if (!session.isRealAudio) {
+      startSimulatedPlayback(session);
+      return;
     }
 
     if (session.fetchingDriveMedia) return;
+
+    const driveFileId = extractDriveFileId(rawUrl);
+    if (driveFileId && !resolvedMediaCache[driveFileId]) {
+      session.fetchingDriveMedia = true;
+      session.isPlaying = false;
+      syncPlayerDom(session.id);
+      const resolvedSrc = await resolveDriveMediaSource(driveFileId);
+      session.fetchingDriveMedia = false;
+      if (!resolvedSrc) {
+        const driveErr = driveMediaErrors[driveFileId] || 'Không tải được tệp âm thanh từ Google Drive. Kiểm tra quyền chia sẻ hoặc thử tải lại file.';
+        notifyPlayerError(session, driveErr);
+        return;
+      }
+      session.url = resolvedSrc;
+    } else if (session.url && session.url.indexOf('data:') === 0) {
+      const objUrl = dataUrlToBlobUrlSync(session.url);
+      if (objUrl) session.url = objUrl;
+    }
+
+    configureAudioElementSource(session, session.url);
 
     session.isPlaying = true;
     activePlayerId = session.id;
@@ -488,34 +744,33 @@ window.StudySnapAudio = (function () {
     try {
       await session.audioEl.play();
     } catch (err) {
-      // Nếu file bị trình duyệt chặn CORS redirect trên thẻ <audio>,
-      // ưu tiên đọc từ Cache / Cloudflare Edge proxy rồi fallback sang GAS (?action=getMedia&fileId=...)
-      const driveFileId = extractDriveFileId(session.url);
-      if (driveFileId && !session.fetchingDriveMedia) {
-        session.fetchingDriveMedia = true;
+      if (err && err.name === 'NotAllowedError') {
         session.isPlaying = false;
-        syncPlayerDom(session.id);
-        try {
-          const resolvedSrc = await resolveDriveMediaSource(driveFileId);
-          if (resolvedSrc) {
-            session.url = resolvedSrc;
-            session.audioEl.src = resolvedSrc;
-            session.audioEl.currentTime = session.currentSeconds;
-            session.fetchingDriveMedia = false;
-            session.isPlaying = true;
-            syncPlayerDom(session.id);
+        if (activePlayerId === session.id) activePlayerId = null;
+        notifyPlayerError(session, 'Tệp âm thanh đã tải xong — hãy bấm nút Phát (▶) một lần nữa để nghe.');
+        return;
+      }
+      if (session.url && session.url.indexOf('data:') === 0) {
+        const fallbackBlobUrl = dataUrlToBlobUrlSync(session.url);
+        if (fallbackBlobUrl && fallbackBlobUrl !== session.url) {
+          session.url = fallbackBlobUrl;
+          configureAudioElementSource(session, fallbackBlobUrl);
+          try {
             await session.audioEl.play();
             return;
+          } catch (retryErr) {
+            err = retryErr;
           }
-        } catch (fetchErr) {
-          // Fallback to simulated timeline
         }
-        session.fetchingDriveMedia = false;
-        syncPlayerDom(session.id);
       }
-      // Fallback sang trình phát mô phỏng có thanh tua nếu file không truy cập được
-      session.isRealAudio = false;
-      startSimulatedPlayback(session);
+      const mediaErrCode = session.audioEl && session.audioEl.error ? session.audioEl.error.code : 0;
+      let errMsg = 'Không phát được tệp âm thanh. Hãy kiểm tra lại file đã tải lên hoặc đường dẫn audio.';
+      if (mediaErrCode === 2) {
+        errMsg = 'Lỗi mạng khi tải tệp âm thanh. Vui lòng kiểm tra kết nối rồi bấm Phát lại.';
+      } else if (mediaErrCode === 4 || (err && err.name === 'NotSupportedError')) {
+        errMsg = 'Trình duyệt không giải mã được tệp âm thanh này hoặc link file bị chặn. Khuyên dùng .mp3 / .m4a / .wav.';
+      }
+      notifyPlayerError(session, errMsg);
     }
   }
 
@@ -1204,23 +1459,6 @@ window.StudySnapAudio = (function () {
     return false;
   }
 
-  const AUDIO_EXT_MIME_MAP = {
-    m4a: 'audio/mp4',
-    m4b: 'audio/mp4',
-    aac: 'audio/aac',
-    mp3: 'audio/mpeg',
-    wav: 'audio/wav',
-    ogg: 'audio/ogg',
-    oga: 'audio/ogg',
-    opus: 'audio/opus',
-    weba: 'audio/webm',
-    webm: 'audio/webm',
-    flac: 'audio/flac',
-    caf: 'audio/x-caf',
-    amr: 'audio/amr',
-    '3gp': 'audio/3gpp'
-  };
-
   function inferUploadedMediaMeta(file) {
     const rawName = String(file && file.name ? file.name : '');
     const extMatch = rawName.match(/\.([a-z0-9]+)$/i);
@@ -1231,21 +1469,15 @@ window.StudySnapAudio = (function () {
       return {
         isVideo: false,
         mediaType: 'audio',
-        mimeType:
-          !rawType || rawType === 'application/octet-stream' || rawType === 'audio/x-m4a' || rawType === 'audio/m4a' || rawType === 'video/mp4'
-            ? AUDIO_EXT_MIME_MAP[ext]
-            : rawType
+        mimeType: normalizePlayableMime(rawType, AUDIO_EXT_MIME_MAP[ext], rawName)
       };
     }
 
     const isVideo = rawType.indexOf('video/') === 0 || ext === 'mp4' || ext === 'mov' || ext === 'm4v' || ext === 'avi';
     const mediaType = isVideo ? 'video' : 'audio';
-    let mimeType = rawType;
-    if (!mimeType || mimeType === 'application/octet-stream') {
-      mimeType = isVideo ? 'video/mp4' : (AUDIO_EXT_MIME_MAP[ext] || 'audio/webm');
-    } else if (mimeType === 'audio/x-m4a' || mimeType === 'audio/m4a') {
-      mimeType = 'audio/mp4';
-    }
+    const mimeType = isVideo
+      ? (rawType && rawType !== 'application/octet-stream' ? rawType : 'video/mp4')
+      : normalizePlayableMime(rawType, AUDIO_EXT_MIME_MAP[ext] || 'audio/webm', rawName);
     return { isVideo: isVideo, mediaType: mediaType, mimeType: mimeType };
   }
 
@@ -1259,8 +1491,10 @@ window.StudySnapAudio = (function () {
       header === 'data:;base64' ||
       header === 'data:base64' ||
       header.indexOf('application/octet-stream') >= 0 ||
+      header.indexOf('binary/octet-stream') >= 0 ||
       header.indexOf('audio/x-m4a') >= 0 ||
       header.indexOf('audio/m4a') >= 0 ||
+      header.indexOf('audio/mp3') >= 0 ||
       (resolvedMime === 'audio/mp4' && header.indexOf('video/mp4') >= 0)
     ) {
       return 'data:' + resolvedMime + ';base64,' + s.slice(commaIdx + 1);
@@ -1278,32 +1512,62 @@ window.StudySnapAudio = (function () {
     const reader = new FileReader();
     reader.onload = function (ev) {
       const dataUrl = normalizeUploadedDataUrlMime(ev.target.result, meta.mimeType);
+      const fallbackDur = meta.isVideo ? '01:15' : '01:10';
+      let settled = false;
+      let tempObjUrl = '';
+      let durTimer = null;
+
+      function finishWithDuration(durText) {
+        if (settled) return;
+        settled = true;
+        if (durTimer) {
+          clearTimeout(durTimer);
+          durTimer = null;
+        }
+        if (tempObjUrl && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+          try {
+            URL.revokeObjectURL(tempObjUrl);
+          } catch (e) {}
+        }
+        callback({
+          mediaType: meta.mediaType,
+          dataUrl: dataUrl,
+          mimeType: meta.mimeType,
+          fileName: file.name,
+          duration: durText || fallbackDur,
+          sizeKB: Math.round(file.size / 1024)
+        });
+      }
+
       const tempEl = document.createElement(meta.isVideo ? 'video' : 'audio');
       tempEl.preload = 'metadata';
       tempEl.onloadedmetadata = function () {
         const dur = isFinite(tempEl.duration) && tempEl.duration > 0
           ? formatDuration(tempEl.duration)
-          : '01:15';
-        callback({
-          mediaType: meta.mediaType,
-          dataUrl: dataUrl,
-          mimeType: meta.mimeType,
-          fileName: file.name,
-          duration: dur,
-          sizeKB: Math.round(file.size / 1024)
-        });
+          : fallbackDur;
+        finishWithDuration(dur);
       };
       tempEl.onerror = function () {
-        callback({
-          mediaType: meta.mediaType,
-          dataUrl: dataUrl,
-          mimeType: meta.mimeType,
-          fileName: file.name,
-          duration: '01:10',
-          sizeKB: Math.round(file.size / 1024)
-        });
+        finishWithDuration(fallbackDur);
       };
+      durTimer = setTimeout(function () {
+        finishWithDuration(fallbackDur);
+      }, 3000);
+
+      if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+        try {
+          const probeBlob = meta.mimeType && file.type !== meta.mimeType ? file.slice(0, file.size, meta.mimeType) : file;
+          tempObjUrl = URL.createObjectURL(probeBlob);
+          tempEl.src = tempObjUrl;
+          return;
+        } catch (e) {
+          // Fall through to dataUrl
+        }
+      }
       tempEl.src = dataUrl;
+    };
+    reader.onerror = function () {
+      showGlobalAudioToast('Không thể đọc tệp âm thanh từ thiết bị. Vui lòng thử chọn lại tệp.');
     };
     reader.readAsDataURL(file);
   }
@@ -1321,18 +1585,27 @@ window.StudySnapAudio = (function () {
   }
 
   /**
-   * Phát file media thực tế hoặc giọng đọc minh họa (dùng cho nơi gọi trực tiếp)
+   * Phát file media thực tế hoặc giọng đọc minh họa (chỉ đọc TTS nếu là dữ liệu mẫu demo:)
    */
-  function playMediaOrDemo(url, fallbackSpeechText, lang) {
+  async function playMediaOrDemo(url, fallbackSpeechText, lang) {
     if (!url) return;
-    if (url.indexOf('data:') === 0 || url.indexOf('http') === 0 || url.indexOf('blob:') === 0) {
-      const audio = new Audio(url);
-      audio.play().catch(function () {
-        speakText(fallbackSpeechText || '你好，老师！', lang || 'zh-CN');
-      });
+    if (String(url).indexOf('demo:') === 0) {
+      speakText(fallbackSpeechText, lang || 'zh-CN');
       return;
     }
-    speakText(fallbackSpeechText, lang || 'zh-CN');
+    const driveId = extractDriveFileId(url);
+    let targetSrc = String(url);
+    if (driveId) {
+      targetSrc = (await resolveDriveMediaSource(driveId)) || targetSrc;
+    } else if (targetSrc.indexOf('data:') === 0) {
+      targetSrc = dataUrlToBlobUrlSync(targetSrc) || targetSrc;
+    }
+    try {
+      const audio = new Audio(targetSrc);
+      await audio.play();
+    } catch (err) {
+      showGlobalAudioToast('Không phát được tệp âm thanh. Vui lòng kiểm tra kết nối hoặc định dạng tệp.');
+    }
   }
 
   return {
@@ -1342,6 +1615,8 @@ window.StudySnapAudio = (function () {
     speakText: speakText,
     playMediaOrDemo: playMediaOrDemo,
     renderVoicePlayer: renderVoicePlayer,
+    cacheDriveMediaFromDataUrl: cacheDriveMediaFromDataUrl,
+    extractDriveFileId: extractDriveFileId,
     cleanAndTrimMonoSamples: cleanAndTrimMonoSamples,
     encodeMonoWavBytes: encodeMonoWavBytes,
     pauseAll: function () { pauseAllExcept(null); }

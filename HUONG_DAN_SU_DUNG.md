@@ -63,17 +63,16 @@ Khi bấm **`+ 6. Nghe hiểu`**, một thẻ bài nghe mới được chèn và
    - **Nhãn phần**: VD `Text 4` hoặc `Bài nghe 1`.
    - **Tiêu đề ngữ cảnh (Hán tự)**: VD `在宾馆房间，李文在写日记。`
    - **Phụ đề / mô tả ngữ cảnh**: VD `In the hotel room, Li Wen was writing in his diary.` hoặc hướng dẫn tiếng Việt.
-2. **Nguồn âm thanh (chọn 1 trong 4 cách)**:
-   - **Tải file Audio** (`.mp3`, `.wav`, ... từ máy tính).
+2. **Nguồn âm thanh cho học sinh nghe (chọn 1 trong 3 cách)**:
+   - **Tải file Audio** (`.mp3`, `.m4a`, `.wav`... từ máy tính).
    - **Thu âm trực tiếp bằng Micro** ngay trên trình duyệt.
    - **Dán đường dẫn (URL)** của tệp nghe.
-   - **Tạo giọng đọc tiếng Trung (TTS)** từ ô **Kịch bản hội thoại (Transcript)** để nghe thử trực tiếp nếu chưa kịp thu file riêng.
-   - *(Mẹo: với tệp âm thanh dung lượng lớn, hệ thống sẽ tối ưu lưu trữ trực tuyến hoặc bạn có thể dán trực tiếp đường dẫn audio).*
+   - *(Mẹo: với tệp âm thanh dung lượng lớn, hệ thống sẽ tối ưu lưu trữ trên Google Drive hoặc bạn có thể dán trực tiếp đường dẫn audio).*
 3. **Danh sách câu hỏi trắc nghiệm theo bài nghe**:
    - Thêm các câu hỏi đánh số `(1)`, `(2)`, ...
    - Mỗi câu hỗ trợ **3 đáp án (A, B, C)** hoặc **4 đáp án (A, B, C, D)** (nếu bỏ trống ô D, giao diện học sinh sẽ tự ẩn đáp án D cho gọn).
    - Tích chọn đáp án đúng (A/B/C/D) để hệ thống tự chấm điểm ngay khi học sinh nộp bài.
-   - Nhập **Kịch bản hội thoại (Transcript)** nếu muốn cho phép học sinh tự đối chiếu lời thoại sau khi nộp bài.
+   - Nhập **Giải thích đáp án** (tùy chọn) để học sinh đối chiếu sau khi nộp bài.
 
 #### D. Chấm điểm & Xuất kết quả
 - Các phần **Nối từ, Trắc nghiệm, Điền từ, Sửa câu sai, Nghe hiểu** (và **Dịch câu** nếu bật chấm tự động) được **hệ thống chấm ngay khi học sinh bấm nộp**.
@@ -157,7 +156,7 @@ Giao diện học sinh có **3 tab** đồng bộ tên gọi với giáo viên. 
    - **Dịch câu**: nhập bản dịch theo yêu cầu.
    - **Nghe hiểu**: bấm nút Play để nghe hội thoại, có thể dùng nút tua **`-5s`** và đổi tốc độ **`1.0x` / `0.8x`** nếu muốn nghe chậm hơn, sau đó chọn đáp án cho các câu `(1)`, `(2)`...
 3. **Tự động lưu nháp**: bài đang làm dở được tự động lưu nháp trên trình duyệt, giúp không bị mất dữ liệu nếu lỡ tải lại trang.
-4. Bấm **`Nộp bài & Chấm điểm toàn bộ`** để xem ngay điểm của các phần chấm tự động, đối chiếu đáp án đúng và đọc lại **Kịch bản hội thoại** ở phần Nghe hiểu (nếu bài có kèm lời thoại). Nếu giáo viên cho phép làm lại, bấm **`Làm lại từ đầu`**.
+4. Bấm **`Nộp bài & Chấm điểm toàn bộ`** để xem ngay điểm của các phần chấm tự động và đối chiếu đáp án đúng. Nếu giáo viên cho phép làm lại, bấm **`Làm lại từ đầu`**.
 
 ---
 

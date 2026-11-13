@@ -1683,17 +1683,22 @@
   function renderListeningQuestionPlayerHtml(sec, item, idx, idPrefix) {
     if (!window.StudySnapAudio || !sec || !item) return '';
     const itemAudioUrl = String(item.audio_url || '').trim();
-    const itemScript = String(item.audio_transcript || '').trim();
-    if (!itemAudioUrl && !itemScript) return '';
+    const isReview = String(idPrefix || '').indexOf('review') >= 0;
+    if (!itemAudioUrl || itemAudioUrl.indexOf('demo:') === 0) {
+      return isReview
+        ? ''
+        : '<div class="listening-missing-audio-note">Câu hỏi này chưa có tệp âm thanh từ giáo viên.</div>';
+    }
 
     return (
       '<div class="listening-question-player">' +
       window.StudySnapAudio.renderVoicePlayer({
         id: (idPrefix || 'student-ls-') + sec.section_id + '-' + item.id,
-        url: itemAudioUrl || ('demo:listening:' + item.id),
+        url: itemAudioUrl,
         duration: item.audio_duration || '00:25',
         label: String(item.audio_label || '').trim() || ('Nghe câu ' + (idx + 1)),
-        fallbackText: itemScript || item.prompt || '你好，老师！',
+        fallbackText: '',
+        requireRealAudio: true,
         lang: 'zh-CN',
         variant: 'student',
         showSpeedToggle: true
@@ -1796,23 +1801,25 @@
     const data = sec.data || {};
     const listeningMode = data.listening_mode === 'per_question' ? 'per_question' : 'shared';
     const audioUrl = (data.audio_url || '').trim();
-    const fallbackScript = (data.audio_transcript || data.context_title || '你好，老师！').trim();
-    const hasAudioSource = Boolean(audioUrl || (data.audio_transcript && data.audio_transcript.trim()));
-    const showSharedPlayer = listeningMode === 'shared' && hasAudioSource && window.StudySnapAudio;
+    const hasAudioFile = Boolean(audioUrl && audioUrl.indexOf('demo:') !== 0);
+    const showSharedPlayer = listeningMode === 'shared' && hasAudioFile && window.StudySnapAudio;
 
-    const playerHtml = showSharedPlayer
-      ? '<div class="listening-audio-strip">' +
-          window.StudySnapAudio.renderVoicePlayer({
-            id: 'student-ls-' + sec.section_id,
-            url: audioUrl || 'demo:listening',
-            duration: data.audio_duration || '00:35',
-            label: data.audio_label || 'Nghe đoạn hội thoại',
-            fallbackText: fallbackScript,
-            lang: 'zh-CN',
-            variant: 'student',
-            showSpeedToggle: true
-          }) +
-        '</div>'
+    const playerHtml = listeningMode === 'shared'
+      ? (showSharedPlayer
+          ? '<div class="listening-audio-strip">' +
+              window.StudySnapAudio.renderVoicePlayer({
+                id: 'student-ls-' + sec.section_id,
+                url: audioUrl,
+                duration: data.audio_duration || '00:35',
+                label: data.audio_label || 'Nghe đoạn hội thoại',
+                fallbackText: '',
+                requireRealAudio: true,
+                lang: 'zh-CN',
+                variant: 'student',
+                showSpeedToggle: true
+              }) +
+            '</div>'
+          : '<div class="listening-missing-audio-note">Phần nghe hiểu này chưa được giáo viên gắn tệp âm thanh.</div>')
       : '';
 
     const hasBannerContent = Boolean(data.context_label || data.context_title || data.context_subtitle || playerHtml);
@@ -2477,14 +2484,7 @@
       const items = (sec.data && sec.data.items) || [];
       const isPerQuestionListening =
         sec.type === 'listening_mc' && sec.data && sec.data.listening_mode === 'per_question';
-      const transcriptHtml =
-        sec.type === 'listening_mc' && !isPerQuestionListening && sec.data && sec.data.audio_transcript
-          ? '<div class="listening-transcript-box">' +
-              '<strong>Nội dung đoạn nghe (Transcript):</strong> ' +
-              escapeHtml(sec.data.audio_transcript) +
-            '</div>'
-          : '';
-      return transcriptHtml + items
+      return items
         .map(function (item, idx) {
           const userOpt = studentAns[item.id];
           const isCorrect =
@@ -2503,13 +2503,6 @@
           const itemAudioReviewHtml = isPerQuestionListening
             ? renderListeningQuestionPlayerHtml(sec, item, idx, 'student-ls-review-')
             : '';
-          const itemTranscriptHtml =
-            sec.type === 'listening_mc' && item.audio_transcript
-              ? '<div class="listening-transcript-box">' +
-                  '<strong>Nội dung câu nghe (Transcript):</strong> ' +
-                  escapeHtml(item.audio_transcript) +
-                '</div>'
-              : '';
 
           return (
             '<div class="mc-card ' +
@@ -2540,7 +2533,6 @@
                 '</strong></div>'
               : '') +
             '</div>' +
-            itemTranscriptHtml +
             (item.explanation
               ? '<div class="explanation-reveal-box">💡 <strong>Giải thích:</strong> ' +
                 escapeHtml(item.explanation) +

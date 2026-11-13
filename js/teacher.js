@@ -1237,7 +1237,6 @@
           audio_label: 'Audio ' + sectionNum,
           audio_url: '',
           audio_duration: '00:45',
-          audio_transcript: '',
           items: [
             {
               id: 'LS_' + timeId + '_1',
@@ -1245,7 +1244,6 @@
               audio_label: '',
               audio_url: '',
               audio_duration: '00:25',
-              audio_transcript: '',
               options: ['', '', '', ''],
               correctIndex: 0,
               explanation: ''
@@ -1256,7 +1254,6 @@
               audio_label: '',
               audio_url: '',
               audio_duration: '00:25',
-              audio_transcript: '',
               options: ['', '', '', ''],
               correctIndex: 0,
               explanation: ''
@@ -1579,12 +1576,10 @@
           const prev = fallbackObj || {};
           const labelEl = scopeEl.querySelector('[data-ls-audio-label="' + targetKey + '"]');
           const urlEl = scopeEl.querySelector('[data-ls-audio-url="' + targetKey + '"]');
-          const trEl = scopeEl.querySelector('[data-ls-audio-transcript="' + targetKey + '"]');
           return {
             audio_label: labelEl ? labelEl.value.trim() : String(prev.audio_label || '').trim(),
             audio_url: urlEl ? urlEl.value.trim() : String(prev.audio_url || '').trim(),
-            audio_duration: prev.audio_duration || defaultDuration || '00:45',
-            audio_transcript: trEl ? trEl.value.trim() : String(prev.audio_transcript || '').trim()
+            audio_duration: prev.audio_duration || defaultDuration || '00:45'
           };
         }
 
@@ -1629,7 +1624,6 @@
             audio_label: itemAudio.audio_label,
             audio_url: itemAudio.audio_url,
             audio_duration: itemAudio.audio_duration,
-            audio_transcript: itemAudio.audio_transcript,
             options: options.length > 0 ? options : ['', '', '', ''],
             correctIndex: correctIdx,
             explanation: exp.trim()
@@ -1644,7 +1638,6 @@
           audio_label: secAudio.audio_label,
           audio_url: secAudio.audio_url,
           audio_duration: secAudio.audio_duration,
-          audio_transcript: secAudio.audio_transcript,
           items: items
         };
       }
@@ -2508,22 +2501,22 @@
         const targetKey = opts.targetKey;
         const aLabel = (opts.audioLabel || '').trim();
         const aUrl = (opts.audioUrl || '').trim();
-        const aTranscript = (opts.transcript || '').trim();
-        const hasPreview = Boolean(aUrl || aTranscript);
+        const hasPreview = Boolean(aUrl && aUrl.indexOf('demo:') !== 0);
         const previewHtml = hasPreview && window.StudySnapAudio
           ? '<div class="listening-audio-strip">' +
               window.StudySnapAudio.renderVoicePlayer({
                 id: opts.playerId,
-                url: aUrl || ('demo:listening:' + targetKey),
+                url: aUrl,
                 duration: opts.duration || '00:35',
-                label: (aLabel || opts.defaultLabel || 'Nghe thử') + (aUrl ? '' : ' (Đọc theo kịch bản)'),
-                fallbackText: aTranscript || '你好，老师！',
+                label: aLabel || opts.defaultLabel || 'Nghe thử file âm thanh',
+                fallbackText: '',
+                requireRealAudio: true,
                 lang: 'zh-CN',
                 variant: 'teacher',
                 showSpeedToggle: true
               }) +
             '</div>'
-          : '<div style="font-size:0.8125rem;color:var(--muted);">Chưa có file âm thanh hoặc kịch bản — hãy tải file MP3, ghi âm trực tiếp hoặc nhập kịch bản tiếng Trung bên dưới.</div>';
+          : '<div style="font-size:0.8125rem;color:var(--muted);">Chưa có file âm thanh — bấm <strong>Tải file Audio</strong> (.mp3/.m4a/.wav...), <strong>Ghi âm trực tiếp</strong> hoặc dán đường dẫn audio vào ô bên dưới.</div>';
 
         const urlAndLabelRowHtml = opts.includeLabelField
           ? '<div class="form-row-2">' +
@@ -2552,21 +2545,11 @@
               '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line></svg>' +
               '<span>Ghi âm trực tiếp</span>' +
             '</button>' +
-            '<button type="button" class="btn btn-ghost btn-sm" data-ls-audio-tts="' + escapeHtml(targetKey) + '">' +
-              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>' +
-              '<span>Nghe thử kịch bản</span>' +
-            '</button>' +
             (aUrl
               ? '<button type="button" class="btn-danger-outline" data-ls-audio-clear="' + escapeHtml(targetKey) + '">Xóa file audio</button>'
               : '') +
           '</div>' +
           urlAndLabelRowHtml +
-          '<div>' +
-            '<label class="form-label" style="font-size:0.8125rem;">' + escapeHtml(opts.transcriptLabel || 'Kịch bản đoạn nghe (Tự đọc giọng tiếng Trung nếu không gắn file MP3 & hiện cho HS đối chiếu sau khi nộp):') + '</label>' +
-            '<textarea class="form-control" rows="2" data-ls-audio-transcript="' + escapeHtml(targetKey) + '" placeholder="' + escapeHtml(opts.transcriptPlaceholder || 'Ví dụ: 女：李文，你从家回北京的路上花了多长时间？ 男：坐火车花了十几个小时...') + '">' +
-              escapeHtml(aTranscript) +
-            '</textarea>' +
-          '</div>' +
           previewHtml
         );
       }
@@ -2647,12 +2630,9 @@
                   audioLabel: item.audio_label || '',
                   audioUrl: item.audio_url || '',
                   duration: item.audio_duration || '00:25',
-                  transcript: item.audio_transcript || '',
                   defaultLabel: 'Nghe câu ' + (idx + 1),
                   includeLabelField: true,
-                  labelPlaceholder: 'Câu ' + (idx + 1),
-                  transcriptLabel: 'Kịch bản câu nghe (Tự đọc nếu không gắn MP3 & hiện khi HS xem lại):',
-                  transcriptPlaceholder: 'Ví dụ: 你好，请问图书馆在哪儿？'
+                  labelPlaceholder: 'Câu ' + (idx + 1)
                 }) +
               '</div>'
             : '';
@@ -2728,11 +2708,10 @@
               audioLabel: data.audio_label || '',
               audioUrl: data.audio_url || '',
               duration: data.audio_duration || '00:45',
-              transcript: data.audio_transcript || '',
               defaultLabel: 'Nghe thử',
               includeLabelField: false
             })
-          : '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);font-weight:600;">Đang bật chế độ Mỗi câu hỏi 1 file nghe riêng — giáo viên tải file audio, ghi âm hoặc nhập kịch bản trực tiếp trong từng thẻ câu hỏi bên dưới.</div>') +
+          : '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);font-weight:600;">Đang bật chế độ Mỗi câu hỏi 1 file nghe riêng — giáo viên tải file audio, ghi âm hoặc dán link file nghe trực tiếp trong từng thẻ câu hỏi bên dưới.</div>') +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:12px;">' +
         questionsHtml +
@@ -3191,7 +3170,6 @@
           audio_label: '',
           audio_url: '',
           audio_duration: '00:25',
-          audio_transcript: '',
           options: ['', '', '', ''],
           correctIndex: 0,
           explanation: ''
@@ -3244,10 +3222,6 @@
         if (!resolved) return;
 
         window.StudySnapAudio.readUploadedMediaFile(file, async function (mediaInfo) {
-          const gasUrl = window.StudySnapStore.getGasUrl && window.StudySnapStore.getGasUrl();
-          if (!gasUrl && mediaInfo.sizeKB > 1800) {
-            showToast('File âm thanh hơi lớn (' + mediaInfo.sizeKB + 'KB) so với bộ nhớ cục bộ. Nên dùng file <= 1.5MB hoặc dán đường dẫn audio!');
-          }
           resolved.targetObj.audio_url = mediaInfo.dataUrl;
           resolved.targetObj.audio_duration = mediaInfo.duration || resolved.defaultDuration;
           if (!resolved.targetObj.audio_label) {
@@ -3262,15 +3236,34 @@
             },
             {
               title: resolved.loadingTitle,
-              desc: 'Hệ thống đang tải lên và đồng bộ tệp âm thanh cho bài tập.'
+              desc: 'Hệ thống đang tải lên Google Drive và đồng bộ tệp âm thanh cho bài tập.'
             }
           );
-          if (!saveAudioRes || saveAudioRes.ok !== false) {
+          if (saveAudioRes && saveAudioRes.ok === true) {
             clearPracticeExerciseDirty(ex.exercise_id);
+            renderTeacherPracticeTab();
+            showToast('Đã tải lên và lưu file nghe: ' + file.name);
+          } else {
+            markPracticeExerciseDirty(ex, true);
+            renderTeacherPracticeTab();
+            const errMsg =
+              (saveAudioRes && saveAudioRes.error) ||
+              'Chưa thể tải file nghe lên Google Drive / máy chủ (tệp đang giữ tạm để nghe thử trên máy này — hãy thử bấm "Lưu đề nhanh").';
+            showToast(errMsg);
           }
-          renderTeacherPracticeTab();
-          showToast('Đã gắn file nghe: ' + file.name);
         });
+      });
+    });
+
+    document.querySelectorAll('[data-ls-audio-url]').forEach(function (inp) {
+      inp.addEventListener('change', function () {
+        const targetKey = inp.getAttribute('data-ls-audio-url');
+        collectExerciseFromDom();
+        const resolved = resolveListeningAudioTarget(targetKey);
+        if (!resolved) return;
+        resolved.targetObj.audio_url = inp.value.trim();
+        savePracticeDraftLocally(ex);
+        renderTeacherPracticeTab();
       });
     });
 
@@ -3313,15 +3306,22 @@
                 desc: 'Hệ thống đang đồng bộ bản ghi âm lên máy chủ.'
               }
             );
-            if (!recSaveRes || recSaveRes.ok !== false) {
+            if (recSaveRes && recSaveRes.ok === true) {
               clearPracticeExerciseDirty(ex.exercise_id);
+              renderTeacherPracticeTab();
+              showToast(
+                recInfo.trimmedSeconds >= 1
+                  ? 'Đã ghi âm, lọc tạp âm & cắt ' + recInfo.trimmedSeconds + 's khoảng trống (' + recInfo.duration + ')!'
+                  : 'Đã ghi âm & lọc tạp âm (' + recInfo.duration + ')!'
+              );
+            } else {
+              markPracticeExerciseDirty(ex, true);
+              renderTeacherPracticeTab();
+              showToast(
+                (recSaveRes && recSaveRes.error) ||
+                'Chưa đồng bộ được bản ghi âm lên máy chủ. Hãy bấm "Lưu đề nhanh" để thử lại.'
+              );
             }
-            renderTeacherPracticeTab();
-            showToast(
-              recInfo.trimmedSeconds >= 1
-                ? 'Đã ghi âm, lọc tạp âm & cắt ' + recInfo.trimmedSeconds + 's khoảng trống (' + recInfo.duration + ')!'
-                : 'Đã ghi âm & lọc tạp âm (' + recInfo.duration + ')!'
-            );
           },
           function (errMsg) {
             btn.disabled = false;
@@ -3330,23 +3330,6 @@
             showToast(errMsg || 'Không thể mở micro để ghi âm.');
           }
         );
-      });
-    });
-
-    document.querySelectorAll('[data-ls-audio-tts]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        if (!window.StudySnapAudio) return;
-        const targetKey = btn.getAttribute('data-ls-audio-tts');
-        const sepIdx = String(targetKey || '').indexOf(':');
-        const secId = sepIdx >= 0 ? targetKey.slice(0, sepIdx) : targetKey;
-        const card = document.querySelector('[data-sec-card="' + secId + '"]');
-        const trInput = card && card.querySelector('[data-ls-audio-transcript="' + targetKey + '"]');
-        const text = trInput ? trInput.value.trim() : '';
-        if (!text) {
-          showToast('Hãy nhập kịch bản tiếng Trung trước để nghe thử giọng đọc!');
-          return;
-        }
-        window.StudySnapAudio.speakText(text, 'zh-CN');
       });
     });
 
@@ -5682,8 +5665,8 @@
       ['Sửa câu sai', 'Phần 4: Sửa câu sai', '我很很高兴。', 'Diễn đạt rất vui mừng', '', '', '', '', '我很高兴。 / 我很高兴', 'Phó từ 很 không lặp lại thành 很很.', ''],
       ['Dịch câu', 'Phần 5: Dịch câu', 'Xin chào các bạn!', 'vi->zh', '', '', '', '', '你们好！ / 大家好！', '"Các bạn" dùng 你们 hoặc 大家.', ''],
       ['Dịch câu', 'Phần 5: Dịch câu', '认识你，我也很高兴。', 'zh->vi', '', '', '', '', 'thu_cong', 'Gợi ý chấm: Làm quen với bạn, tôi cũng rất vui.', ''],
-      ['Nghe hiểu', 'Text 4: Nghe hiểu', '李文回北京的路上花了多长时间？', '在宾馆房间，李文在写日记。', '几个小时', '十几个小时', '几十个小时', '', 'B', '女：李文，你从家回北京的路上花了多长时间？ 男：坐火车花了十几个小时，有点儿累。', ''],
-      ['Nghe hiểu', 'Text 4: Nghe hiểu', '李文觉得王老师的姐姐看起来怎么样？', '在宾馆房间，李文在写日记。', '很累', '很年轻', '很像王老师', '', 'B', '女：昨天我见到王老师的姐姐了，她看起来很年轻！ 男：是啊。', '']
+      ['Nghe hiểu', 'Text 4: Nghe hiểu', '李文回北京的路上花了多长时间？', '在宾馆房间，李文在写日记。', '几个小时', '十几个小时', '几十个小时', '', 'B', 'Trong bài nghe nhân vật nói mất 十几个小时.', ''],
+      ['Nghe hiểu', 'Text 4: Nghe hiểu', '李文觉得王老师的姐姐看起来怎么样？', '在宾馆房间，李文在写日记。', '很累', '很年轻', '很像王老师', '', 'B', 'Chị gái thầy Vương trông rất trẻ (很年轻).', '']
     ];
 
     const SECTION_BADGE_MAP = {
@@ -6017,17 +6000,12 @@
           const listeningMode = distinctAudioUrls.length > 1 || hasPerQuestionHint ? 'per_question' : 'shared';
 
           let audioUrl = '';
-          const transcriptLines = [];
           const items = [];
 
           bucket.rows.forEach(function (r) {
             const rowAudioUrl = (r.cols[10] || '').trim();
-            const rowTranscript = (r.cols[9] || '').trim();
-            if (listeningMode === 'shared') {
-              if (!audioUrl && rowAudioUrl) audioUrl = rowAudioUrl;
-              if (rowTranscript && transcriptLines.indexOf(rowTranscript) < 0) {
-                transcriptLines.push(rowTranscript);
-              }
+            if (listeningMode === 'shared' && !audioUrl && rowAudioUrl) {
+              audioUrl = rowAudioUrl;
             }
             const prompt = r.cols[2];
             const options = [r.cols[4], r.cols[5], r.cols[6], r.cols[7]];
@@ -6043,10 +6021,9 @@
               audio_label: listeningMode === 'per_question' ? ('Câu ' + itemIdx) : '',
               audio_url: listeningMode === 'per_question' ? rowAudioUrl : '',
               audio_duration: '00:25',
-              audio_transcript: listeningMode === 'per_question' ? rowTranscript : '',
               options: options,
               correctIndex: ansRes.index,
-              explanation: ''
+              explanation: (r.cols[9] || '').trim()
             });
           });
           if (items.length === 0) return;
@@ -6070,7 +6047,6 @@
               audio_label: 'Audio ' + secNum,
               audio_url: listeningMode === 'shared' ? audioUrl : '',
               audio_duration: '00:45',
-              audio_transcript: listeningMode === 'shared' ? transcriptLines.join(' ') : '',
               items: items
             }
           });
@@ -6256,7 +6232,7 @@
           ['Điền từ', 'Câu có chỗ trống ____', 'Gợi ý nghĩa tiếng Việt', 'Bỏ trống', 'Từ cần điền (tự gom vào Ngân hàng từ)', 'Từ nhiễu thêm (ngăn cách dấu phẩy)', 'Bỏ trống'],
           ['Sửa câu sai', 'Câu sai đề bài', 'Tình huống giao tiếp', 'Bỏ trống', 'Các câu đúng ngăn cách dấu /', 'Giải thích lỗi sai', 'Bỏ trống'],
           ['Dịch câu', 'Câu cần dịch', 'vi->zh hoặc zh->vi', 'Bỏ trống', 'Đáp án mẫu (hoặc ghi thu_cong để chấm tay)', 'Gợi ý chấm / Giải thích', 'Bỏ trống'],
-          ['Nghe hiểu', 'Câu hỏi nghe (1), (2)...', 'Tiêu đề ngữ cảnh bài nghe', '3 đáp án A–C (hoặc thêm D)', 'Ghi A, B, C hoặc D', 'Kịch bản hội thoại (Transcript)', 'Đường dẫn file âm thanh (tùy chọn)']
+          ['Nghe hiểu', 'Câu hỏi nghe (1), (2)...', 'Tiêu đề ngữ cảnh bài nghe', '3 đáp án A–C (hoặc thêm D)', 'Ghi A, B, C hoặc D', 'Giải thích đáp án (tùy chọn)', 'Đường dẫn file âm thanh (URL)']
         ];
         const ws2 = window.XLSX.utils.aoa_to_sheet(guideRows);
         ws2['!cols'] = [

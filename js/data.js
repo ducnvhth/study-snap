@@ -1125,11 +1125,10 @@ window.STUDYSNAP_INITIAL_DATA = {
           data: {
             context_label: '课文 4',
             context_title: '在宾馆房间，李文在写日记。',
-            context_subtitle: '听两遍对话，选择正确答案。(Nghe đoạn hội thoại 2 lần rồi chọn đáp án đúng.)',
+            context_subtitle: 'Nghe đoạn hội thoại 2 lần và chọn đáp án đúng.',
             audio_label: '1-7',
-            audio_url: 'demo:listening',
+            audio_url: '',
             audio_duration: '00:28',
-            audio_transcript: '女：李文，你从家回北京的路上花了多长时间？ 男：坐火车花了十几个小时，有点儿累。 女：对了，昨天我见到王老师的姐姐了，她看起来很年轻！ 男：是啊，很多人也这么说。',
             items: [
               {
                 id: 'LS1',
@@ -2380,34 +2379,58 @@ window.StudySnapStore = (function () {
     return await inflightMigrationPromise;
   }
 
+  function cacheUploadedDriveMedia(mediaUrl, dataUrl, filename) {
+    try {
+      if (
+        typeof window !== 'undefined' &&
+        window.StudySnapAudio &&
+        typeof window.StudySnapAudio.cacheDriveMediaFromDataUrl === 'function'
+      ) {
+        window.StudySnapAudio.cacheDriveMediaFromDataUrl(mediaUrl, dataUrl, filename);
+      }
+    } catch (e) {
+      // Ignore cache warm-up errors
+    }
+  }
+
   async function uploadMediaToDriveViaGas(mediaOpts) {
     const gasUrl = getGasUrl();
     if (!gasUrl) {
       return { ok: false, error: 'Chưa cấu hình cầu nối Google Apps Script cho Google Drive.' };
     }
-    const response = await fetchWithTimeout(
-      gasUrl,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'uploadMedia',
-          base64_data: mediaOpts.base64_data,
-          mime_type: mediaOpts.mime_type || 'audio/webm',
-          filename: mediaOpts.filename || ('StudySnap_' + Date.now())
-        })
-      },
-      90000
-    );
-    const json = await response.json();
-    if (!json || !json.ok || !json.media_url) {
-      const legacyHint =
-        json && json.error && String(json.error).indexOf('không hợp lệ') >= 0
-          ? 'Vui lòng cập nhật và Deploy New Version cho backend/Code.gs để bật tải tệp lên Google Drive.'
-          : (json && json.error) || 'Không thể tải tệp âm thanh/video lên Google Drive.';
-      return { ok: false, error: legacyHint };
+    try {
+      const response = await fetchWithTimeout(
+        gasUrl,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'uploadMedia',
+            base64_data: mediaOpts.base64_data,
+            mime_type: mediaOpts.mime_type || 'audio/webm',
+            filename: mediaOpts.filename || ('StudySnap_' + Date.now())
+          })
+        },
+        90000
+      );
+      const json = await response.json();
+      if (!json || !json.ok || !json.media_url) {
+        const legacyHint =
+          json && json.error && String(json.error).indexOf('không hợp lệ') >= 0
+            ? 'Vui lòng cập nhật và Deploy New Version cho backend/Code.gs để bật tải tệp lên Google Drive.'
+            : (json && json.error) || 'Không thể tải tệp âm thanh/video lên Google Drive.';
+        return { ok: false, error: legacyHint };
+      }
+      return json;
+    } catch (err) {
+      const isAbort = err && err.name === 'AbortError';
+      return {
+        ok: false,
+        error: isAbort
+          ? 'Tải tệp âm thanh lên Google Drive quá thời gian (tệp hơi lớn hoặc mạng chậm). Vui lòng thử lại.'
+          : 'Không thể kết nối cầu nối Google Drive (GAS) khi tải tệp âm thanh.'
+      };
     }
-    return json;
   }
 
   function cleanupDriveMediaViaGas(urls) {
@@ -2451,6 +2474,7 @@ window.StudySnapStore = (function () {
         filename: payloadCopy.media_filename || ('BVN_' + (payloadCopy.assignment_id || 'EX') + '_' + (payloadCopy.student_id || 'HS') + '_' + Date.now() + hwMeta.ext)
       });
       if (!up.ok) return { errorResponse: up };
+      cacheUploadedDriveMedia(up.media_url, payloadCopy.media_base64, payloadCopy.media_filename);
       payloadCopy.media_url = up.media_url;
       payloadCopy.media_base64 = '';
       if (stateObj && Array.isArray(stateObj.submissions)) {
@@ -2476,6 +2500,7 @@ window.StudySnapStore = (function () {
         filename: 'VoiceFeedback_' + (payloadCopy.assignment_id || 'EX') + '_' + (payloadCopy.student_id || 'HS') + '_' + Date.now() + fbMeta.ext
       });
       if (!upVoice.ok) return { errorResponse: upVoice };
+      cacheUploadedDriveMedia(upVoice.media_url, payloadCopy.teacher_voice_base64, 'voice_feedback.webm');
       payloadCopy.teacher_voice_url = upVoice.media_url;
       payloadCopy.teacher_voice_base64 = '';
       if (stateObj && Array.isArray(stateObj.submissions)) {
@@ -2539,6 +2564,7 @@ window.StudySnapStore = (function () {
             if (!results[j] || !results[j].ok || !results[j].media_url) {
               return { errorResponse: results[j] || { ok: false, error: 'Lỗi tải file nghe lên Google Drive.' } };
             }
+            cacheUploadedDriveMedia(results[j].media_url, chunk[j].dataUrl, chunk[j].prefix);
             chunk[j].target.audio_url = results[j].media_url;
           }
         }

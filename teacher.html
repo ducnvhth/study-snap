@@ -1307,7 +1307,7 @@
             <label class="form-label" for="practice-excel-paste" style="margin: 0; font-weight: 700;">Hoặc copy vùng bảng từ Excel / bảng tính rồi dán trực tiếp vào đây:</label>
             <button type="button" class="btn btn-outline btn-sm" id="btn-jump-to-template-view" style="font-size: 0.75rem; padding: 3px 10px;">Xem cấu trúc cột mẫu</button>
           </div>
-          <textarea id="practice-excel-paste" class="excel-paste-textarea" placeholder="Dán các dòng từ file Excel mẫu (cột A đến K: Dạng bài | Tên phần | Câu hỏi / Đề bài | Pinyin / Ngữ cảnh / Gợi ý | Đáp án A..D | Đáp án đúng | Giải thích / Lời thoại | Link Audio)..."></textarea>
+          <textarea id="practice-excel-paste" class="excel-paste-textarea" placeholder="Dán các dòng từ file Excel mẫu (cột A đến K: Dạng bài | Tên phần | Câu hỏi / Đề bài | Pinyin / Ngữ cảnh / Gợi ý | Đáp án A..D | Đáp án đúng | Giải thích / Ghi chú | Link Audio)..."></textarea>
         </div>
 
         <!-- Xem trước đề đã phân tích -->
@@ -1370,7 +1370,7 @@
           <strong>Quy tắc điền nhanh trong Excel:</strong>
           Cột <strong>A (Dạng bài)</strong> nhập tên tiếng Việt (<code>Nối từ</code>, <code>Trắc nghiệm</code>, <code>Điền từ</code>, <code>Sửa câu sai</code>, <code>Dịch câu</code>, <code>Nghe hiểu</code>); nếu các dòng dưới thuộc cùng dạng/phần có thể để trống cột A hệ thống tự nối tiếp.
           Cột <strong>I (Đáp án đúng)</strong> luôn chứa đáp án (Nghĩa TV với <em>Nối từ</em>; <code>A/B/C/D</code> với <em>Trắc nghiệm &amp; Nghe hiểu</em>; Từ điền với <em>Điền từ</em>; Câu sửa chuẩn ngăn cách <code>/</code> với <em>Sửa câu sai &amp; Dịch câu</em>; để trống hoặc ghi <code>thu_cong</code> nếu muốn chấm tay câu Dịch).
-          Với <strong>Nghe hiểu</strong>, cột <strong>D</strong> là ngữ cảnh bài nghe, cột <strong>J</strong> là kịch bản hội thoại/từng câu để hiện sau khi nộp hoặc đọc TTS, cột <strong>K</strong> là đường dẫn audio (URL) — nếu dùng chung 1 link cho nhiều câu thì hệ thống tự chọn dạng <em>1 file nghe chung</em>, nếu mỗi câu có 1 link audio riêng hoặc ghi <code>Nghe từng câu</code> ở cột A thì tự chọn dạng <em>Mỗi câu hỏi 1 file nghe</em> (hoặc tải file/ghi âm từng câu sau khi nhập).
+          Với <strong>Nghe hiểu</strong>, cột <strong>D</strong> là ngữ cảnh bài nghe, cột <strong>J</strong> là giải thích đáp án (tùy chọn, hiện sau khi nộp bài), cột <strong>K</strong> là đường dẫn file audio (URL) — nếu dùng chung 1 link cho nhiều câu thì hệ thống tự chọn dạng <em>1 file nghe chung</em>, nếu mỗi câu có 1 link audio riêng hoặc ghi <code>Nghe từng câu</code> ở cột A thì tự chọn dạng <em>Mỗi câu hỏi 1 file nghe</em> (hoặc tải file .mp3/.m4a/.wav hay ghi âm trực tiếp sau khi nhập).
         </div>
       </div>
 

@@ -642,6 +642,14 @@ function formatPracticeAssignmentTitle(rawTitle) {
   );
 }
 
+function normalizeProxyMediaMime(rawContentType) {
+  const ct = String(rawContentType || '').split(';')[0].trim().toLowerCase();
+  if (!ct) return 'audio/webm';
+  if (ct === 'audio/x-m4a' || ct === 'audio/m4a') return 'audio/mp4';
+  if (ct === 'audio/mp3') return 'audio/mpeg';
+  return ct;
+}
+
 async function handleDriveMediaProxy(request, url, ctx) {
   const fileId = String(url.searchParams.get('fileId') || '').trim();
   if (!/^[a-zA-Z0-9_-]{10,120}$/.test(fileId)) {
@@ -649,7 +657,7 @@ async function handleDriveMediaProxy(request, url, ctx) {
   }
 
   const edgeCache = typeof caches !== 'undefined' && caches.default ? caches.default : null;
-  const cacheKey = new Request('https://studysnap-drive-edge.internal/media/' + encodeURIComponent(fileId), {
+  const cacheKey = new Request('https://studysnap-drive-edge.internal/media/v2/' + encodeURIComponent(fileId), {
     method: 'GET'
   });
   if (edgeCache) {
@@ -659,6 +667,7 @@ async function handleDriveMediaProxy(request, url, ctx) {
 
   const driveUrls = [
     'https://drive.usercontent.google.com/download?id=' + encodeURIComponent(fileId) + '&export=download&confirm=t',
+    'https://drive.usercontent.google.com/uc?id=' + encodeURIComponent(fileId) + '&export=download',
     'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(fileId)
   ];
 
@@ -666,7 +675,10 @@ async function handleDriveMediaProxy(request, url, ctx) {
     try {
       const upstream = await fetch(driveUrls[i], {
         method: 'GET',
-        redirect: 'follow'
+        redirect: 'follow',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; StudySnapMediaProxy/1.0)'
+        }
       });
       const contentType = String(upstream.headers.get('content-type') || '').toLowerCase();
       if (
@@ -676,7 +688,7 @@ async function handleDriveMediaProxy(request, url, ctx) {
         contentType.indexOf('application/json') === -1
       ) {
         const headers = new Headers();
-        headers.set('Content-Type', contentType || 'audio/webm');
+        headers.set('Content-Type', normalizeProxyMediaMime(contentType));
         const contentLen = upstream.headers.get('content-length');
         if (contentLen) headers.set('Content-Length', contentLen);
         headers.set('Cache-Control', 'public, max-age=604800, immutable');
