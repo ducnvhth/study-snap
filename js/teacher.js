@@ -1139,6 +1139,7 @@
         description: 'Nghe đoạn hội thoại và chọn đáp án chính xác nhất cho từng câu hỏi.',
         max_score: 2,
         data: {
+          listening_mode: 'shared',
           context_label: 'Bài nghe',
           context_title: '',
           context_subtitle: 'Nghe đoạn hội thoại 2 lần và chọn đáp án đúng.',
@@ -1150,6 +1151,10 @@
             {
               id: 'LS_' + timeId + '_1',
               prompt: '',
+              audio_label: '',
+              audio_url: '',
+              audio_duration: '00:25',
+              audio_transcript: '',
               options: ['', '', '', ''],
               correctIndex: 0,
               explanation: ''
@@ -1157,6 +1162,10 @@
             {
               id: 'LS_' + timeId + '_2',
               prompt: '',
+              audio_label: '',
+              audio_url: '',
+              audio_duration: '00:25',
+              audio_transcript: '',
               options: ['', '', '', ''],
               correctIndex: 0,
               explanation: ''
@@ -1465,19 +1474,48 @@
         });
         sec.data = { items: items };
       } else if (sec.type === 'listening_mc') {
+        const prevData = sec.data || {};
+        const modeEl = card.querySelector('[data-ls-mode]');
+        const listeningMode =
+          (modeEl ? modeEl.value : prevData.listening_mode) === 'per_question'
+            ? 'per_question'
+            : 'shared';
         const ctxLabel = (card.querySelector('[data-ls-label]') || {}).value || '';
         const ctxTitle = (card.querySelector('[data-ls-title]') || {}).value || '';
         const ctxSub = (card.querySelector('[data-ls-subtitle]') || {}).value || '';
-        const audioLabel = (card.querySelector('[data-ls-audio-label]') || {}).value || '';
-        const audioUrl = (card.querySelector('[data-ls-audio-url]') || {}).value || '';
-        const transcript = (card.querySelector('[data-ls-transcript]') || {}).value || '';
-        const prevDur = (sec.data && sec.data.audio_duration) || '00:45';
+
+        function readListeningAudioDomFields(scopeEl, targetKey, fallbackObj, defaultDuration) {
+          const prev = fallbackObj || {};
+          const labelEl = scopeEl.querySelector('[data-ls-audio-label="' + targetKey + '"]');
+          const urlEl = scopeEl.querySelector('[data-ls-audio-url="' + targetKey + '"]');
+          const trEl = scopeEl.querySelector('[data-ls-audio-transcript="' + targetKey + '"]');
+          return {
+            audio_label: labelEl ? labelEl.value.trim() : String(prev.audio_label || '').trim(),
+            audio_url: urlEl ? urlEl.value.trim() : String(prev.audio_url || '').trim(),
+            audio_duration: prev.audio_duration || defaultDuration || '00:45',
+            audio_transcript: trEl ? trEl.value.trim() : String(prev.audio_transcript || '').trim()
+          };
+        }
+
+        const prevItemsById = {};
+        (prevData.items || []).forEach(function (it) {
+          if (it && it.id) prevItemsById[it.id] = it;
+        });
+
+        const secAudio = readListeningAudioDomFields(card, sec.section_id, prevData, '00:45');
 
         const items = [];
         card.querySelectorAll('[data-ls-qcard]').forEach(function (qCard, qIdx) {
           const itemId = qCard.getAttribute('data-ls-qcard') || ('LS_' + (qIdx + 1));
           const prompt = (qCard.querySelector('[data-ls-prompt]') || {}).value || '';
           const exp = (qCard.querySelector('[data-ls-exp]') || {}).value || '';
+          const prevItem = prevItemsById[itemId] || {};
+          const itemAudio = readListeningAudioDomFields(
+            qCard,
+            sec.section_id + ':' + itemId,
+            prevItem,
+            '00:25'
+          );
 
           const options = [];
           qCard.querySelectorAll('[data-ls-opt]').forEach(function (optInp) {
@@ -1497,6 +1535,10 @@
           items.push({
             id: itemId,
             prompt: prompt.trim(),
+            audio_label: itemAudio.audio_label,
+            audio_url: itemAudio.audio_url,
+            audio_duration: itemAudio.audio_duration,
+            audio_transcript: itemAudio.audio_transcript,
             options: options.length > 0 ? options : ['', '', '', ''],
             correctIndex: correctIdx,
             explanation: exp.trim()
@@ -1504,13 +1546,14 @@
         });
 
         sec.data = {
+          listening_mode: listeningMode,
           context_label: ctxLabel.trim(),
           context_title: ctxTitle.trim(),
           context_subtitle: ctxSub.trim(),
-          audio_label: audioLabel.trim(),
-          audio_url: audioUrl.trim(),
-          audio_duration: prevDur,
-          audio_transcript: transcript.trim(),
+          audio_label: secAudio.audio_label,
+          audio_url: secAudio.audio_url,
+          audio_duration: secAudio.audio_duration,
+          audio_transcript: secAudio.audio_transcript,
           items: items
         };
       }
@@ -1658,6 +1701,13 @@
     const maxScoreBadge = document.getElementById('teacher-practice-maxscore-badge');
     const stickySummaryBadge = document.getElementById('gform-sticky-summary');
     const subCountPill = document.getElementById('teacher-practice-sub-count-pill');
+    const btnEditMeta = document.getElementById('btn-edit-practice-meta');
+    const btnSaveMetaInline = document.getElementById('btn-save-practice-meta-inline');
+
+    if (btnEditMeta) btnEditMeta.disabled = !ex;
+    if (btnSaveMetaInline) btnSaveMetaInline.disabled = !ex;
+    if (titleInput) titleInput.disabled = !ex;
+    if (tagInput) tagInput.disabled = !ex;
 
     if (!ex) {
       if (selectEl) {
@@ -2355,25 +2405,92 @@
       );
     } else if (sec.type === 'listening_mc') {
       const data = sec.data || {};
+      const listeningMode = data.listening_mode === 'per_question' ? 'per_question' : 'shared';
       const items = data.items || [];
       const optLetters = ['A', 'B', 'C', 'D'];
-      const audioUrl = (data.audio_url || '').trim();
-      const transcript = (data.audio_transcript || '').trim();
-      const hasPreviewAudio = Boolean(audioUrl || transcript);
-      const previewPlayerHtml = hasPreviewAudio && window.StudySnapAudio
-        ? '<div class="listening-audio-strip">' +
-            window.StudySnapAudio.renderVoicePlayer({
-              id: 'ls-builder-' + sec.section_id,
-              url: audioUrl || 'demo:listening',
-              duration: data.audio_duration || '00:45',
-              label: (data.audio_label || 'Nghe thử') + (audioUrl ? '' : ' (Đọc theo kịch bản)'),
-              fallbackText: transcript || '你好，老师！',
-              lang: 'zh-CN',
-              variant: 'teacher',
-              showSpeedToggle: true
-            }) +
+
+      function renderListeningAudioEditorHtml(opts) {
+        const targetKey = opts.targetKey;
+        const aLabel = (opts.audioLabel || '').trim();
+        const aUrl = (opts.audioUrl || '').trim();
+        const aTranscript = (opts.transcript || '').trim();
+        const hasPreview = Boolean(aUrl || aTranscript);
+        const previewHtml = hasPreview && window.StudySnapAudio
+          ? '<div class="listening-audio-strip">' +
+              window.StudySnapAudio.renderVoicePlayer({
+                id: opts.playerId,
+                url: aUrl || ('demo:listening:' + targetKey),
+                duration: opts.duration || '00:35',
+                label: (aLabel || opts.defaultLabel || 'Nghe thử') + (aUrl ? '' : ' (Đọc theo kịch bản)'),
+                fallbackText: aTranscript || '你好，老师！',
+                lang: 'zh-CN',
+                variant: 'teacher',
+                showSpeedToggle: true
+              }) +
+            '</div>'
+          : '<div style="font-size:0.8125rem;color:var(--muted);">Chưa có file âm thanh hoặc kịch bản — hãy tải file MP3, ghi âm trực tiếp hoặc nhập kịch bản tiếng Trung bên dưới.</div>';
+
+        const urlAndLabelRowHtml = opts.includeLabelField
+          ? '<div class="form-row-2">' +
+              '<div>' +
+                '<label class="form-label" style="font-size:0.8125rem;">Nhãn loa (ví dụ: ' + escapeHtml(opts.labelPlaceholder || 'Câu 1') + '):</label>' +
+                '<input type="text" class="form-control" data-ls-audio-label="' + escapeHtml(targetKey) + '" value="' + escapeHtml(aLabel) + '" placeholder="' + escapeHtml(opts.labelPlaceholder || 'Ví dụ: Câu 1') + '">' +
+              '</div>' +
+              '<div>' +
+                '<label class="form-label" style="font-size:0.8125rem;">Link file Audio (hoặc tự động điền khi tải file/ghi âm):</label>' +
+                '<input type="text" class="form-control" data-ls-audio-url="' + escapeHtml(targetKey) + '" value="' + escapeHtml(aUrl) + '" placeholder="Dán đường dẫn audio hoặc bấm Tải file / Ghi âm">' +
+              '</div>' +
+            '</div>'
+          : '<div>' +
+              '<label class="form-label" style="font-size:0.8125rem;">Link file Audio (hoặc tự động điền khi tải file/ghi âm):</label>' +
+              '<input type="text" class="form-control" data-ls-audio-url="' + escapeHtml(targetKey) + '" value="' + escapeHtml(aUrl) + '" placeholder="Dán đường dẫn file audio hoặc bấm Tải file / Ghi âm ở trên">' +
+            '</div>';
+
+        return (
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:4px;">' +
+            '<label class="btn btn-outline btn-sm" style="cursor:pointer;">' +
+              '<input type="file" accept="audio/*" class="file-input-hidden" data-ls-audio-upload="' + escapeHtml(targetKey) + '">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>' +
+              '<span>Tải file Audio (.mp3/.wav)</span>' +
+            '</label>' +
+            '<button type="button" class="btn btn-secondary btn-sm" data-ls-audio-rec="' + escapeHtml(targetKey) + '">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line></svg>' +
+              '<span>Ghi âm trực tiếp</span>' +
+            '</button>' +
+            '<button type="button" class="btn btn-ghost btn-sm" data-ls-audio-tts="' + escapeHtml(targetKey) + '">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>' +
+              '<span>Nghe thử kịch bản</span>' +
+            '</button>' +
+            (aUrl
+              ? '<button type="button" class="btn-danger-outline" data-ls-audio-clear="' + escapeHtml(targetKey) + '">Xóa file audio</button>'
+              : '') +
+          '</div>' +
+          urlAndLabelRowHtml +
+          '<div>' +
+            '<label class="form-label" style="font-size:0.8125rem;">' + escapeHtml(opts.transcriptLabel || 'Kịch bản đoạn nghe (Tự đọc giọng tiếng Trung nếu không gắn file MP3 & hiện cho HS đối chiếu sau khi nộp):') + '</label>' +
+            '<textarea class="form-control" rows="2" data-ls-audio-transcript="' + escapeHtml(targetKey) + '" placeholder="' + escapeHtml(opts.transcriptPlaceholder || 'Ví dụ: 女：李文，你从家回北京的路上花了多长时间？ 男：坐火车花了十几个小时...') + '">' +
+              escapeHtml(aTranscript) +
+            '</textarea>' +
+          '</div>' +
+          previewHtml
+        );
+      }
+
+      const sectionAudioEditorHtml = listeningMode === 'shared'
+        ? '<div class="form-row-2">' +
+            '<div>' +
+              '<label class="form-label" style="font-size:0.8125rem;">Nhãn bài nghe (ví dụ: 课文 4 / Bài nghe 1):</label>' +
+              '<input type="text" class="form-control" data-ls-label value="' + escapeHtml(data.context_label || '') + '" placeholder="Ví dụ: 课文 4">' +
+            '</div>' +
+            '<div>' +
+              '<label class="form-label" style="font-size:0.8125rem;">Mã file nghe hiển thị cạnh loa (ví dụ: 1-7):</label>' +
+              '<input type="text" class="form-control" data-ls-audio-label="' + escapeHtml(sec.section_id) + '" value="' + escapeHtml(data.audio_label || '') + '" placeholder="Ví dụ: 1-7 hoặc Hội thoại 1">' +
+            '</div>' +
           '</div>'
-        : '<div style="font-size:0.8125rem;color:var(--muted);">Chưa có file âm thanh hoặc kịch bản — hãy tải file MP3, ghi âm trực tiếp hoặc nhập kịch bản tiếng Trung bên dưới.</div>';
+        : '<div>' +
+            '<label class="form-label" style="font-size:0.8125rem;">Nhãn bài nghe chung (ví dụ: Nghe câu ngắn / Part 1):</label>' +
+            '<input type="text" class="form-control" data-ls-label value="' + escapeHtml(data.context_label || '') + '" placeholder="Ví dụ: Phần nghe từng câu">' +
+          '</div>';
 
       const questionsHtml = items
         .map(function (item, idx) {
@@ -2426,6 +2543,25 @@
             })
             .join('');
 
+          const perQuestionAudioHtml = listeningMode === 'per_question'
+            ? '<div class="listening-question-audio-box">' +
+                '<div style="font-size:0.8125rem;font-weight:700;color:var(--color-primary-deep);">File nghe riêng cho Câu ' + (idx + 1) + '</div>' +
+                renderListeningAudioEditorHtml({
+                  targetKey: sec.section_id + ':' + item.id,
+                  playerId: 'ls-builder-' + sec.section_id + '-' + item.id,
+                  audioLabel: item.audio_label || '',
+                  audioUrl: item.audio_url || '',
+                  duration: item.audio_duration || '00:25',
+                  transcript: item.audio_transcript || '',
+                  defaultLabel: 'Nghe câu ' + (idx + 1),
+                  includeLabelField: true,
+                  labelPlaceholder: 'Câu ' + (idx + 1),
+                  transcriptLabel: 'Kịch bản câu nghe (Tự đọc nếu không gắn MP3 & hiện khi HS xem lại):',
+                  transcriptPlaceholder: 'Ví dụ: 你好，请问图书馆在哪儿？'
+                }) +
+              '</div>'
+            : '';
+
           return (
             '<div class="gform-question-card" data-ls-qcard="' +
             escapeHtml(item.id) +
@@ -2438,6 +2574,7 @@
             escapeHtml(sec.section_id + ':' + item.id) +
             '">✕ Xóa câu này</button>' +
             '</div>' +
+            perQuestionAudioHtml +
             '<div>' +
             '<label class="form-label" style="font-size:0.8125rem;">Câu hỏi (ví dụ: 李文回北京的路上花了多长时间？):</label>' +
             '<input type="text" class="form-control" data-ls-prompt="' +
@@ -2466,77 +2603,41 @@
       return (
         '<div>' +
         '<div class="listening-builder-media-box">' +
+        '<div class="listening-mode-bar">' +
+        '<span class="listening-mode-label">Hình thức file nghe:</span>' +
+        '<input type="hidden" data-ls-mode value="' + listeningMode + '">' +
+        '<div class="filter-pill-group" role="group" aria-label="Chọn dạng bài nghe hiểu">' +
+        '<button type="button" class="filter-pill' + (listeningMode === 'shared' ? ' is-active' : '') + '" data-ls-mode-btn="' + escapeHtml(sec.section_id + ':shared') + '">1. Một file nghe cho nhiều câu</button>' +
+        '<button type="button" class="filter-pill' + (listeningMode === 'per_question' ? ' is-active' : '') + '" data-ls-mode-btn="' + escapeHtml(sec.section_id + ':per_question') + '">2. Mỗi câu hỏi 1 file nghe</button>' +
+        '</div>' +
+        '</div>' +
+        sectionAudioEditorHtml +
         '<div class="form-row-2">' +
         '<div>' +
-        '<label class="form-label" style="font-size:0.8125rem;">Nhãn bài nghe (ví dụ: 课文 4 / Bài nghe 1):</label>' +
-        '<input type="text" class="form-control" data-ls-label value="' +
-        escapeHtml(data.context_label || '') +
-        '" placeholder="Ví dụ: 课文 4">' +
-        '</div>' +
-        '<div>' +
-        '<label class="form-label" style="font-size:0.8125rem;">Mã file nghe hiển thị cạnh loa (ví dụ: 1-7):</label>' +
-        '<input type="text" class="form-control" data-ls-audio-label value="' +
-        escapeHtml(data.audio_label || '') +
-        '" placeholder="Ví dụ: 1-7 hoặc Hội thoại 1">' +
-        '</div>' +
-        '</div>' +
-        '<div class="form-row-2">' +
-        '<div>' +
-        '<label class="form-label" style="font-size:0.8125rem;">Ngữ cảnh / Tiêu đề đoạn nghe:</label>' +
+        '<label class="form-label" style="font-size:0.8125rem;">' + (listeningMode === 'per_question' ? 'Ngữ cảnh / Tiêu đề chung (nếu có):' : 'Ngữ cảnh / Tiêu đề đoạn nghe:') + '</label>' +
         '<input type="text" class="form-control" data-ls-title value="' +
         escapeHtml(data.context_title || '') +
-        '" placeholder="Ví dụ: 在宾馆房间，李文在写日记。">' +
+        '" placeholder="' + (listeningMode === 'per_question' ? 'Ví dụ: Nghe từng câu ngắn và chọn đáp án đúng' : 'Ví dụ: 在宾馆房间，李文在写日记。') + '">' +
         '</div>' +
         '<div>' +
         '<label class="form-label" style="font-size:0.8125rem;">Hướng dẫn làm bài:</label>' +
         '<input type="text" class="form-control" data-ls-subtitle value="' +
         escapeHtml(data.context_subtitle || '') +
-        '" placeholder="Ví dụ: Nghe đoạn hội thoại 2 lần và chọn đáp án đúng.">' +
+        '" placeholder="' + (listeningMode === 'per_question' ? 'Ví dụ: Bấm nghe từng câu và chọn đáp án đúng.' : 'Ví dụ: Nghe đoạn hội thoại 2 lần và chọn đáp án đúng.') + '">' +
         '</div>' +
         '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:4px;">' +
-        '<label class="btn btn-outline btn-sm" style="cursor:pointer;">' +
-        '<input type="file" accept="audio/*" class="file-input-hidden" data-ls-upload="' +
-        escapeHtml(sec.section_id) +
-        '">' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>' +
-        '<span>Tải file Audio (.mp3/.wav)</span>' +
-        '</label>' +
-        '<button type="button" class="btn btn-secondary btn-sm" data-ls-rec-btn="' +
-        escapeHtml(sec.section_id) +
-        '">' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line></svg>' +
-        '<span>Ghi âm trực tiếp</span>' +
-        '</button>' +
-        '<button type="button" class="btn btn-ghost btn-sm" data-ls-preview-tts="' +
-        escapeHtml(sec.section_id) +
-        '">' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>' +
-        '<span>Nghe thử kịch bản</span>' +
-        '</button>' +
-        (audioUrl
-          ? '<button type="button" class="btn-danger-outline" data-ls-clear-audio="' +
-            escapeHtml(sec.section_id) +
-            '">Xóa file audio</button>'
-          : '') +
-        '</div>' +
-        '<div>' +
-        '<label class="form-label" style="font-size:0.8125rem;">Link file Audio (hoặc tự động điền khi tải file/ghi âm):</label>' +
-        '<input type="text" class="form-control" data-ls-audio-url="' +
-        escapeHtml(sec.section_id) +
-        '" value="' +
-        escapeHtml(audioUrl) +
-        '" placeholder="Dán đường dẫn file audio hoặc bấm Tải file / Ghi âm ở trên">' +
-        '</div>' +
-        '<div>' +
-        '<label class="form-label" style="font-size:0.8125rem;">Kịch bản đoạn nghe (Tự đọc giọng tiếng Trung nếu không gắn file MP3 &amp; hiện cho HS đối chiếu sau khi nộp):</label>' +
-        '<textarea class="form-control" rows="2" data-ls-transcript="' +
-        escapeHtml(sec.section_id) +
-        '" placeholder="Ví dụ: 女：李文，你从家回北京的路上花了多长时间？ 男：坐火车花了十几个小时...">' +
-        escapeHtml(transcript) +
-        '</textarea>' +
-        '</div>' +
-        previewPlayerHtml +
+        (listeningMode === 'shared'
+          ? renderListeningAudioEditorHtml({
+              targetKey: sec.section_id,
+              playerId: 'ls-builder-' + sec.section_id,
+              audioLabel: data.audio_label || '',
+              audioUrl: data.audio_url || '',
+              duration: data.audio_duration || '00:45',
+              transcript: data.audio_transcript || '',
+              defaultLabel: 'Nghe thử',
+              includeLabelField: false
+            })
+          : '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);font-weight:600;">Đang bật chế độ Mỗi câu hỏi 1 file nghe riêng — giáo viên tải file audio, ghi âm hoặc nhập kịch bản trực tiếp trong từng thẻ câu hỏi bên dưới.</div>') +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:12px;">' +
         questionsHtml +
@@ -2894,7 +2995,69 @@
       });
     });
 
-    // 7. Listening MC: Add / Delete Question, Upload Audio, Record Mic, Preview TTS, Clear Audio
+    // 7. Listening MC: Switch Mode, Add / Delete Question, Upload Audio, Record Mic, Preview TTS, Clear Audio
+    function resolveListeningAudioTarget(targetKey) {
+      const key = String(targetKey || '');
+      const sepIdx = key.indexOf(':');
+      const secId = sepIdx >= 0 ? key.slice(0, sepIdx) : key;
+      const itemId = sepIdx >= 0 ? key.slice(sepIdx + 1) : '';
+      const sec = (ex.sections || []).find(function (s) {
+        return s.section_id === secId;
+      });
+      if (!sec || !sec.data) return null;
+
+      if (!itemId) {
+        return {
+          sec: sec,
+          item: null,
+          targetObj: sec.data,
+          defaultDuration: '00:45',
+          defaultLabelPrefix: '',
+          loadingTitle: 'Đang lưu tệp âm thanh bài nghe...'
+        };
+      }
+      const items = sec.data.items || [];
+      const itemIdx = items.findIndex(function (it) {
+        return it.id === itemId;
+      });
+      if (itemIdx < 0) return null;
+      return {
+        sec: sec,
+        item: items[itemIdx],
+        targetObj: items[itemIdx],
+        defaultDuration: '00:25',
+        defaultLabelPrefix: 'Câu ' + (itemIdx + 1),
+        loadingTitle: 'Đang lưu tệp âm thanh Câu ' + (itemIdx + 1) + '...'
+      };
+    }
+
+    document.querySelectorAll('[data-ls-mode-btn]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const val = btn.getAttribute('data-ls-mode-btn') || '';
+        const sepIdx = val.indexOf(':');
+        if (sepIdx < 0) return;
+        const secId = val.slice(0, sepIdx);
+        const nextMode = val.slice(sepIdx + 1) === 'per_question' ? 'per_question' : 'shared';
+
+        collectExerciseFromDom();
+        const sec = (ex.sections || []).find(function (s) {
+          return s.section_id === secId;
+        });
+        if (!sec || !sec.data) return;
+        const prevMode = sec.data.listening_mode === 'per_question' ? 'per_question' : 'shared';
+        if (prevMode === nextMode) return;
+
+        sec.data.listening_mode = nextMode;
+        window.StudySnapStore.savePracticeExercise(state, ex);
+        renderTeacherPracticeTab();
+        showToast(
+          nextMode === 'per_question'
+            ? 'Đã chuyển sang dạng: Mỗi câu hỏi 1 file nghe riêng.'
+            : 'Đã chuyển sang dạng: 1 file nghe chung cho cả phần.'
+        );
+      });
+    });
+
     document.querySelectorAll('[data-add-ls-q]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         collectExerciseFromDom();
@@ -2908,6 +3071,10 @@
         sec.data.items.push({
           id: 'LS_' + Date.now(),
           prompt: '',
+          audio_label: '',
+          audio_url: '',
+          audio_duration: '00:25',
+          audio_transcript: '',
           options: ['', '', '', ''],
           correctIndex: 0,
           explanation: ''
@@ -2948,26 +3115,25 @@
       });
     });
 
-    document.querySelectorAll('[data-ls-upload]').forEach(function (inp) {
+    document.querySelectorAll('[data-ls-audio-upload]').forEach(function (inp) {
       inp.addEventListener('change', function () {
         const file = inp.files && inp.files[0];
         if (!file || !window.StudySnapAudio) return;
-        const secId = inp.getAttribute('data-ls-upload');
+        const targetKey = inp.getAttribute('data-ls-audio-upload');
         collectExerciseFromDom();
-        const sec = (ex.sections || []).find(function (s) {
-          return s.section_id === secId;
-        });
-        if (!sec || !sec.data) return;
+        const resolved = resolveListeningAudioTarget(targetKey);
+        if (!resolved) return;
 
         window.StudySnapAudio.readUploadedMediaFile(file, async function (mediaInfo) {
           const gasUrl = window.StudySnapStore.getGasUrl && window.StudySnapStore.getGasUrl();
           if (!gasUrl && mediaInfo.sizeKB > 1800) {
             showToast('File âm thanh hơi lớn (' + mediaInfo.sizeKB + 'KB) so với bộ nhớ cục bộ. Nên dùng file <= 1.5MB hoặc dán đường dẫn audio!');
           }
-          sec.data.audio_url = mediaInfo.dataUrl;
-          sec.data.audio_duration = mediaInfo.duration || '00:45';
-          if (!sec.data.audio_label) {
-            sec.data.audio_label = file.name.replace(/\.[^/.]+$/, '');
+          resolved.targetObj.audio_url = mediaInfo.dataUrl;
+          resolved.targetObj.audio_duration = mediaInfo.duration || resolved.defaultDuration;
+          if (!resolved.targetObj.audio_label) {
+            resolved.targetObj.audio_label =
+              resolved.defaultLabelPrefix || file.name.replace(/\.[^/.]+$/, '');
           }
           await runWithLoading(
             null,
@@ -2976,7 +3142,7 @@
               await window.StudySnapStore.savePracticeExercise(state, ex);
             },
             {
-              title: 'Đang lưu tệp âm thanh bài nghe...',
+              title: resolved.loadingTitle,
               desc: 'Hệ thống đang tải lên và đồng bộ tệp âm thanh cho bài tập.'
             }
           );
@@ -2986,10 +3152,10 @@
       });
     });
 
-    document.querySelectorAll('[data-ls-rec-btn]').forEach(function (btn) {
+    document.querySelectorAll('[data-ls-audio-rec]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         if (!window.StudySnapAudio) return;
-        const secId = btn.getAttribute('data-ls-rec-btn');
+        const targetKey = btn.getAttribute('data-ls-audio-rec');
         if (btn.getAttribute('data-recording') === '1') {
           window.StudySnapAudio.stopRecording();
           btn.setAttribute('data-recording', '0');
@@ -2997,10 +3163,8 @@
         }
 
         collectExerciseFromDom();
-        const sec = (ex.sections || []).find(function (s) {
-          return s.section_id === secId;
-        });
-        if (!sec || !sec.data) return;
+        const resolved = resolveListeningAudioTarget(targetKey);
+        if (!resolved) return;
 
         btn.setAttribute('data-recording', '1');
         const labelSpan = btn.querySelector('span');
@@ -3011,8 +3175,8 @@
           async function (recInfo) {
             btn.setAttribute('data-recording', '0');
             if (labelSpan) labelSpan.textContent = 'Ghi âm trực tiếp';
-            sec.data.audio_url = recInfo.dataUrl;
-            sec.data.audio_duration = recInfo.duration || '00:30';
+            resolved.targetObj.audio_url = recInfo.dataUrl;
+            resolved.targetObj.audio_duration = recInfo.duration || '00:30';
             await runWithLoading(
               btn,
               'Đang lưu bản thu...',
@@ -3020,7 +3184,7 @@
                 await window.StudySnapStore.savePracticeExercise(state, ex);
               },
               {
-                title: 'Đang lưu bản thu âm bài nghe...',
+                title: resolved.loadingTitle,
                 desc: 'Hệ thống đang đồng bộ bản ghi âm lên máy chủ.'
               }
             );
@@ -3036,12 +3200,14 @@
       });
     });
 
-    document.querySelectorAll('[data-ls-preview-tts]').forEach(function (btn) {
+    document.querySelectorAll('[data-ls-audio-tts]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         if (!window.StudySnapAudio) return;
-        const secId = btn.getAttribute('data-ls-preview-tts');
+        const targetKey = btn.getAttribute('data-ls-audio-tts');
+        const sepIdx = String(targetKey || '').indexOf(':');
+        const secId = sepIdx >= 0 ? targetKey.slice(0, sepIdx) : targetKey;
         const card = document.querySelector('[data-sec-card="' + secId + '"]');
-        const trInput = card && card.querySelector('[data-ls-transcript="' + secId + '"]');
+        const trInput = card && card.querySelector('[data-ls-audio-transcript="' + targetKey + '"]');
         const text = trInput ? trInput.value.trim() : '';
         if (!text) {
           showToast('Hãy nhập kịch bản tiếng Trung trước để nghe thử giọng đọc!');
@@ -3051,15 +3217,13 @@
       });
     });
 
-    document.querySelectorAll('[data-ls-clear-audio]').forEach(function (btn) {
+    document.querySelectorAll('[data-ls-audio-clear]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         collectExerciseFromDom();
-        const secId = btn.getAttribute('data-ls-clear-audio');
-        const sec = (ex.sections || []).find(function (s) {
-          return s.section_id === secId;
-        });
-        if (!sec || !sec.data) return;
-        sec.data.audio_url = '';
+        const targetKey = btn.getAttribute('data-ls-audio-clear');
+        const resolved = resolveListeningAudioTarget(targetKey);
+        if (!resolved) return;
+        resolved.targetObj.audio_url = '';
         window.StudySnapStore.savePracticeExercise(state, ex);
         renderTeacherPracticeTab();
         showToast('Đã gỡ file âm thanh.');
@@ -3581,73 +3745,168 @@
       });
     });
 
-    // 3. Create Practice Exercise Modal & Trigger
+    // 3. Create / Edit Practice Exercise Metadata Modal & Inline Controls
     const btnCreateEx = document.getElementById('btn-create-practice-ex');
+    const btnEditMeta = document.getElementById('btn-edit-practice-meta');
+    const btnSaveMetaInline = document.getElementById('btn-save-practice-meta-inline');
     const modalCreateEx = document.getElementById('modal-create-practice-ex');
     const btnCloseCreateEx = document.getElementById('btn-close-create-ex-modal');
     const btnCancelCreateEx = document.getElementById('btn-cancel-create-ex-modal');
     const formCreateEx = document.getElementById('form-create-new-practice-ex');
 
+    function closePracticeMetaModal() {
+      if (modalCreateEx) {
+        modalCreateEx.classList.remove('is-open', 'is-visible');
+      }
+    }
+
+    function openPracticeMetaModal(mode, targetEx) {
+      if (!modalCreateEx || !formCreateEx) return;
+      const modalTitleEl = document.getElementById('create-ex-modal-title');
+      const modalHintEl = document.getElementById('create-ex-modal-hint');
+      const submitBtnEl = document.getElementById('btn-submit-create-ex-modal');
+      const titleInp = document.getElementById('new-ex-title');
+      const tagInp = document.getElementById('new-ex-tag');
+
+      if (mode === 'edit') {
+        if (!targetEx) {
+          showToast('Vui lòng tạo hoặc chọn một bài tập trước khi chỉnh sửa.');
+          return;
+        }
+        formCreateEx.setAttribute('data-mode', 'edit');
+        formCreateEx.setAttribute('data-edit-ex-id', targetEx.exercise_id);
+        if (modalTitleEl) modalTitleEl.textContent = 'Sửa tên & thuộc bài tập';
+        if (modalHintEl) {
+          modalHintEl.textContent =
+            'Thay đổi tiêu đề và nhãn thuộc bài sẽ được lưu lên hệ thống và đồng bộ với các lớp đã giao bài này.';
+        }
+        if (submitBtnEl) submitBtnEl.textContent = 'Lưu thay đổi';
+        if (titleInp) titleInp.value = targetEx.title || '';
+        if (tagInp) tagInp.value = targetEx.lesson_tag || '';
+      } else {
+        const nextNum = (state.practiceExercises || []).length + 1;
+        formCreateEx.setAttribute('data-mode', 'create');
+        formCreateEx.removeAttribute('data-edit-ex-id');
+        if (modalTitleEl) modalTitleEl.textContent = 'Tạo bài tập luyện tập mới';
+        if (modalHintEl) {
+          modalHintEl.textContent =
+            'Hệ thống sẽ tự động tạo sẵn bài tập mới để giáo viên thêm các phần câu hỏi hoặc nhập từ Excel.';
+        }
+        if (submitBtnEl) submitBtnEl.textContent = 'Tạo bài tập ngay';
+        if (titleInp) titleInp.value = 'Bài tập luyện tập cuối bài — HSK 1: Bài ' + nextNum;
+        if (tagInp) tagInp.value = 'Bài ' + nextNum;
+      }
+
+      modalCreateEx.classList.add('is-open', 'is-visible');
+      setTimeout(function () {
+        if (titleInp) {
+          titleInp.focus();
+          titleInp.select();
+        }
+      }, 60);
+    }
+
+    async function persistPracticeMetaUpdate(ex, nextTitle, nextTag, triggerBtns, loadingLabel) {
+      if (!ex) return null;
+      const active = getActivePracticeExercise();
+      if (active && active.exercise_id === ex.exercise_id) {
+        collectExerciseFromDom();
+      }
+      ex.title = nextTitle;
+      ex.lesson_tag = nextTag;
+
+      if (active && active.exercise_id === ex.exercise_id) {
+        const metaTitleInp = document.getElementById('ex-meta-title');
+        const metaTagInp = document.getElementById('ex-meta-tag');
+        if (metaTitleInp) metaTitleInp.value = ex.title;
+        if (metaTagInp) metaTagInp.value = ex.lesson_tag;
+      }
+
+      return await runWithLoading(
+        triggerBtns,
+        loadingLabel || 'Đang lưu tên & thuộc bài...',
+        async function () {
+          return await window.StudySnapStore.savePracticeExercise(state, ex);
+        },
+        {
+          title: 'Đang lưu tên & thuộc bài...',
+          desc: 'Hệ thống đang cập nhật tiêu đề, nhãn bài số và đồng bộ dữ liệu.'
+        }
+      );
+    }
+
     if (btnCreateEx && modalCreateEx) {
       btnCreateEx.addEventListener('click', function () {
-        const nextNum = (state.practiceExercises || []).length + 1;
-        const titleInp = document.getElementById('new-ex-title');
-        const tagInp = document.getElementById('new-ex-tag');
-        const currentTitleInp = document.getElementById('ex-meta-title');
-        const currentTagInp = document.getElementById('ex-meta-tag');
-
-        const currentTitle = currentTitleInp ? currentTitleInp.value.trim() : '';
-        const currentTag = currentTagInp ? currentTagInp.value.trim() : '';
-
-        if (titleInp) {
-          titleInp.value = currentTitle && currentTitle !== 'Bài tập luyện tập cuối bài — HSK 1: Bài 1'
-            ? currentTitle
-            : 'Bài tập luyện tập cuối bài — HSK 1: Bài ' + nextNum;
-        }
-        if (tagInp) {
-          tagInp.value = currentTag && currentTag !== 'Bài 1'
-            ? currentTag
-            : 'Bài ' + nextNum;
-        }
-
-        modalCreateEx.classList.add('is-open', 'is-visible');
-        setTimeout(function () {
-          if (titleInp) {
-            titleInp.focus();
-            titleInp.select();
-          }
-        }, 60);
+        openPracticeMetaModal('create', null);
       });
+    }
 
+    if (btnEditMeta && modalCreateEx) {
+      btnEditMeta.addEventListener('click', function () {
+        openPracticeMetaModal('edit', getActivePracticeExercise());
+      });
+    }
+
+    if (modalCreateEx) {
       modalCreateEx.addEventListener('click', function (e) {
         if (e.target === modalCreateEx) {
-          modalCreateEx.classList.remove('is-open', 'is-visible');
+          closePracticeMetaModal();
         }
       });
     }
 
     if (btnCloseCreateEx && modalCreateEx) {
-      btnCloseCreateEx.addEventListener('click', function () {
-        modalCreateEx.classList.remove('is-open', 'is-visible');
-      });
+      btnCloseCreateEx.addEventListener('click', closePracticeMetaModal);
     }
 
     if (btnCancelCreateEx && modalCreateEx) {
-      btnCancelCreateEx.addEventListener('click', function () {
-        modalCreateEx.classList.remove('is-open', 'is-visible');
-      });
+      btnCancelCreateEx.addEventListener('click', closePracticeMetaModal);
     }
 
     if (formCreateEx && modalCreateEx) {
       formCreateEx.addEventListener('submit', async function (e) {
         e.preventDefault();
+        const mode = formCreateEx.getAttribute('data-mode') || 'create';
         const titleInp = document.getElementById('new-ex-title');
         const tagInp = document.getElementById('new-ex-tag');
         const submitBtn = formCreateEx.querySelector('button[type="submit"]');
 
-        const nextNum = (state.practiceExercises || []).length + 1;
-        const title = (titleInp ? titleInp.value : '').trim() || ('Bài ' + nextNum);
-        const tag = (tagInp ? tagInp.value : '').trim() || ('Bài ' + nextNum);
+        const title = (titleInp ? titleInp.value : '').trim();
+        const tag = (tagInp ? tagInp.value : '').trim();
+        if (!title || !tag) {
+          showToast('Vui lòng nhập đầy đủ tiêu đề bài tập và thuộc bài!');
+          if (!title && titleInp) titleInp.focus();
+          else if (!tag && tagInp) tagInp.focus();
+          return;
+        }
+
+        if (mode === 'edit') {
+          const editExId = formCreateEx.getAttribute('data-edit-ex-id');
+          const targetEx =
+            (state.practiceExercises || []).find(function (item) {
+              return item.exercise_id === editExId;
+            }) || getActivePracticeExercise();
+          if (!targetEx) {
+            closePracticeMetaModal();
+            return;
+          }
+
+          const res = await persistPracticeMetaUpdate(
+            targetEx,
+            title,
+            tag,
+            submitBtn,
+            'Đang lưu thay đổi...'
+          );
+          if (res && res.ok === false) {
+            alert(res.error || 'Không thể lưu tên & thuộc bài lên máy chủ. Vui lòng thử lại.');
+            return;
+          }
+          closePracticeMetaModal();
+          renderAll();
+          showToast('Đã cập nhật: [' + tag + '] ' + title);
+          return;
+        }
 
         const newEx = {
           exercise_id: 'EX_' + Date.now(),
@@ -3666,13 +3925,13 @@
         });
         ui.selectedPracticeExId = newEx.exercise_id;
         ui.practiceCurrentView = 'builder';
-        modalCreateEx.classList.remove('is-open', 'is-visible');
-        renderTeacherPracticeTab();
+        closePracticeMetaModal();
+        renderAll();
         showToast('Đã tạo bài tập mới: ' + title);
       });
     }
 
-    // Title & Tag live-sync to active exercise and dropdown
+    // Title & Tag live-sync locally to active exercise and dropdown (no network sync per keystroke)
     const metaTitleInput = document.getElementById('ex-meta-title');
     const metaTagInput = document.getElementById('ex-meta-tag');
     function syncMetaInputsToActiveEx() {
@@ -3684,7 +3943,7 @@
       if (metaTagInput && metaTagInput.value.trim()) {
         ex.lesson_tag = metaTagInput.value.trim();
       }
-      window.StudySnapStore.savePracticeExercise(state, ex);
+      window.StudySnapStore.saveState(state);
       const sel = document.getElementById('teacher-practice-select');
       if (sel) {
         const opt = sel.querySelector('option[value="' + ex.exercise_id + '"]');
@@ -3698,6 +3957,37 @@
     }
     if (metaTagInput) {
       metaTagInput.addEventListener('input', syncMetaInputsToActiveEx);
+    }
+
+    if (btnSaveMetaInline) {
+      btnSaveMetaInline.addEventListener('click', async function () {
+        const ex = getActivePracticeExercise();
+        if (!ex) {
+          showToast('Vui lòng tạo hoặc chọn một bài tập trước khi lưu.');
+          return;
+        }
+        const nextTitle = metaTitleInput ? metaTitleInput.value.trim() : '';
+        const nextTag = metaTagInput ? metaTagInput.value.trim() : '';
+        if (!nextTitle || !nextTag) {
+          showToast('Vui lòng nhập đầy đủ tiêu đề bài tập và thuộc bài!');
+          if (!nextTitle && metaTitleInput) metaTitleInput.focus();
+          else if (!nextTag && metaTagInput) metaTagInput.focus();
+          return;
+        }
+        const res = await persistPracticeMetaUpdate(
+          ex,
+          nextTitle,
+          nextTag,
+          btnSaveMetaInline,
+          'Đang lưu...'
+        );
+        if (res && res.ok === false) {
+          alert(res.error || 'Không thể lưu tên & thuộc bài lên máy chủ. Vui lòng thử lại.');
+          return;
+        }
+        renderAll();
+        showToast('Đã lưu tên & thuộc bài: [' + nextTag + '] ' + nextTitle);
+      });
     }
 
     // Top Bar & Sticky Bar Save Button Triggers
@@ -3757,17 +4047,26 @@
     if (metaForm) {
       metaForm.addEventListener('submit', async function (e) {
         e.preventDefault();
-        const ex = getActivePracticeExercise() || createFreshPracticeExercise(null, null, false);
-
-        collectExerciseFromDom();
-
         const titleInput = document.getElementById('ex-meta-title');
         const tagInput = document.getElementById('ex-meta-tag');
         const threshGood = document.getElementById('ex-meta-thresh-good');
         const threshVeryGood = document.getElementById('ex-meta-thresh-verygood');
 
-        if (titleInput && titleInput.value.trim()) ex.title = titleInput.value.trim();
-        if (tagInput && tagInput.value.trim()) ex.lesson_tag = tagInput.value.trim();
+        const titleVal = titleInput ? titleInput.value.trim() : '';
+        const tagVal = tagInput ? tagInput.value.trim() : '';
+        if (!titleVal || !tagVal) {
+          showToast('Vui lòng nhập đầy đủ tiêu đề bài tập và thuộc bài!');
+          if (!titleVal && titleInput) titleInput.focus();
+          else if (!tagVal && tagInput) tagInput.focus();
+          return;
+        }
+
+        const ex = getActivePracticeExercise() || createFreshPracticeExercise(titleVal, tagVal, false);
+
+        collectExerciseFromDom();
+
+        ex.title = titleVal;
+        ex.lesson_tag = tagVal;
         if (!ex.thresholds) ex.thresholds = { good: 25, very_good: 31 };
         ex.thresholds.good = parseInt(threshGood ? threshGood.value : 25, 10) || 25;
         ex.thresholds.very_good = parseInt(threshVeryGood ? threshVeryGood.value : 31, 10) || 31;
@@ -3780,12 +4079,17 @@
 
         const saveBtns = [
           document.getElementById('btn-save-top-bar'),
-          document.getElementById('btn-save-sticky-bar')
+          document.getElementById('btn-save-sticky-bar'),
+          document.getElementById('btn-save-practice-meta-inline')
         ].filter(Boolean);
-        await runWithLoading(saveBtns, 'Đang lưu đề...', async function () {
-          await window.StudySnapStore.savePracticeExercise(state, ex);
+        const res = await runWithLoading(saveBtns, 'Đang lưu đề...', async function () {
+          return await window.StudySnapStore.savePracticeExercise(state, ex);
         });
-        renderTeacherPracticeTab();
+        if (res && res.ok === false) {
+          alert(res.error || 'Không thể lưu bài tập lên máy chủ. Vui lòng thử lại.');
+          return;
+        }
+        renderAll();
         showToast('Đã lưu bài tập "' + ex.title + '" thành công!');
       });
     }
@@ -5535,14 +5839,36 @@
           const ctxTitle = (ctxParts[0] || '').trim();
           const ctxSub = (ctxParts[1] || '').trim() || 'Nghe đoạn hội thoại 2 lần rồi chọn đáp án đúng.';
           const labelCandidate = (bucket.rawTitle || '').split(':')[0].trim() || ('Bài nghe ' + secNum);
+
+          const distinctAudioUrls = [];
+          let hasPerQuestionHint = false;
+          bucket.rows.forEach(function (r) {
+            const typeKey = normalizePlainKey(r.cols[0] + ' ' + r.cols[1]);
+            if (
+              typeKey.indexOf('tung cau') >= 0 ||
+              typeKey.indexOf('moi cau') >= 0 ||
+              typeKey.indexOf('per_question') >= 0 ||
+              typeKey.indexOf('nghe ngan') >= 0
+            ) {
+              hasPerQuestionHint = true;
+            }
+            const u = (r.cols[10] || '').trim();
+            if (u && distinctAudioUrls.indexOf(u) < 0) distinctAudioUrls.push(u);
+          });
+          const listeningMode = distinctAudioUrls.length > 1 || hasPerQuestionHint ? 'per_question' : 'shared';
+
           let audioUrl = '';
           const transcriptLines = [];
           const items = [];
 
           bucket.rows.forEach(function (r) {
-            if (!audioUrl && r.cols[10]) audioUrl = r.cols[10];
-            if (r.cols[9] && transcriptLines.indexOf(r.cols[9]) < 0) {
-              transcriptLines.push(r.cols[9]);
+            const rowAudioUrl = (r.cols[10] || '').trim();
+            const rowTranscript = (r.cols[9] || '').trim();
+            if (listeningMode === 'shared') {
+              if (!audioUrl && rowAudioUrl) audioUrl = rowAudioUrl;
+              if (rowTranscript && transcriptLines.indexOf(rowTranscript) < 0) {
+                transcriptLines.push(rowTranscript);
+              }
             }
             const prompt = r.cols[2];
             const options = [r.cols[4], r.cols[5], r.cols[6], r.cols[7]];
@@ -5551,9 +5877,14 @@
             if (!ansRes.matched) {
               warnings.push('Dòng ' + r.rowNum + ': Đáp án đúng "' + r.cols[8] + '" chưa khớp A/B/C/D, tạm đặt về A.');
             }
+            const itemIdx = items.length + 1;
             items.push({
-              id: 'LS_' + baseTs + '_' + secNum + '_' + (items.length + 1),
+              id: 'LS_' + baseTs + '_' + secNum + '_' + itemIdx,
               prompt: prompt,
+              audio_label: listeningMode === 'per_question' ? ('Câu ' + itemIdx) : '',
+              audio_url: listeningMode === 'per_question' ? rowAudioUrl : '',
+              audio_duration: '00:25',
+              audio_transcript: listeningMode === 'per_question' ? rowTranscript : '',
               options: options,
               correctIndex: ansRes.index,
               explanation: ''
@@ -5567,16 +5898,20 @@
             section_num: secNum,
             type: 'listening_mc',
             title: finalTitle,
-            description: 'Nghe đoạn hội thoại và chọn đáp án chính xác nhất cho từng câu hỏi.',
+            description:
+              listeningMode === 'per_question'
+                ? 'Nghe file âm thanh ở từng câu và chọn đáp án chính xác nhất.'
+                : 'Nghe đoạn hội thoại và chọn đáp án chính xác nhất cho từng câu hỏi.',
             max_score: items.length,
             data: {
+              listening_mode: listeningMode,
               context_label: labelCandidate,
               context_title: ctxTitle,
               context_subtitle: ctxSub,
               audio_label: 'Audio ' + secNum,
-              audio_url: audioUrl,
+              audio_url: listeningMode === 'shared' ? audioUrl : '',
               audio_duration: '00:45',
-              audio_transcript: transcriptLines.join(' '),
+              audio_transcript: listeningMode === 'shared' ? transcriptLines.join(' ') : '',
               items: items
             }
           });
@@ -5653,7 +5988,8 @@
       if (sec.type === 'listening_mc') {
         const first = (d.items || [])[0];
         const ctx = d.context_title ? ('[' + d.context_title + '] ') : '';
-        return ctx + (first ? first.prompt : '');
+        const modeTag = d.listening_mode === 'per_question' ? '(Mỗi câu 1 file nghe) ' : '(1 file nghe) ';
+        return modeTag + ctx + (first ? first.prompt : '');
       }
       return '';
     }

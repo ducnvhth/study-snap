@@ -91,6 +91,10 @@
             <button type="button" class="btn btn-primary btn-sm" id="btn-create-practice-ex">
               <span>+ Tạo bài tập mới</span>
             </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-edit-practice-meta" title="Sửa tiêu đề và thuộc bài cho đề luyện tập đang chọn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+              <span>Sửa tên &amp; thuộc bài</span>
+            </button>
             <button type="button" class="btn btn-outline btn-sm" id="btn-open-import-practice-modal" title="Nhập đề luyện tập hàng loạt từ file Excel / CSV hoặc xem file template">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13h8"></path><path d="M8 17h8"></path><path d="M10 9h4"></path></svg>
               <span>Nhập từ Excel</span>
@@ -139,8 +143,12 @@
                   <label class="form-label" for="ex-meta-tag" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground); text-transform: uppercase; letter-spacing: 0.05em;">Thuộc bài</label>
                   <input type="text" id="ex-meta-tag" class="form-control" style="font-weight: 600;" placeholder="Ví dụ: Bài 1" required>
                 </div>
-                <div style="align-self: flex-end; padding-bottom: 4px;">
+                <div style="align-self: flex-end; padding-bottom: 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                   <span class="status-badge status-graded tabular-nums" id="teacher-practice-maxscore-badge" style="font-size: 0.9375rem; font-weight: 700; padding: 8px 14px;">Tổng 35 điểm</span>
+                  <button type="button" class="btn btn-outline btn-sm" id="btn-save-practice-meta-inline" title="Lưu thay đổi tiêu đề và thuộc bài">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <span>Lưu tên</span>
+                  </button>
                 </div>
               </div>
               <input type="hidden" id="ex-meta-thresh-good" value="25">
@@ -1058,17 +1066,19 @@
     </div>
   </div>
 
-  <!-- MODAL 2: TẠO BÀI TẬP MỚI (CỰC KỲ ĐƠN GIẢN) -->
+  <!-- MODAL 2: TẠO / SỬA TÊN & THUỘC BÀI TẬP LUYỆN TẬP -->
   <div class="modal-backdrop" id="modal-create-practice-ex" role="dialog" aria-modal="true" aria-labelledby="create-ex-modal-title">
     <div class="modal-dialog" style="max-width: 500px;">
       <div class="panel-header" style="margin-bottom: 16px;">
         <div class="panel-title-row">
           <h2 id="create-ex-modal-title">Tạo bài tập luyện tập mới</h2>
         </div>
-        <button type="button" class="btn btn-outline btn-sm" id="btn-close-create-ex-modal">✕</button>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-create-ex-modal" aria-label="Đóng">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
       </div>
 
-      <form id="form-create-new-practice-ex">
+      <form id="form-create-new-practice-ex" data-mode="create">
         <div class="form-group">
           <label class="form-label" for="new-ex-title">Tiêu đề bài tập:</label>
           <input type="text" id="new-ex-title" class="form-control" placeholder="Ví dụ: Bài tập luyện tập cuối bài — HSK 1: Bài 2" required>
@@ -1079,13 +1089,13 @@
           <input type="text" id="new-ex-tag" class="form-control" placeholder="Ví dụ: Bài 2" required>
         </div>
 
-        <div style="background: var(--color-surface-muted); padding: 12px 14px; border-radius: var(--radius-md); margin-bottom: 18px; font-size: 0.8125rem; color: var(--color-muted-foreground);">
+        <div id="create-ex-modal-hint" style="background: var(--color-surface-muted); padding: 12px 14px; border-radius: var(--radius-md); margin-bottom: 18px; font-size: 0.8125rem; color: var(--color-muted-foreground);">
           Hệ thống sẽ tự động tạo sẵn các phần câu hỏi mẫu để giáo viên chỉ việc bấm vào sửa lại nội dung bài học.
         </div>
 
         <div class="banner-actions" style="justify-content: flex-end; gap: 10px;">
           <button type="button" class="btn btn-outline" id="btn-cancel-create-ex-modal">Hủy</button>
-          <button type="submit" class="btn btn-primary" style="font-weight: 700;">Tạo bài tập ngay</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-create-ex-modal" style="font-weight: 700;">Tạo bài tập ngay</button>
         </div>
       </form>
     </div>
@@ -1358,7 +1368,7 @@
           <strong>Quy tắc điền nhanh trong Excel:</strong>
           Cột <strong>A (Dạng bài)</strong> nhập tên tiếng Việt (<code>Nối từ</code>, <code>Trắc nghiệm</code>, <code>Điền từ</code>, <code>Sửa câu sai</code>, <code>Dịch câu</code>, <code>Nghe hiểu</code>); nếu các dòng dưới thuộc cùng dạng/phần có thể để trống cột A hệ thống tự nối tiếp.
           Cột <strong>I (Đáp án đúng)</strong> luôn chứa đáp án (Nghĩa TV với <em>Nối từ</em>; <code>A/B/C/D</code> với <em>Trắc nghiệm &amp; Nghe hiểu</em>; Từ điền với <em>Điền từ</em>; Câu sửa chuẩn ngăn cách <code>/</code> với <em>Sửa câu sai &amp; Dịch câu</em>; để trống hoặc ghi <code>thu_cong</code> nếu muốn chấm tay câu Dịch).
-          Với <strong>Nghe hiểu</strong>, cột <strong>D</strong> là ngữ cảnh bài nghe, cột <strong>J</strong> là kịch bản hội thoại để hiện sau khi nộp hoặc đọc TTS, cột <strong>K</strong> là đường dẫn audio (URL) (tùy chọn, có thể tải file hoặc thu âm sau khi nhập).
+          Với <strong>Nghe hiểu</strong>, cột <strong>D</strong> là ngữ cảnh bài nghe, cột <strong>J</strong> là kịch bản hội thoại/từng câu để hiện sau khi nộp hoặc đọc TTS, cột <strong>K</strong> là đường dẫn audio (URL) — nếu dùng chung 1 link cho nhiều câu thì hệ thống tự chọn dạng <em>1 file nghe chung</em>, nếu mỗi câu có 1 link audio riêng hoặc ghi <code>Nghe từng câu</code> ở cột A thì tự chọn dạng <em>Mỗi câu hỏi 1 file nghe</em> (hoặc tải file/ghi âm từng câu sau khi nhập).
         </div>
       </div>
 

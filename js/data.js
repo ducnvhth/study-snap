@@ -2257,6 +2257,24 @@ window.StudySnapStore = (function () {
     });
   }
 
+  function formatPracticeAssignmentTitle(rawTitle) {
+    const clean = String(rawTitle || '').trim() || 'Bài tập mới';
+    if (/^Luyện tập cuối bài:/i.test(clean)) return clean;
+    return 'Luyện tập cuối bài: ' + clean.replace(/^Bài tập luyện tập cuối bài\s*—\s*/i, '');
+  }
+
+  function syncLinkedPracticeAssignments(stateObj, exercise) {
+    if (!stateObj || !Array.isArray(stateObj.assignments) || !exercise || !exercise.exercise_id) return;
+    const formattedTitle = formatPracticeAssignmentTitle(exercise.title);
+    const nextTag = String(exercise.lesson_tag || '').trim() || 'Bài 1';
+    stateObj.assignments.forEach(function (a) {
+      if (a && a.require_media === 'practice' && a.exercise_id === exercise.exercise_id) {
+        a.title = formattedTitle;
+        a.lesson_tag = nextTag;
+      }
+    });
+  }
+
   async function savePracticeExercise(stateObj, exercise) {
     if (!stateObj.practiceExercises) stateObj.practiceExercises = [];
     const idx = stateObj.practiceExercises.findIndex(function (e) {
@@ -2267,6 +2285,7 @@ window.StudySnapStore = (function () {
     } else {
       stateObj.practiceExercises.push(exercise);
     }
+    syncLinkedPracticeAssignments(stateObj, exercise);
     saveState(stateObj);
     return await syncPostToGas(stateObj, {
       action: 'savePracticeExercise',

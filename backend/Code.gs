@@ -1115,24 +1115,77 @@ function handleGradeManualTranslation_(ss, payload) {
   return null;
 }
 
+function formatPracticeAssignmentTitle_(rawTitle) {
+  const clean = String(rawTitle || '').trim() || 'Bài tập mới';
+  if (/^Luyện tập cuối bài:/i.test(clean)) return clean;
+  return 'Luyện tập cuối bài: ' + clean.replace(/^Bài tập luyện tập cuối bài\s*—\s*/i, '');
+}
+
+function syncLinkedPracticeAssignmentMeta_(ss, exId, cleanTitle, cleanTag) {
+  const asgSheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS);
+  if (!asgSheet || asgSheet.getLastRow() <= 1 || !exId) return 0;
+
+  const headers = ensureSheetHeaders_(asgSheet, ASSIGNMENT_HEADERS);
+  const titleColIdx = headers.indexOf('title');
+  const tagColIdx = headers.indexOf('lesson_tag');
+  const reqColIdx = headers.indexOf('require_media');
+  const exIdColIdx = headers.indexOf('exercise_id');
+  if (exIdColIdx === -1 || titleColIdx === -1 || tagColIdx === -1) return 0;
+
+  const formattedAsgTitle = formatPracticeAssignmentTitle_(cleanTitle);
+  const values = asgSheet.getDataRange().getValues();
+  let updatedCount = 0;
+
+  for (let i = 1; i < values.length; i++) {
+    const rowExId = String(values[i][exIdColIdx] || '').trim();
+    const rowReq = reqColIdx >= 0 ? String(values[i][reqColIdx] || '').trim() : 'practice';
+    if (rowExId === exId && (reqColIdx === -1 || rowReq === 'practice')) {
+      asgSheet.getRange(i + 1, titleColIdx + 1).setValue(formattedAsgTitle);
+      asgSheet.getRange(i + 1, tagColIdx + 1).setValue(cleanTag);
+      updatedCount++;
+    }
+  }
+  return updatedCount;
+}
+
+function persistListeningDataUrlToDrive_(dataUrl, filePrefix) {
+  if (typeof dataUrl !== 'string' || dataUrl.indexOf('data:') !== 0) {
+    return dataUrl;
+  }
+  const mimeMatch = dataUrl.match(/^data:([^;]+);base64,/i);
+  const mimeType = mimeMatch && mimeMatch[1] ? mimeMatch[1] : 'audio/webm';
+  const ext = mimeType.indexOf('mp3') >= 0 || mimeType.indexOf('mpeg') >= 0
+    ? '.mp3'
+    : (mimeType.indexOf('wav') >= 0 ? '.wav' : (mimeType.indexOf('mp4') >= 0 || mimeType.indexOf('m4a') >= 0 ? '.m4a' : '.webm'));
+  const fileName = filePrefix + '_' + Date.now() + ext;
+  return saveBase64MediaToDrive_(dataUrl, mimeType, fileName);
+}
+
 function handleSavePracticeExercise_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_EXERCISES);
   const ex = payload.exercise || payload;
   const exId = String(ex.exercise_id || ('EX_' + Date.now()));
   const nowStr = new Date().toLocaleString('vi-VN');
+  const cleanTitle = String(ex.title || '').trim() || 'Bài tập mới';
+  const cleanTag = String(ex.lesson_tag || '').trim() || 'Bài 1';
 
-  // Nếu có đoạn audio nhúng Base64 (từ dạng bài Nghe hiểu), đẩy lên Drive để tránh vượt giới hạn 50k ký tự/ô của Google Sheets
+  // Đẩy audio nhúng Base64 (cả ở mức phần nghe chung và mức từng câu hỏi riêng) lên Drive để tránh vượt giới hạn 50k ký tự/ô của Google Sheets
   if (Array.isArray(ex.sections)) {
     for (let sIdx = 0; sIdx < ex.sections.length; sIdx++) {
       const sec = ex.sections[sIdx];
-      if (sec && sec.data && typeof sec.data.audio_url === 'string' && sec.data.audio_url.indexOf('data:') === 0) {
-        const mimeMatch = sec.data.audio_url.match(/^data:([^;]+);base64,/i);
-        const mimeType = mimeMatch && mimeMatch[1] ? mimeMatch[1] : 'audio/webm';
-        const ext = mimeType.indexOf('mp3') >= 0 || mimeType.indexOf('mpeg') >= 0
-          ? '.mp3'
-          : (mimeType.indexOf('wav') >= 0 ? '.wav' : (mimeType.indexOf('mp4') >= 0 || mimeType.indexOf('m4a') >= 0 ? '.m4a' : '.webm'));
-        const fileName = exId + '_' + (sec.section_id || ('listen_' + (sIdx + 1))) + '_' + Date.now() + ext;
-        sec.data.audio_url = saveBase64MediaToDrive_(sec.data.audio_url, mimeType, fileName);
+      if (!sec || !sec.data) continue;
+      const secPrefix = exId + '_' + (sec.section_id || ('listen_' + (sIdx + 1)));
+      if (typeof sec.data.audio_url === 'string' && sec.data.audio_url.indexOf('data:') === 0) {
+        sec.data.audio_url = persistListeningDataUrlToDrive_(sec.data.audio_url, secPrefix);
+      }
+      if (Array.isArray(sec.data.items)) {
+        for (let qIdx = 0; qIdx < sec.data.items.length; qIdx++) {
+          const item = sec.data.items[qIdx];
+          if (item && typeof item.audio_url === 'string' && item.audio_url.indexOf('data:') === 0) {
+            const qPrefix = secPrefix + '_' + (item.id || ('q' + (qIdx + 1)));
+            item.audio_url = persistListeningDataUrlToDrive_(item.audio_url, qPrefix);
+          }
+        }
       }
     }
   }
@@ -1148,8 +1201,8 @@ function handleSavePracticeExercise_(ss, payload) {
 
   const rowData = [
     exId,
-    ex.title || 'Bài tập mới',
-    ex.lesson_tag || 'Bài 1',
+    cleanTitle,
+    cleanTag,
     ex.total_score || 35,
     typeof ex.thresholds === 'object' ? JSON.stringify(ex.thresholds) : String(ex.thresholds_json || '{"very_good":31,"good":25}'),
     typeof ex.sections === 'object' ? JSON.stringify(ex.sections) : String(ex.sections_json || '[]'),
@@ -1161,6 +1214,7 @@ function handleSavePracticeExercise_(ss, payload) {
   } else {
     sheet.appendRow(rowData);
   }
+  syncLinkedPracticeAssignmentMeta_(ss, exId, cleanTitle, cleanTag);
   return { exercise_id: exId };
 }
 
