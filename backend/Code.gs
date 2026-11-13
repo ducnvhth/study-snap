@@ -149,24 +149,10 @@ function doPost(e) {
       });
     }
 
-    if (action === 'clearAllData') {
-      const includeTeachers = Boolean(payload && (payload.include_teachers === true || payload.includeTeachers === true));
-      const clearResult = includeTeachers ? clearAllDataCompletely() : clearAllData();
+    if (action === 'clearAllData' || action === 'clearAllDataCompletely') {
       return jsonResponse({
-        ok: true,
-        message: clearResult.message,
-        isProduction: clearResult.isProduction,
-        data: getBootstrapData_(ss)
-      });
-    }
-
-    if (action === 'clearAllDataCompletely') {
-      const clearResult = clearAllDataCompletely();
-      return jsonResponse({
-        ok: true,
-        message: clearResult.message,
-        isProduction: clearResult.isProduction,
-        data: getBootstrapData_(ss)
+        ok: false,
+        error: 'Chức năng quản trị và làm sạch dữ liệu chỉ được thực hiện trực tiếp trong Google Apps Script.'
       });
     }
 

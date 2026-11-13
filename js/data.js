@@ -1220,8 +1220,6 @@ window.StudySnapLoading = (function () {
     deleteStudentAccount: 'Đang xóa tài khoản học sinh...',
     addVocabulary: 'Đang thêm từ vựng mới...',
     batchAddVocabulary: 'Đang nhập danh sách từ vựng...',
-    clearAllData: 'Đang xóa toàn bộ dữ liệu thử nghiệm...',
-    clearAllDataCompletely: 'Đang xóa trắng toàn bộ dữ liệu...',
     getMedia: 'Đang tải tệp âm thanh...'
   };
 
@@ -1825,41 +1823,6 @@ window.StudySnapStore = (function () {
     return { key: 'needs_review', label: 'Cần ôn tập lại 📚', badgeClass: 'status-missing' };
   }
 
-  async function clearAllTestData(stateObj, options) {
-    const includeTeachers = Boolean(options && (options.includeTeachers === true || options.include_teachers === true));
-    if (includeTeachers) {
-      stateObj.teachers = [];
-    }
-    stateObj.classes = [];
-    stateObj.students = [];
-    stateObj.assignments = [];
-    stateObj.submissions = [];
-    stateObj.vocabulary = [];
-    stateObj.exitTicketLogs = [];
-    stateObj.practiceExercises = [];
-    stateObj.practiceSubmissions = [];
-    stateObj.isClearedForProduction = true;
-    saveState(stateObj);
-
-    try {
-      Object.keys(localStorage).forEach(function (key) {
-        if (
-          key.indexOf('studysnap_mastered_vocab') === 0 ||
-          key.indexOf('studysnap_practice_draft_') === 0
-        ) {
-          localStorage.removeItem(key);
-        }
-      });
-    } catch (e) {
-      // ignore
-    }
-
-    return await syncPostToGas(stateObj, {
-      action: includeTeachers ? 'clearAllDataCompletely' : 'clearAllData',
-      include_teachers: includeTeachers
-    });
-  }
-
   async function fetchWithTimeout(url, options, timeoutMs) {
     if (typeof AbortController === 'undefined') {
       return await fetch(url, options);
@@ -2165,7 +2128,6 @@ window.StudySnapStore = (function () {
     setGasUrl: setGasUrl,
     syncPostToGas: syncPostToGas,
     fetchBootstrapFromGas: fetchBootstrapFromGas,
-    clearAllTestData: clearAllTestData,
     normalizeChineseSentence: normalizeChineseSentence,
     isAnswerMatch: isAnswerMatch,
     isKeywordsMatch: isKeywordsMatch,

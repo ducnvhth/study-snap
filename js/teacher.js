@@ -1679,8 +1679,8 @@
           '<div style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:16px;background:var(--pink-lt);color:var(--ink);margin-bottom:12px;">' +
           '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>' +
           '</div>' +
-          '<p style="margin:0 0 8px;font-size:1rem;font-weight:700;color:var(--ink);">Chưa có bài luyện tập cuối buổi nào</p>' +
-          '<p style="margin:0 0 18px;font-size:0.875rem;color:var(--color-muted-foreground);">Bạn có thể tạo bài tập mới từ đầu, nhập nhanh từ file Excel, hoặc nạp bộ câu hỏi mẫu chuẩn HSK.</p>' +
+          '<p style="margin:0 auto 8px;font-size:1rem;font-weight:700;color:var(--ink);">Chưa có bài luyện tập cuối buổi nào</p>' +
+          '<p style="margin:0 auto 18px;font-size:0.875rem;color:var(--color-muted-foreground);">Bạn có thể tạo bài tập mới từ đầu, nhập nhanh từ file Excel, hoặc nạp bộ câu hỏi mẫu chuẩn HSK.</p>' +
           '<div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">' +
           '<button type="button" class="btn btn-primary" id="btn-empty-new-practice">+ Tạo bài tập mới</button>' +
           '<button type="button" class="btn btn-outline-primary" id="btn-empty-import-practice">Nhập từ Excel</button>' +
@@ -1797,10 +1797,10 @@
       listEl.innerHTML =
         '<div style="padding:32px 20px;text-align:center;background:var(--white);border:1.5px dashed var(--pink-md);border-radius:var(--radius-xl);margin:16px 0;">' +
         '<div style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:16px;background:var(--pink-lt);color:var(--ink);margin-bottom:10px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>' +
-        '<p style="margin:0 0 8px;font-size:1rem;font-weight:700;color:var(--color-primary-deep);">' +
+        '<p style="margin:0 auto 8px;font-size:1rem;font-weight:700;color:var(--color-primary-deep);">' +
         'Bài tập này chưa có câu hỏi nào' +
         '</p>' +
-        '<p style="margin:0 0 16px;font-size:0.875rem;color:var(--color-muted-foreground);">' +
+        '<p style="margin:0 auto 16px;font-size:0.875rem;color:var(--color-muted-foreground);">' +
         'Hãy bấm vào các nút dạng bài bên trên hoặc bấm nút dưới đây để nạp sẵn bộ câu hỏi mẫu:' +
         '</p>' +
         '<button type="button" class="btn btn-primary" id="btn-quick-fill-template">' +
@@ -3231,7 +3231,7 @@
 
     if (manualItems.length === 0) {
       container.innerHTML =
-        '<p style="color:var(--color-muted-foreground);text-align:center;">Bài tập này không có câu Dịch nào cần chấm thủ công.</p>';
+        '<p style="margin:0 auto;color:var(--color-muted-foreground);text-align:center;">Bài tập này không có câu Dịch nào cần chấm thủ công.</p>';
     } else {
       const studentTransAns = (sub.answers && sub.answers[translationSecId]) || {};
       const manualGrades = sub.manual_grades || {};
@@ -4048,38 +4048,6 @@
     const exportCsvBtn = document.getElementById('btn-export-matrix-csv');
     if (exportCsvBtn) {
       exportCsvBtn.addEventListener('click', exportMatrixToCsv);
-    }
-
-    const clearAllBtn = document.getElementById('btn-clear-all-test-data');
-    if (clearAllBtn) {
-      clearAllBtn.addEventListener('click', async function () {
-        const confirmed = window.confirm(
-          'XÁC NHẬN XÓA TOÀN BỘ DỮ LIỆU THỬ NGHIỆM?\n\n' +
-          'Thao tác này sẽ xóa sạch toàn bộ dữ liệu Học sinh, Lớp học, Bài tập về nhà, Bài nộp, Từ vựng, Bài luyện tập và Lịch sử kết quả (chỉ giữ lại tài khoản Giáo viên).\n\n' +
-          'Bạn có chắc chắn muốn tiếp tục?'
-        );
-        if (!confirmed) return;
-
-        window.StudySnapAudio.pauseAll();
-        ui.teacherDraftVoice = null;
-        ui.selectedPracticeExId = null;
-        ui.activeGradingSubId = null;
-        ui.gradingStudentId = '';
-        ui.gradingAssignmentId = '';
-        await runWithLoading(
-          clearAllBtn,
-          'Đang xóa dữ liệu...',
-          async function () {
-            await window.StudySnapStore.clearAllTestData(state);
-          },
-          {
-            title: 'Đang xóa toàn bộ dữ liệu thử nghiệm...',
-            desc: 'Hệ thống đang làm sạch dữ liệu và giữ lại tài khoản Giáo viên.'
-          }
-        );
-        renderAll();
-        showToast('Đã xóa toàn bộ dữ liệu thử nghiệm! Hệ thống đã sẵn sàng cho dữ liệu lớp học thật.');
-      });
     }
 
     const logoutBtn = document.getElementById('btn-teacher-logout');

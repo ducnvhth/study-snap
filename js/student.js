@@ -1390,8 +1390,11 @@
       const container = document.getElementById('student-practice-sections-container');
       if (container) {
         container.innerHTML =
-          '<div style="text-align:center;padding:48px 20px;color:var(--color-muted-foreground);">' +
-          '<h3 style="color:var(--color-foreground);margin-bottom:8px;">Chưa có bài tập nào được giao cho lớp của em</h3>' +
+          '<div class="empty-state-panel">' +
+          '<div class="empty-state-icon" aria-hidden="true">' +
+          '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>' +
+          '</div>' +
+          '<h3>Chưa có bài tập nào được giao cho lớp của em</h3>' +
           '<p>Giáo viên sẽ sớm cập nhật bài tập luyện tập cuối bài cho lớp tại đây.</p>' +
           '</div>';
       }
