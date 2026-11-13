@@ -1,80 +1,61 @@
-# StudySnap — Nền Tảng BVN Đa Phương Tiện, Luyện Tập Cuối Giờ & Ôn Từ Vựng Tương Tác
+# StudySnap — Nền Tảng BVN Đa Phương Tiện, Luyện Tập Cuối Giờ & Ôn Từ Vựng
 
-**StudySnap** là nền tảng học tập tương tác tách biệt rõ theo từng vai trò (**Giáo viên** và **Học sinh**), được thiết kế để vận hành với **chi phí 0đ** trên kiến trúc **Cloudflare Pages + Google Apps Script + Google Sheets / Google Drive**.
-
----
-
-## 1. Kiến Trúc Tách Trang Theo Vai Trò (Multi-Page Role Architecture)
-
-Thay vì gộp chung mọi thứ vào 1 trang duy nhất, StudySnap tách thành **3 trang chuyên biệt** với hệ thống xác thực và phân quyền riêng (`js/auth.js`):
-
-1. **Cổng Đăng Nhập (`index.html` + `js/login.js`)**:
-   - Đăng nhập phân luồng theo vai trò **Học sinh** hoặc **Giáo viên**.
-   - Sau khi xác thực thành công:
-     - Tài khoản **Giáo viên** tự động chuyển hướng sang `teacher.html`.
-     - Tài khoản **Học sinh** tự động chuyển hướng sang `student.html`.
-   - Danh sách đăng nhập nhanh (Quick Demo Login) tự động cập nhật ngay khi Giáo viên tạo thêm tài khoản Học sinh mới.
-
-2. **Không Gian Quản Lý & Chấm Bài Của Giáo Viên (`teacher.html` + `js/teacher.js`)**:
-   - **Chấm BVN & Bảng Tổng Hợp Tự Động**:
-     - Nghe bài thu âm / xem video BVN của từng học sinh, chấm điểm (thang 10), ghi nhận xét văn bản và **thu âm phản hồi giọng nói (Voice Feedback)** trực tiếp trên trình duyệt.
-     - Giao thêm Bài tập về nhà mới cho cả lớp.
-     - **Bảng tự động tổng hợp tiến độ & ý kiến giáo viên**: Hiển thị ma trận học sinh × bài tập, làm nổi bật bạn nào chưa làm (`Chưa làm`), bạn nào chờ chấm (`Chờ chấm`), kèm điểm số và nguyên văn nhận xét + nhãn Voice Feedback của giáo viên ngay trong từng ô. Hỗ trợ lọc nhanh những bạn chưa làm bài và xuất CSV.
-   - **Tạo & Quản Lý Tài Khoản Học Sinh**:
-     - Giáo viên tạo tài khoản mới cho học sinh (`Họ và tên`, `Tên đăng nhập`, `Mật khẩu`, `Lớp học`, `Mục tiêu đầu ra`).
-     - Có nút tạo mật khẩu ngẫu nhiên, sao chép nhanh thông tin đăng nhập để gửi qua Zalo/Messenger cho học sinh, hoặc đặt lại mật khẩu khi học sinh quên.
-   - **Quản Lý Từ Vựng & Kết Quả Cuối Giờ**:
-     - Thêm từ vựng mới vào từng bài học (`Bài 1`, `Bài 2`, `Bài 3`, `Bài 4`...) và theo dõi kết quả làm bài luyện tập cuối giờ của cả lớp.
-
-3. **Không Gian Học Tập Cá Nhân Của Học Sinh (`student.html` + `js/student.js`)**:
-   - Cá nhân hóa 100% theo tài khoản học sinh đang đăng nhập (không hiển thị công cụ chấm bài hay danh sách tài khoản của học sinh khác).
-   - **Bài Tập Về Nhà Của Em**:
-     - Chọn bài tập, thu âm trực tiếp trên trình duyệt hoặc tải file Audio/Video lên hệ thống.
-     - Xem điểm số, đọc nhận xét chi tiết và **bấm nghe trực tiếp phản hồi giọng nói (Voice Feedback) của giáo viên**.
-     - Xem bảng tổng hợp tiến độ và ý kiến giáo viên của riêng bản thân qua từng bài.
-   - **Bài Luyện Tập Cuối Giờ (Exit Ticket)**:
-     - Trắc nghiệm tương tác thay thế Google Forms nhàm chán, có phát âm từ khóa, giải thích đáp án tức thì và tự động lưu kết quả theo tài khoản học sinh.
-   - **Web Ôn Từ Vựng Theo Bài & Tổng Hợp**:
-     - Bấm vào **`Bài 1`**, **`Bài 2`**, **`Bài 3`** để ôn từ vựng của riêng từng bài.
-     - Bấm **`Tổng hợp tất cả các bài`** để gộp toàn bộ từ vựng cuối khóa vào bộ thẻ lật 3D Flashcard và danh sách ôn tập.
+Nền tảng học tập tương tác miễn phí (`0đ`) cho lớp học Tiếng Trung HSK & Ngoại ngữ, tối ưu phản hồi tức thì trên **Cloudflare Workers Static Assets + Cloudflare D1** kết hợp **Google Drive Media Bridge (5TB)**.
 
 ---
 
-## 2. Tài Khoản Dùng Thử Mặc Định
+## Kiến Trúc & Công Nghệ
 
-| Vai trò | Tên đăng nhập | Mật khẩu | Trang đích sau đăng nhập |
-| :--- | :--- | :--- | :--- |
-| **Giáo viên** | `gv_minh` | `123456` | `teacher.html` |
-| **Học sinh 1** | `hs01` | `123456` | `student.html` (Nguyễn Minh Anh) |
-| **Học sinh 2** | `hs02` | `123456` | `student.html` (Trần Hoàng Nam) |
-| **Học sinh 3** | `hs03` | `123456` | `student.html` (Lê Thảo Nguyên) |
-| **Học sinh 4** | `hs04` | `123456` | `student.html` (Phạm Gia Huy) |
-
-*(Giáo viên có thể đăng nhập vào `teacher.html` -> mở tab **Tạo & Quản lý TK Học sinh** để tạo thêm tài khoản mới bất kỳ lúc nào).*
+- **Frontend & Edge Hosting**: HTML5 / CSS3 / Vanilla JS phục vụ qua **Cloudflare Workers (Static Assets)** cấu hình tại [`wrangler.toml`](wrangler.toml) (cùng [`.assetsignore`](.assetsignore) và [`_headers`](_headers) cấp quyền micro/camera).
+- **Database Chính (20–100ms)**: **Cloudflare D1 (SQLite tại Edge)** phục vụ qua endpoint `/api` tại [`src/worker.js`](src/worker.js) & [`functions/api.js`](functions/api.js) *(hỗ trợ cả Cloudflare Workers Builds `npx wrangler deploy` lẫn Cloudflare Pages Functions)*.
+- **Kho Lưu Trữ Media (5TB)**: **Google Drive** qua **Google Apps Script Web App** ([`backend/Code.gs`](backend/Code.gs)) xử lý chuyên biệt `uploadMedia`, `deleteMediaFiles`, `getMedia` (không chờ `LockService` hay đọc Sheets), đồng thời làm fallback dự phòng nếu D1 chưa sẵn sàng.
+- **Tối ưu Audio & Caching**:
+  - Thu âm giọng nói nén `audioBitsPerSecond: 32000` qua `MediaRecorder API`.
+  - Tải file nghe hiểu song song (tối đa 3 file/lượt) lên Google Drive khi lưu đề luyện tập.
+  - Phát lại media qua Cloudflare Edge Cache (`/api?action=media&fileId=...`) + Browser Cache API (`studysnap-drive-media-v1`) + `localStorage` cho từ vựng & trạng thái.
 
 ---
 
-## 3. Cấu Trúc Thư Mục
+## Cấu Trúc Thư Mục
 
 ```text
 study-snap/
-├── index.html                  # Cổng đăng nhập Giáo viên & Học sinh
-├── teacher.html                # Không gian làm việc dành riêng cho Giáo viên
-├── student.html                # Không gian học tập dành riêng cho Học sinh
-├── _headers                    # Cấu hình bảo mật & cache cho Cloudflare Pages
+├── index.html                        # Cổng Đăng Nhập (Học sinh & Giáo viên)
+├── student.html                      # Cổng Học Sinh (BVN Audio/Video, Luyện tập cuối giờ, Flashcard & Trắc nghiệm từ vựng)
+├── teacher.html                      # Cổng Giáo Viên (Chữa BVN + Voice Feedback, Soạn đề Nghe/Dịch/Nối/Trắc nghiệm, Quản lý lớp)
+├── _headers                          # Cấu hình header bảo mật & quyền micro/camera
+├── .assetsignore                     # Ẩn mã nguồn backend/worker/tài liệu khỏi static assets công khai
+├── wrangler.toml                     # Cấu hình Cloudflare Workers Static Assets + D1 binding DB
+├── wrangler.workers.example.toml     # Mẫu cấu hình Cloudflare Workers Static Assets
+├── wrangler.pages.example.toml       # Mẫu cấu hình nếu chuyển sang Cloudflare Pages
 ├── styles/
-│   └── main.css                # Hệ thống giao diện chuẩn DESIGN.md (Education Teal & Achievement Orange)
+│   └── main.css                      # Hệ thống giao diện Education Teal & Coral + responsive
 ├── js/
-│   ├── data.js                 # Dữ liệu khởi tạo, LocalStorage Store & Google Apps Script Sync
-│   ├── auth.js                 # Xác thực đăng nhập, quản lý phiên & bảo vệ route theo vai trò
-│   ├── audio.js                # MediaRecorder thu âm giọng nói, đọc file Audio/Video & phát âm TTS
-│   ├── login.js                # Logic trang đăng nhập (index.html)
-│   ├── teacher.js              # Logic trang Giáo viên (teacher.html)
-│   └── student.js              # Logic trang Học sinh (student.html)
+│   ├── data.js                       # Store, Loading Overlay & Sync Queue (Hybrid Cloudflare D1 + GAS Drive Bridge)
+│   ├── auth.js                       # Quản lý phiên đăng nhập theo vai trò
+│   ├── login.js                      # Xử lý đăng nhập & chuyển cổng
+│   ├── audio.js                      # Thu âm 32kbps, trình phát sóng âm & Cache API + Edge proxy cache
+│   ├── student.js                    # Giao diện & nghiệp vụ Cổng Học Sinh
+│   ├── teacher.js                    # Giao diện & nghiệp vụ Cổng Giáo Viên
+│   ├── vocab_data.js                 # Dữ liệu khởi tạo từ vựng theo bài
+│   └── vocab_suite.js                # Bộ ôn tập từ vựng (Flashcard 3D, Nối từ, Trắc nghiệm, Tổng hợp)
+├── src/
+│   └── worker.js                     # Entry-point Cloudflare Worker phục vụ /api và tài nguyên tĩnh ASSETS
+├── functions/
+│   └── api.js                        # Logic API Cloudflare D1 & Drive Media Proxy (/api)
 ├── backend/
-│   ├── Code.gs                        # Mã nguồn Google Apps Script kết nối Google Sheets & Google Drive
-│   └── HUONG_DAN_CAI_DAT_BACKEND.md   # Hướng dẫn chi tiết từng bước cài đặt Code.gs & Deploy Web App URL
-├── AGENTS.md                          # Quy trình phối hợp 2 skill UI UX Pro Max & Impeccable
-├── PRODUCT.md                  # Ngữ cảnh sản phẩm & kiến trúc kỹ thuật
-└── DESIGN.md                   # Hệ thống thiết kế chuẩn hóa
+│   ├── schema_d1.sql                 # Lược đồ 10 bảng SQLite & 8 index cho Cloudflare D1
+│   ├── Code.gs                       # Google Apps Script Drive Media Bridge + Sheets fallback
+│   └── HUONG_DAN_CAI_DAT_BACKEND.md  # Hướng dẫn cài đặt chi tiết từng bước
+└── design-system/                    # Tài liệu hệ thống thiết kế StudySnap
 ```
+
+---
+
+## Cài Đặt Nhanh
+
+Xem hướng dẫn chi tiết tại [`backend/HUONG_DAN_CAI_DAT_BACKEND.md`](backend/HUONG_DAN_CAI_DAT_BACKEND.md):
+
+1. Cập nhật [`backend/Code.gs`](backend/Code.gs) lên Google Apps Script và xuất bản (**Deploy -> Manage deployments -> Edit -> Version: `New version` -> Deploy**).
+2. Tạo D1 database trên Cloudflare Dashboard (chạy [`backend/schema_d1.sql`](backend/schema_d1.sql) trong D1 Studio) và gắn `database_id` vào `[[d1_databases]]` trong [`wrangler.toml`](wrangler.toml).
+3. Push lên GitHub để Cloudflare Workers Builds chạy **`npx wrangler deploy`** tự động, sau đó mở thử `/api?action=ping`.

@@ -8,9 +8,9 @@ web
 
 ## Stack
 
-- **Frontend & Hosting**: Web App (HTML5 / Tailwind CSS / Modern JS hoặc Vite SPA) triển khai trên **Cloudflare Pages** để tối ưu tốc độ tải trang toàn cầu và miễn phí băng thông.
-- **Backend API**: **Google Apps Script (GAS)** triển khai dưới dạng Web App (`doGet` / `doPost`), xử lý toàn bộ nghiệp vụ API và lưu trữ file ghi âm/video của học sinh cùng file ghi âm phản hồi của giáo viên lên **Google Drive**.
-- **Database**: **Google Sheets** đóng vai trò cơ sở dữ liệu trung tâm để tối ưu chi phí vận hành về **0đ**, dễ dàng quản lý, sao lưu và kiểm tra dữ liệu trực tiếp khi cần.
+- **Frontend & Hosting**: Web App (HTML5 / CSS3 / Vanilla JS) triển khai trên **Cloudflare Workers Static Assets / Cloudflare Pages** cùng endpoint **`/api`** để tối ưu tốc độ tải trang toàn cầu và miễn phí băng thông.
+- **Database Chính**: **Cloudflare D1 (SQLite tại Edge)** lưu toàn bộ dữ liệu có cấu trúc (`teachers`, `classes`, `students`, `assignments`, `submissions`, `exit_tickets`, `vocabulary`, `practice_exercises`, `practice_submissions`) với độ trễ ~20–100ms, hoàn toàn miễn phí (`0đ`, không cần thẻ tín dụng).
+- **Media Bridge & Kho Lưu Trữ 5TB**: **Google Apps Script (GAS)** Web App + **Google Drive** đóng vai trò kho lưu trữ tệp ghi âm/video của học sinh, voice feedback của giáo viên và file nghe hiểu, kết hợp proxy cache tại Cloudflare Edge (`/api?action=media`) & trình duyệt. Google Sheets được giữ làm nguồn dự phòng / tự động di trú 1 lần sang D1 khi khởi tạo.
 
 ## Users
 
@@ -82,8 +82,8 @@ Dự án bao gồm **3 phân hệ chức năng cốt lõi (Core Modules)** hoạ
 ## Capabilities and Constraints
 
 - **Ràng buộc Hạ tầng & Chi phí**:
-  - Không sử dụng server trả phí. Toàn bộ dữ liệu cấu trúc lưu trên **Google Sheets**; toàn bộ file media (audio/video học sinh nộp và voice feedback của giáo viên) lưu trên **Google Drive** thông qua **Google Apps Script**.
-  - Frontend tĩnh host trên **Cloudflare Pages**, giao tiếp với Google Apps Script qua HTTPS JSON API (`text/plain;charset=utf-8` khi `POST` để tránh lỗi CORS preflight của GAS).
+  - Không sử dụng server trả phí hay dịch vụ yêu cầu thẻ tín dụng. Toàn bộ dữ liệu có cấu trúc lưu trên **Cloudflare D1** qua **Cloudflare Worker (`src/worker.js` / `functions/api.js` tại `/api`)**; toàn bộ file media (audio/video học sinh nộp, file nghe hiểu và voice feedback của giáo viên) lưu trên **Google Drive 5TB** thông qua **Google Apps Script**.
+  - Frontend tĩnh host trên **Cloudflare Workers Static Assets / Pages**, giao tiếp đồng nhất qua `/api` (`application/json`) với D1 và fallback/media-bridge qua HTTPS JSON (`text/plain;charset=utf-8` khi `POST` để tránh lỗi CORS preflight của GAS).
 - **Trải nghiệm tốc độ cao (Zero-Friction UX)**:
   - Vì Google Apps Script có độ trễ khởi động (1–3 giây), giao diện phải áp dụng bộ nhớ đệm cục bộ (`localStorage` / `IndexedDB` + Stale-While-Revalidate) cho kho từ vựng và danh sách bài học để thao tác chuyển giữa `Bài 1`, `Bài 2` và `Tổng hợp` diễn ra tức thì (0ms delay).
   - Hỗ trợ nén/kiểm soát dung lượng file ghi âm & video trước khi tải lên và hiển thị thanh tiến trình tải lên rõ ràng.
@@ -131,7 +131,7 @@ Dự án bao gồm **3 phân hệ chức năng cốt lõi (Core Modules)** hoạ
 
 - Quy trình phối hợp 2 skill được định nghĩa tại [`AGENTS.md`](AGENTS.md).
 - Hệ thống token thiết kế chi tiết được lưu tại [`DESIGN.md`](DESIGN.md) và [`design-system/studysnap/MASTER.md`](design-system/studysnap/MASTER.md).
-- Dự án đang ở giai đoạn khởi tạo (greenfield); không bịa đặt số liệu học sinh ảo hoặc đánh giá giả mạo trong giao diện chính thức (chỉ sử dụng dữ liệu mẫu minh họa rõ ràng khi chạy chế độ demo/khởi tạo Google Sheets).
+- Dự án sử dụng kiến trúc lai D1 + Google Drive; không bịa đặt số liệu học sinh ảo hoặc đánh giá giả mạo trong giao diện chính thức (chỉ sử dụng dữ liệu mẫu minh họa rõ ràng khi chạy chế độ demo cục bộ `file://` hoặc chưa kết nối backend).
 
 ## Product Principles
 
@@ -139,7 +139,7 @@ Dự án bao gồm **3 phân hệ chức năng cốt lõi (Core Modules)** hoạ
 2. **Nhìn một bảng, nắm trọn lớp học (Single-Glance Progress & Feedback Matrix)**: Bảng tổng hợp tự động không chỉ báo ai đã làm hay chưa làm mà còn hiển thị luôn nhận xét và phản hồi giọng nói của giáo viên trong từng bài.
 3. **Học tập là niềm vui, không phải điền biểu mẫu (Playful Learning Over Form-Filling)**: Bài luyện tập cuối giờ và web ôn từ vựng phải mang lại cảm giác tương tác tức thì, sinh động, chạm là phản hồi ngay.
 4. **Một chạm tới đúng bài học (One-Tap Lesson & Master Review)**: Muốn ôn Bài 1 bấm Bài 1, muốn ôn Bài 2 bấm Bài 2, cuối khóa bấm "Tổng hợp" là có ngay toàn bộ kho từ vựng mà không cần tìm kiếm phức tạp.
-5. **Tối ưu chi phí vận hành tuyệt đối (Zero-Cost Serverless Architecture)**: Tận dụng thông minh Cloudflare Pages, Google Apps Script và Google Sheets để hệ thống chạy bền bỉ, nhanh và hoàn toàn miễn phí.
+5. **Tối ưu chi phí vận hành tuyệt đối (Zero-Cost Serverless Architecture)**: Kết hợp **Cloudflare Pages + D1** (xử lý dữ liệu siêu nhanh ở Edge) và **Google Apps Script + Google Drive** (lưu trữ media 5TB) để hệ thống vận hành mượt mà, bền bỉ và hoàn toàn miễn phí (`0đ`).
 
 ## Accessibility & Inclusion
 

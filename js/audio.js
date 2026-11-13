@@ -11,7 +11,131 @@ window.StudySnapAudio = (function () {
 
   // Quản lý các phiên phát âm thanh tương tác (Play / Pause / Seek / Time readout)
   const playerSessions = {};
+  const resolvedMediaCache = {};
+  const inflightMediaFetches = {};
+  const MEDIA_CACHE_NAME = 'studysnap-drive-media-v1';
   let activePlayerId = null;
+
+  async function readBrowserCachedMedia(fileId) {
+    if (!fileId || typeof caches === 'undefined') return '';
+    try {
+      const cache = await caches.open(MEDIA_CACHE_NAME);
+      const cached = await cache.match('https://studysnap-media-cache.local/drive/' + encodeURIComponent(fileId));
+      if (!cached) return '';
+      const blob = await cached.blob();
+      if (!blob || blob.size === 0) return '';
+      if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+        return URL.createObjectURL(blob);
+      }
+      return '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  async function writeBrowserCachedMedia(fileId, blob) {
+    if (!fileId || !blob || typeof caches === 'undefined' || typeof Response === 'undefined') return;
+    try {
+      const cache = await caches.open(MEDIA_CACHE_NAME);
+      const headers = { 'Content-Type': blob.type || 'audio/webm' };
+      await cache.put(
+        'https://studysnap-media-cache.local/drive/' + encodeURIComponent(fileId),
+        new Response(blob, { status: 200, headers: headers })
+      );
+    } catch (e) {
+      // Ignore cache quota errors
+    }
+  }
+
+  async function dataUrlToBlob(dataUrl) {
+    try {
+      const res = await fetch(dataUrl);
+      return await res.blob();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function resolveDriveMediaSource(driveFileId) {
+    if (!driveFileId) return '';
+    if (resolvedMediaCache[driveFileId]) return resolvedMediaCache[driveFileId];
+    if (inflightMediaFetches[driveFileId]) return await inflightMediaFetches[driveFileId];
+
+    inflightMediaFetches[driveFileId] = (async function () {
+      try {
+        const cachedObjUrl = await readBrowserCachedMedia(driveFileId);
+        if (cachedObjUrl) {
+          resolvedMediaCache[driveFileId] = cachedObjUrl;
+          return cachedObjUrl;
+        }
+
+        const canUseEdgeMedia =
+          typeof window !== 'undefined' &&
+          window.location &&
+          /^https?:$/i.test(window.location.protocol) &&
+          window.StudySnapStore &&
+          typeof window.StudySnapStore.isUsingD1 === 'function' &&
+          window.StudySnapStore.isUsingD1();
+
+        if (canUseEdgeMedia) {
+          try {
+            const edgeRes = await fetch('/api?action=media&fileId=' + encodeURIComponent(driveFileId));
+            const ct = String(edgeRes.headers.get('content-type') || '').toLowerCase();
+            if (edgeRes.ok && ct.indexOf('application/json') === -1 && ct.indexOf('text/html') === -1) {
+              const blob = await edgeRes.blob();
+              if (blob && blob.size > 0) {
+                await writeBrowserCachedMedia(driveFileId, blob);
+                const objUrl =
+                  typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+                    ? URL.createObjectURL(blob)
+                    : '';
+                if (objUrl) {
+                  resolvedMediaCache[driveFileId] = objUrl;
+                  return objUrl;
+                }
+              }
+            }
+          } catch (edgeErr) {
+            // Fall through to GAS Drive Bridge getMedia
+          }
+        }
+
+        const gasUrl =
+          window.StudySnapStore && window.StudySnapStore.getGasUrl
+            ? window.StudySnapStore.getGasUrl()
+            : '';
+        if (!gasUrl) return '';
+
+        const fetchReq = fetch(gasUrl + '?action=getMedia&fileId=' + encodeURIComponent(driveFileId)).then(function (r) {
+          return r.json();
+        });
+        const json = window.StudySnapLoading
+          ? await window.StudySnapLoading.trackPromise('getMedia', fetchReq)
+          : await fetchReq;
+
+        if (json && json.ok && json.dataUrl) {
+          const blob = await dataUrlToBlob(json.dataUrl);
+          if (blob && blob.size > 0) {
+            await writeBrowserCachedMedia(driveFileId, blob);
+            if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+              const objUrl = URL.createObjectURL(blob);
+              resolvedMediaCache[driveFileId] = objUrl;
+              return objUrl;
+            }
+          }
+          resolvedMediaCache[driveFileId] = json.dataUrl;
+          return json.dataUrl;
+        }
+        return '';
+      } catch (err) {
+        return '';
+      } finally {
+        delete inflightMediaFetches[driveFileId];
+      }
+    })();
+
+    return await inflightMediaFetches[driveFileId];
+  }
 
   const PLAYER_ICONS = {
     play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>',
@@ -175,19 +299,22 @@ window.StudySnapAudio = (function () {
 
   function getOrCreateSession(playerEl) {
     const id = playerEl.getAttribute('data-voice-player');
-    const url = playerEl.getAttribute('data-voice-url') || '';
+    const rawUrl = playerEl.getAttribute('data-voice-url') || '';
+    const driveId = extractDriveFileId(rawUrl);
+    const effectiveUrl = (driveId && resolvedMediaCache[driveId]) ? resolvedMediaCache[driveId] : rawUrl;
     const durStr = playerEl.getAttribute('data-voice-duration') || '00:40';
     const fallbackText = playerEl.getAttribute('data-voice-fallback') || '你好，老师！';
     const lang = playerEl.getAttribute('data-voice-lang') || 'zh-CN';
     const totalSec = parseDurationToSeconds(durStr);
 
-    if (!playerSessions[id] || playerSessions[id].url !== url) {
+    if (!playerSessions[id] || playerSessions[id].rawUrl !== rawUrl) {
       if (playerSessions[id]) {
         pauseSession(id);
       }
       playerSessions[id] = {
         id: id,
-        url: url,
+        rawUrl: rawUrl,
+        url: effectiveUrl,
         fallbackText: fallbackText,
         lang: lang,
         totalSeconds: totalSec,
@@ -196,11 +323,14 @@ window.StudySnapAudio = (function () {
         isPlaying: false,
         audioEl: null,
         simTimer: null,
-        isRealAudio: url.indexOf('data:') === 0 || url.indexOf('blob:') === 0 || url.indexOf('http') === 0,
+        isRealAudio: effectiveUrl.indexOf('data:') === 0 || effectiveUrl.indexOf('blob:') === 0 || effectiveUrl.indexOf('http') === 0,
         fetchingDriveMedia: false
       };
     } else {
       playerSessions[id].fallbackText = fallbackText;
+      if (driveId && resolvedMediaCache[driveId] && playerSessions[id].url !== resolvedMediaCache[driveId]) {
+        playerSessions[id].url = resolvedMediaCache[driveId];
+      }
     }
     return playerSessions[id];
   }
@@ -359,23 +489,17 @@ window.StudySnapAudio = (function () {
       await session.audioEl.play();
     } catch (err) {
       // Nếu file bị trình duyệt chặn CORS redirect trên thẻ <audio>,
-      // tự động tải dữ liệu Base64 qua API (?action=getMedia&fileId=...)
+      // ưu tiên đọc từ Cache / Cloudflare Edge proxy rồi fallback sang GAS (?action=getMedia&fileId=...)
       const driveFileId = extractDriveFileId(session.url);
-      if (driveFileId && !session.fetchingDriveMedia && window.StudySnapStore && window.StudySnapStore.getGasUrl) {
+      if (driveFileId && !session.fetchingDriveMedia) {
         session.fetchingDriveMedia = true;
         session.isPlaying = false;
         syncPlayerDom(session.id);
         try {
-          const gasUrl = window.StudySnapStore.getGasUrl();
-          const fetchReq = fetch(gasUrl + '?action=getMedia&fileId=' + encodeURIComponent(driveFileId)).then(function (r) {
-            return r.json();
-          });
-          const json = window.StudySnapLoading
-            ? await window.StudySnapLoading.trackPromise('getMedia', fetchReq)
-            : await fetchReq;
-          if (json && json.ok && json.dataUrl) {
-            session.url = json.dataUrl;
-            session.audioEl.src = json.dataUrl;
+          const resolvedSrc = await resolveDriveMediaSource(driveFileId);
+          if (resolvedSrc) {
+            session.url = resolvedSrc;
+            session.audioEl.src = resolvedSrc;
             session.audioEl.currentTime = session.currentSeconds;
             session.fetchingDriveMedia = false;
             session.isPlaying = true;
@@ -490,11 +614,28 @@ window.StudySnapAudio = (function () {
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       recordedChunks = [];
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : 'audio/mp4';
+      let mimeType = 'audio/webm';
+      if (typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        }
+      }
 
-      activeRecorder = new MediaRecorder(stream);
+      const recorderOptions = {
+        mimeType: mimeType,
+        audioBitsPerSecond: 32000
+      };
+      try {
+        activeRecorder = new MediaRecorder(stream, recorderOptions);
+      } catch (optErr) {
+        try {
+          activeRecorder = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
+        } catch (fallbackErr) {
+          activeRecorder = new MediaRecorder(stream);
+        }
+      }
       activeRecorder.ondataavailable = function (e) {
         if (e.data && e.data.size > 0) {
           recordedChunks.push(e.data);

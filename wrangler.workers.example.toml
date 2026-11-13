@@ -1,0 +1,19 @@
+# Mẫu cấu hình dành riêng nếu deploy StudySnap bằng Cloudflare Workers (Static Assets + Worker script)
+# thay cho Cloudflare Pages (`functions/api.js`).
+# Khi dùng Workers Static Assets: chạy `npx wrangler deploy` sau khi đổi tên file này thành `wrangler.toml`
+# và điền đúng `database_id` UUID thật từ Cloudflare Dashboard.
+
+name = "study-snap"
+main = "src/worker.js"
+compatibility_date = "2024-11-01"
+
+[assets]
+directory = "."
+binding = "ASSETS"
+run_worker_first = ["/api", "/api/*"]
+
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "studysnap-db"
+# database_id = "<DAN-UUID-DATABASE-ID-TU-CLOUDFLARE-DASHBOARD>"
+

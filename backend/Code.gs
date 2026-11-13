@@ -280,16 +280,32 @@ function doGet(e) {
       if (!fileId) {
         return jsonResponse({ ok: false, error: 'Thiếu fileId.' });
       }
+      const cache = getScriptCacheSafe_();
+      const cacheKey = 'MEDIA_CACHE_' + fileId;
+      if (cache) {
+        try {
+          const cachedRaw = cache.get(cacheKey);
+          if (cachedRaw) {
+            return jsonResponse(JSON.parse(cachedRaw));
+          }
+        } catch (err) {}
+      }
       const file = DriveApp.getFileById(fileId);
       const blob = file.getBlob();
       const mimeType = blob.getContentType() || 'audio/webm';
       const base64 = Utilities.base64Encode(blob.getBytes());
-      return jsonResponse({
+      const resObj = {
         ok: true,
         fileId: fileId,
         mimeType: mimeType,
         dataUrl: 'data:' + mimeType + ';base64,' + base64
-      });
+      };
+      if (cache && resObj.dataUrl.length < 85000) {
+        try {
+          cache.put(cacheKey, JSON.stringify(resObj), 21600);
+        } catch (err) {}
+      }
+      return jsonResponse(resObj);
     }
 
     const curVer = getDataVersion_();
@@ -372,12 +388,53 @@ function buildMutationResponse_(ss, payload, preVer, extraFields) {
 }
 
 function doPost(e) {
+  let rawBody = '{}';
+  let payload = {};
+  try {
+    rawBody = (e && e.postData && e.postData.contents) ? e.postData.contents : '{}';
+    payload = JSON.parse(rawBody);
+  } catch (parseErr) {
+    return jsonResponse({ ok: false, error: 'Dữ liệu gửi lên không hợp lệ.' });
+  }
+
+  const action = String(payload.action || '');
+
+  // Cầu nối Drive nhanh cho kiến trúc lai Cloudflare D1 + Google Drive (không chạm Google Sheets, không chờ LockService)
+  if (action === 'uploadMedia') {
+    try {
+      const dataInput = payload.base64_data || payload.data_url || payload.media_base64 || '';
+      if (!dataInput) {
+        return jsonResponse({ ok: false, error: 'Thiếu dữ liệu tệp media.' });
+      }
+      const mimeType = String(payload.mime_type || 'audio/webm');
+      const fileName = String(payload.filename || ('StudySnap_' + Date.now()));
+      const mediaUrl = saveBase64MediaToDrive_(dataInput, mimeType, fileName);
+      const idMatch = mediaUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      return jsonResponse({
+        ok: true,
+        fileId: idMatch && idMatch[1] ? idMatch[1] : '',
+        media_url: mediaUrl
+      });
+    } catch (uploadErr) {
+      return jsonResponse({
+        ok: false,
+        error: 'Không thể lưu tệp lên Google Drive lúc này.'
+      });
+    }
+  }
+
+  if (action === 'deleteMediaFiles') {
+    try {
+      const trashedCount = handleDeleteMediaFiles_(payload);
+      return jsonResponse({ ok: true, trashedCount: trashedCount });
+    } catch (delErr) {
+      return jsonResponse({ ok: false, error: 'Không thể dọn tệp Google Drive.' });
+    }
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    const rawBody = (e && e.postData && e.postData.contents) ? e.postData.contents : '{}';
-    const payload = JSON.parse(rawBody);
-    const action = payload.action || '';
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     ensureSheetsExistFast_(ss);
 
@@ -1299,17 +1356,78 @@ function handleDeleteAssignment_(ss, payload) {
   };
 }
 
+function getOrCreateUploadFolder_() {
+  const folderPropKey = 'STUDYSNAP_DRIVE_FOLDER_ID';
+  const cache = getScriptCacheSafe_();
+  let folderId = '';
+  if (cache) {
+    try {
+      folderId = String(cache.get(folderPropKey) || '');
+    } catch (e) {}
+  }
+  if (!folderId) {
+    try {
+      folderId = String(PropertiesService.getScriptProperties().getProperty(folderPropKey) || '');
+    } catch (e) {}
+  }
+  if (folderId) {
+    try {
+      const existingFolder = DriveApp.getFolderById(folderId);
+      if (existingFolder && !existingFolder.isTrashed()) {
+        if (cache) {
+          try { cache.put(folderPropKey, folderId, 21600); } catch (e) {}
+        }
+        return existingFolder;
+      }
+    } catch (e) {}
+  }
+
+  const folders = DriveApp.getFoldersByName(DRIVE_FOLDER_NAME);
+  const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(DRIVE_FOLDER_NAME);
+  const resolvedId = folder && typeof folder.getId === 'function' ? folder.getId() : '';
+  if (resolvedId) {
+    try {
+      PropertiesService.getScriptProperties().setProperty(folderPropKey, resolvedId);
+    } catch (e) {}
+    if (cache) {
+      try { cache.put(folderPropKey, resolvedId, 21600); } catch (e) {}
+    }
+  }
+  return folder;
+}
+
 function saveBase64MediaToDrive_(base64Data, mimeType, fileName) {
   const cleaned = base64Data.indexOf(',') >= 0 ? base64Data.split(',')[1] : base64Data;
   const bytes = Utilities.base64Decode(cleaned);
   const blob = Utilities.newBlob(bytes, mimeType, fileName);
 
-  const folders = DriveApp.getFoldersByName(DRIVE_FOLDER_NAME);
-  const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(DRIVE_FOLDER_NAME);
+  const folder = getOrCreateUploadFolder_();
   const file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
   return 'https://drive.google.com/uc?export=download&id=' + file.getId();
+}
+
+function handleDeleteMediaFiles_(payload) {
+  let trashedCount = 0;
+  const seenIds = {};
+  const urls = Array.isArray(payload && payload.urls) ? payload.urls : [];
+  urls.forEach(function (u) {
+    const m = String(u || '').match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (m && m[1]) seenIds[m[1]] = true;
+  });
+  const fileIds = Array.isArray(payload && payload.fileIds) ? payload.fileIds : [];
+  fileIds.forEach(function (id) {
+    const clean = String(id || '').trim();
+    if (clean) seenIds[clean] = true;
+  });
+  Object.keys(seenIds).forEach(function (fileId) {
+    try {
+      DriveApp.getFileById(fileId).setTrashed(true);
+      trashedCount++;
+    } catch (e) {}
+  });
+  return trashedCount;
 }
 
 function handleSubmitPracticeExercise_(ss, payload) {

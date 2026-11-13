@@ -1,8 +1,13 @@
 name = "study-snap"
+main = "src/worker.js"
 compatibility_date = "2024-11-01"
 
 [assets]
 directory = "."
+binding = "ASSETS"
+run_worker_first = ["/api", "/api/*"]
 
-# Tương thích Cloudflare Pages
-pages_build_output_dir = "."
+[[d1_databases]]
+binding = "DB"
+database_name = "studysnap-db"
+database_id = "50f7b5d6-e11e-451f-acb2-1b97e583041a"

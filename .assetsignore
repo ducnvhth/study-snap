@@ -1,0 +1,13 @@
+.git/
+.gitignore
+.assetsignore
+.agent/
+.wrangler/
+backend/
+design-system/
+functions/
+src/
+node_modules/
+wrangler.toml
+wrangler.*.toml
+*.md

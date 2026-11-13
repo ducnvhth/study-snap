@@ -1,0 +1,16 @@
+# Mẫu cấu hình Cloudflare Pages nếu muốn quản lý Binding bằng file thay vì Dashboard UI.
+# Lưu ý QUAN TRỌNG:
+# - Nếu bạn gắn D1 Database (`DB`) trực tiếp trên Cloudflare Pages Dashboard (Settings -> Bindings),
+#   KHÔNG nên đổi tên file này thành `wrangler.toml` mà để trống `[[d1_databases]]`,
+#   vì sự tồn tại của `wrangler.toml` sẽ khiến Pages bỏ qua các binding cấu hình trên Dashboard.
+# - Chỉ sao chép thành `wrangler.toml` khi bạn điền đúng `database_id` UUID thật của mình.
+
+name = "study-snap"
+compatibility_date = "2024-11-01"
+pages_build_output_dir = "."
+
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "studysnap-db"
+# database_id = "<DAN-UUID-DATABASE-ID-TU-CLOUDFLARE-DASHBOARD>"
+

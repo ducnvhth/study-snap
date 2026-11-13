@@ -6723,6 +6723,12 @@
           return c.class_name.trim().toLowerCase() !== clsName.trim().toLowerCase();
         });
         window.StudySnapStore.saveState(state);
+        await runWithLoading(deleteClassBtn, 'Đang xóa lớp...', async function () {
+          await window.StudySnapStore.syncPostToGas(state, {
+            action: 'deleteClass',
+            class_name: clsName
+          });
+        });
         if (ui.studentAccountsClassFilter === clsName) ui.studentAccountsClassFilter = 'all';
         renderAll();
         showToast('Đã xóa lớp học "' + clsName + '"!');
@@ -6754,7 +6760,25 @@
             targetClass = available[num - 1];
           }
           st.class_name = targetClass;
+          if (
+            targetClass !== 'Chưa xếp lớp' &&
+            Array.isArray(state.classes) &&
+            !state.classes.some(function (c) { return String(c.class_name || '').toLowerCase() === targetClass.toLowerCase(); })
+          ) {
+            state.classes.push({
+              class_id: 'CLS_' + Date.now(),
+              class_name: targetClass,
+              created_at: new Date().toLocaleDateString('vi-VN')
+            });
+          }
           window.StudySnapStore.saveState(state);
+          await runWithLoading(changeClassBtn, 'Đang đổi lớp...', async function () {
+            await window.StudySnapStore.syncPostToGas(state, {
+              action: 'changeStudentClass',
+              student_id: st.student_id,
+              class_name: targetClass
+            });
+          });
           renderAll();
           showToast('Đã chuyển học sinh ' + st.full_name + ' sang ' + targetClass + '!');
         }

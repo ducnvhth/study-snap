@@ -1215,11 +1215,15 @@ window.StudySnapLoading = (function () {
     unassignAssignment: 'Đang hủy giao bài cho lớp...',
     saveTeacherFeedback: 'Đang lưu nhận xét & phản hồi giọng nói...',
     createClass: 'Đang tạo lớp học mới...',
+    deleteClass: 'Đang xóa lớp học...',
+    changeStudentClass: 'Đang chuyển lớp cho học sinh...',
     createStudentAccount: 'Đang tạo tài khoản học sinh...',
     resetStudentPassword: 'Đang cập nhật mật khẩu học sinh...',
     deleteStudentAccount: 'Đang xóa tài khoản học sinh...',
     addVocabulary: 'Đang thêm từ vựng mới...',
     batchAddVocabulary: 'Đang nhập danh sách từ vựng...',
+    uploadMedia: 'Đang tải tệp âm thanh/video lên Google Drive...',
+    importFromBootstrapData: 'Đang chuyển dữ liệu sang Cloudflare D1...',
     getMedia: 'Đang tải tệp âm thanh...'
   };
 
@@ -1283,6 +1287,18 @@ window.StudySnapLoading = (function () {
     createClass: {
       title: 'Đang tạo lớp học mới...',
       desc: 'Vui lòng đợi hệ thống cập nhật danh sách lớp học.'
+    },
+    deleteClass: {
+      title: 'Đang xóa lớp học...',
+      desc: 'Vui lòng đợi hệ thống cập nhật danh sách lớp và học sinh.'
+    },
+    changeStudentClass: {
+      title: 'Đang chuyển lớp cho học sinh...',
+      desc: 'Vui lòng đợi hệ thống lưu lớp học mới.'
+    },
+    importFromBootstrapData: {
+      title: 'Đang chuyển dữ liệu sang Cloudflare D1...',
+      desc: 'Hệ thống đang đồng bộ dữ liệu ban đầu sang cơ sở dữ liệu tốc độ cao.'
     },
     createStudentAccount: {
       title: 'Đang tạo tài khoản học sinh...',
@@ -1756,6 +1772,10 @@ window.StudySnapStore = (function () {
   const STORAGE_KEY = 'studysnap_app_state_zh_v1';
   const GAS_URL_KEY = 'studysnap_gas_webapp_url';
   const DEFAULT_GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwVkdgBgbyjOe9vFz-8dhut231bViQkEOgyUEwJbFHN1ww16w-Vkgq45IB9d1baxNRcaw/exec';
+  const D1_API_ENDPOINT = '/api';
+  let backendMode = 'unknown';
+  let inflightProbePromise = null;
+  let inflightMigrationPromise = null;
   let inflightBootstrapPromise = null;
   let writeSyncQueue = Promise.resolve();
 
@@ -1789,7 +1809,13 @@ window.StudySnapStore = (function () {
           }
           (parsed.students || []).forEach(function (st) {
             const c = (st.class_name || '').trim();
-            if (c && !parsed.classes.some(function (cls) { return cls.class_name.toLowerCase() === c.toLowerCase(); })) {
+            if (
+              c &&
+              c !== 'Chưa xếp lớp' &&
+              c !== 'all' &&
+              c !== 'unassigned' &&
+              !parsed.classes.some(function (cls) { return cls.class_name.toLowerCase() === c.toLowerCase(); })
+            ) {
               parsed.classes.push({
                 class_id: 'CLS_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                 class_name: c,
@@ -1862,7 +1888,8 @@ window.StudySnapStore = (function () {
     if (action === 'submitHomework' && json.submission) {
       const targetAsgId = String(payload.assignment_id || '').trim();
       const targetStuId = String(payload.student_id || '').trim();
-      const subList = Array.isArray(stateObj.submissions) ? stateObj.submissions : [];
+      if (!Array.isArray(stateObj.submissions)) stateObj.submissions = [];
+      const subList = stateObj.submissions;
       const found = subList.find(function (s) {
         return (
           (json.submission.submission_id && s.submission_id === json.submission.submission_id) ||
@@ -1873,6 +1900,17 @@ window.StudySnapStore = (function () {
         if (json.submission.submission_id) found.submission_id = json.submission.submission_id;
         if (json.submission.media_url) found.media_url = json.submission.media_url;
         if (json.submission.status) found.status = json.submission.status;
+      } else if (targetAsgId && targetStuId) {
+        subList.push({
+          submission_id: json.submission.submission_id || ('SUB_' + Date.now()),
+          assignment_id: targetAsgId,
+          student_id: targetStuId,
+          student_note: String(payload.student_note || ''),
+          media_type: String(payload.media_type || 'audio'),
+          media_url: json.submission.media_url || String(payload.media_url || ''),
+          media_duration: String(payload.media_duration || '01:00'),
+          status: json.submission.status || 'submitted'
+        });
       }
     } else if (action === 'saveTeacherFeedback' && json.submission) {
       const targetAsgId = String(payload.assignment_id || '').trim();
@@ -1963,7 +2001,15 @@ window.StudySnapStore = (function () {
       }
     }
 
-    if (
+    if (Array.isArray(remoteData.classes) && (remoteData.classes.length > 0 || remoteData.isProduction === true || stateObj.isClearedForProduction === true)) {
+      stateObj.classes = remoteData.classes.map(function (c) {
+        return {
+          class_id: c.class_id || ('CLS_' + Date.now()),
+          class_name: String(c.class_name || '').trim(),
+          created_at: formatCleanDate(c.created_at) || '01/11/2026'
+        };
+      }).filter(function (c) { return Boolean(c.class_name); });
+    } else if (
       (remoteIsCleared || stateObj.isClearedForProduction === true) &&
       Array.isArray(remoteData.students) &&
       remoteData.students.length === 0 &&
@@ -1984,6 +2030,23 @@ window.StudySnapStore = (function () {
           password: String(st.password || '123456'),
           created_at: formatCleanDate(st.created_at) || '01/11/2026'
         };
+      });
+      stateObj.students.forEach(function (st) {
+        const c = String(st.class_name || '').trim();
+        if (
+          c &&
+          c !== 'Chưa xếp lớp' &&
+          c !== 'all' &&
+          c !== 'unassigned' &&
+          Array.isArray(stateObj.classes) &&
+          !stateObj.classes.some(function (cls) { return String(cls.class_name || '').toLowerCase() === c.toLowerCase(); })
+        ) {
+          stateObj.classes.push({
+            class_id: 'CLS_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            class_name: c,
+            created_at: st.created_at || '01/11/2026'
+          });
+        }
       });
     }
     if (Array.isArray(remoteData.assignments)) {
@@ -2209,9 +2272,287 @@ window.StudySnapStore = (function () {
     }
   }
 
+  function canProbeD1Endpoint() {
+    return Boolean(
+      typeof window !== 'undefined' &&
+        window.location &&
+        /^https?:$/i.test(String(window.location.protocol || '')) &&
+        typeof fetch === 'function'
+    );
+  }
+
+  async function postD1Json(bodyObj, timeoutMs) {
+    const response = await fetchWithTimeout(
+      D1_API_ENDPOINT,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyObj)
+      },
+      timeoutMs || 20000
+    );
+    const json = await response.json();
+    return { response: response, json: json };
+  }
+
+  async function probeD1Mode() {
+    if (backendMode !== 'unknown') return backendMode;
+    if (!canProbeD1Endpoint()) {
+      backendMode = 'gas';
+      return backendMode;
+    }
+    if (inflightProbePromise) return await inflightProbePromise;
+    inflightProbePromise = (async function () {
+      try {
+        const res = await fetchWithTimeout(D1_API_ENDPOINT + '?action=ping', {}, 5000);
+        const json = await res.json();
+        if (json && json.backend === 'cloudflare-d1' && !json.d1Missing && res.ok) {
+          backendMode = 'd1';
+          return 'd1';
+        }
+      } catch (e) {
+        // Fallback sang GAS neu khong co Pages Function /api
+      } finally {
+        inflightProbePromise = null;
+      }
+      backendMode = 'gas';
+      return 'gas';
+    })();
+    return await inflightProbePromise;
+  }
+
+  async function ensureD1Migrated(stateObj) {
+    if (inflightMigrationPromise) return await inflightMigrationPromise;
+    inflightMigrationPromise = (async function () {
+      try {
+        const gasUrl = getGasUrl();
+        let migratedFromSheets = false;
+        if (gasUrl) {
+          try {
+            const gasRes = await fetchWithTimeout(gasUrl + '?action=bootstrap', {}, 25000);
+            const gasJson = await gasRes.json();
+            if (gasJson && gasJson.ok && gasJson.data) {
+              const d = gasJson.data;
+              const hasAnyGasData = Boolean(
+                d.isProduction === true ||
+                  (Array.isArray(d.teachers) && d.teachers.length > 0) ||
+                  (Array.isArray(d.students) && d.students.length > 0) ||
+                  (Array.isArray(d.assignments) && d.assignments.length > 0) ||
+                  (Array.isArray(d.practiceExercises) && d.practiceExercises.length > 0) ||
+                  (Array.isArray(d.vocabulary) && d.vocabulary.length > 0)
+              );
+              if (hasAnyGasData) {
+                const importOut = await postD1Json(
+                  { action: 'importFromBootstrapData', data: d },
+                  30000
+                );
+                if (importOut && importOut.json && importOut.json.ok) {
+                  migratedFromSheets = true;
+                  if (importOut.json.version && stateObj) {
+                    stateObj.syncVersion = String(importOut.json.version);
+                    stateObj.syncBackend = 'd1';
+                  }
+                  if (importOut.json.data) mergeRemoteData(stateObj, importOut.json.data);
+                  return importOut.json;
+                }
+              }
+            }
+          } catch (gasMigrateErr) {
+            // Tiep tuc setupDatabase neu khong doc duoc GAS cu
+          }
+        }
+        if (!migratedFromSheets) {
+          const setupOut = await postD1Json({ action: 'setupDatabase' }, 20000);
+          if (setupOut && setupOut.json && setupOut.json.ok) {
+            if (setupOut.json.version && stateObj) {
+              stateObj.syncVersion = String(setupOut.json.version);
+              stateObj.syncBackend = 'd1';
+            }
+            if (setupOut.json.data) mergeRemoteData(stateObj, setupOut.json.data);
+            return setupOut.json;
+          }
+        }
+        return null;
+      } finally {
+        inflightMigrationPromise = null;
+      }
+    })();
+    return await inflightMigrationPromise;
+  }
+
+  async function uploadMediaToDriveViaGas(mediaOpts) {
+    const gasUrl = getGasUrl();
+    if (!gasUrl) {
+      return { ok: false, error: 'Chưa cấu hình cầu nối Google Apps Script cho Google Drive.' };
+    }
+    const response = await fetchWithTimeout(
+      gasUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'uploadMedia',
+          base64_data: mediaOpts.base64_data,
+          mime_type: mediaOpts.mime_type || 'audio/webm',
+          filename: mediaOpts.filename || ('StudySnap_' + Date.now())
+        })
+      },
+      90000
+    );
+    const json = await response.json();
+    if (!json || !json.ok || !json.media_url) {
+      const legacyHint =
+        json && json.error && String(json.error).indexOf('không hợp lệ') >= 0
+          ? 'Vui lòng cập nhật và Deploy New Version cho backend/Code.gs để bật tải tệp lên Google Drive.'
+          : (json && json.error) || 'Không thể tải tệp âm thanh/video lên Google Drive.';
+      return { ok: false, error: legacyHint };
+    }
+    return json;
+  }
+
+  function cleanupDriveMediaViaGas(urls) {
+    const gasUrl = getGasUrl();
+    if (!gasUrl || !Array.isArray(urls) || urls.length === 0 || typeof fetch !== 'function') return;
+    try {
+      fetch(gasUrl, {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'deleteMediaFiles', urls: urls })
+      }).catch(function () {});
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+  }
+
+  async function prepareD1MediaPayload(stateObj, rawPayload) {
+    const payloadCopy = Object.assign({}, rawPayload || {});
+    const actionName = String(payloadCopy.action || '');
+
+    if (actionName === 'submitHomework' && payloadCopy.media_base64 && String(payloadCopy.media_base64).indexOf('data:') === 0) {
+      const up = await uploadMediaToDriveViaGas({
+        base64_data: payloadCopy.media_base64,
+        mime_type: payloadCopy.media_mime_type || (payloadCopy.media_type === 'video' ? 'video/mp4' : 'audio/webm'),
+        filename: payloadCopy.media_filename || ('BVN_' + (payloadCopy.assignment_id || 'EX') + '_' + (payloadCopy.student_id || 'HS') + '_' + Date.now())
+      });
+      if (!up.ok) return { errorResponse: up };
+      payloadCopy.media_url = up.media_url;
+      payloadCopy.media_base64 = '';
+      if (stateObj && Array.isArray(stateObj.submissions)) {
+        const localSub = stateObj.submissions.find(function (s) {
+          return s.assignment_id === payloadCopy.assignment_id && s.student_id === payloadCopy.student_id;
+        });
+        if (localSub) {
+          localSub.media_url = up.media_url;
+          saveState(stateObj);
+        }
+      }
+      return { payload: payloadCopy };
+    }
+
+    if (actionName === 'saveTeacherFeedback' && payloadCopy.teacher_voice_base64 && String(payloadCopy.teacher_voice_base64).indexOf('data:') === 0) {
+      const upVoice = await uploadMediaToDriveViaGas({
+        base64_data: payloadCopy.teacher_voice_base64,
+        mime_type: payloadCopy.teacher_voice_mime_type || 'audio/webm',
+        filename: 'VoiceFeedback_' + (payloadCopy.assignment_id || 'EX') + '_' + (payloadCopy.student_id || 'HS') + '_' + Date.now()
+      });
+      if (!upVoice.ok) return { errorResponse: upVoice };
+      payloadCopy.teacher_voice_url = upVoice.media_url;
+      payloadCopy.teacher_voice_base64 = '';
+      if (stateObj && Array.isArray(stateObj.submissions)) {
+        const localSub = stateObj.submissions.find(function (s) {
+          return s.assignment_id === payloadCopy.assignment_id && s.student_id === payloadCopy.student_id;
+        });
+        if (localSub) {
+          localSub.teacher_voice_url = upVoice.media_url;
+          saveState(stateObj);
+        }
+      }
+      return { payload: payloadCopy };
+    }
+
+    if (actionName === 'savePracticeExercise') {
+      const exSource = payloadCopy.exercise || payloadCopy;
+      const exClone = JSON.parse(JSON.stringify(exSource));
+      const exId = String(exClone.exercise_id || ('EX_' + Date.now()));
+      const uploadTasks = [];
+
+      if (Array.isArray(exClone.sections)) {
+        exClone.sections.forEach(function (sec, sIdx) {
+          if (!sec || !sec.data) return;
+          const secPrefix = exId + '_' + (sec.section_id || ('listen_' + (sIdx + 1)));
+          if (typeof sec.data.audio_url === 'string' && sec.data.audio_url.indexOf('data:') === 0) {
+            uploadTasks.push({
+              target: sec.data,
+              dataUrl: sec.data.audio_url,
+              prefix: secPrefix
+            });
+          }
+          if (Array.isArray(sec.data.items)) {
+            sec.data.items.forEach(function (item, qIdx) {
+              if (item && typeof item.audio_url === 'string' && item.audio_url.indexOf('data:') === 0) {
+                uploadTasks.push({
+                  target: item,
+                  dataUrl: item.audio_url,
+                  prefix: secPrefix + '_' + (item.id || ('q' + (qIdx + 1)))
+                });
+              }
+            });
+          }
+        });
+      }
+
+      if (uploadTasks.length > 0) {
+        const CONCURRENCY = 3;
+        for (let i = 0; i < uploadTasks.length; i += CONCURRENCY) {
+          const chunk = uploadTasks.slice(i, i + CONCURRENCY);
+          const results = await Promise.all(
+            chunk.map(function (task) {
+              const mimeMatch = task.dataUrl.match(/^data:([^;]+);base64,/i);
+              const mimeType = mimeMatch && mimeMatch[1] ? mimeMatch[1] : 'audio/webm';
+              const ext = mimeType.indexOf('mp3') >= 0 || mimeType.indexOf('mpeg') >= 0
+                ? '.mp3'
+                : (mimeType.indexOf('wav') >= 0 ? '.wav' : (mimeType.indexOf('mp4') >= 0 || mimeType.indexOf('m4a') >= 0 ? '.m4a' : '.webm'));
+              return uploadMediaToDriveViaGas({
+                base64_data: task.dataUrl,
+                mime_type: mimeType,
+                filename: task.prefix + '_' + Date.now() + ext
+              });
+            })
+          );
+          for (let j = 0; j < results.length; j++) {
+            if (!results[j] || !results[j].ok || !results[j].media_url) {
+              return { errorResponse: results[j] || { ok: false, error: 'Lỗi tải file nghe lên Google Drive.' } };
+            }
+            chunk[j].target.audio_url = results[j].media_url;
+          }
+        }
+        if (stateObj && Array.isArray(stateObj.practiceExercises)) {
+          const idx = stateObj.practiceExercises.findIndex(function (e) {
+            return e.exercise_id === exClone.exercise_id;
+          });
+          if (idx >= 0) {
+            stateObj.practiceExercises[idx].sections = exClone.sections;
+            saveState(stateObj);
+          }
+        }
+      }
+
+      if (payloadCopy.exercise) {
+        payloadCopy.exercise = exClone;
+      } else {
+        Object.assign(payloadCopy, exClone);
+      }
+      return { payload: payloadCopy };
+    }
+
+    return { payload: payloadCopy };
+  }
+
   async function syncPostToGas(stateObj, payload) {
+    const mode = await probeD1Mode();
     const url = getGasUrl();
-    if (!url) return null;
+    if (mode === 'gas' && !url) return null;
     const loadingCtrl = typeof window !== 'undefined' ? window.StudySnapLoading : null;
     const actionName = payload && payload.action ? payload.action : 'sync';
     const customLabel = (payload && payload._loadingLabel) || actionName;
@@ -2230,9 +2571,52 @@ window.StudySnapStore = (function () {
       if (loadingCtrl && lockId && loadingCtrl.activateBlockingSync) {
         loadingCtrl.activateBlockingSync(lockId);
       }
-      const actionName = payload && payload.action ? String(payload.action) : '';
+      const act = payload && payload.action ? String(payload.action) : '';
+      let activeMode = mode;
+
+      if (activeMode === 'd1') {
+        const prepared = await prepareD1MediaPayload(stateObj, payload);
+        if (prepared.errorResponse) {
+          return prepared.errorResponse;
+        }
+        const cleanedPayload = prepared.payload;
+        const wirePayload =
+          act === 'login' || act === 'setupDatabase' || act === 'importFromBootstrapData'
+            ? cleanedPayload
+            : Object.assign({}, cleanedPayload, {
+                deltaOnly: true,
+                clientVersion:
+                  stateObj && stateObj.syncBackend === 'd1' && stateObj.syncVersion
+                    ? String(stateObj.syncVersion)
+                    : ''
+              });
+
+        const d1Res = await postD1Json(wirePayload, hasHeavyBody ? 45000 : 20000);
+        let json = d1Res.json;
+        if (act === 'login' && json && json.needsMigration) {
+          await ensureD1Migrated(stateObj);
+          const retryRes = await postD1Json(wirePayload, 20000);
+          json = retryRes.json;
+        }
+        if (json && json.ok) {
+          if (stateObj) stateObj.syncBackend = 'd1';
+          if (Array.isArray(json.deletedMediaUrls) && json.deletedMediaUrls.length > 0) {
+            cleanupDriveMediaViaGas(json.deletedMediaUrls);
+          }
+          if (json.data) {
+            if (json.version && stateObj) {
+              stateObj.syncVersion = String(json.version);
+            }
+            mergeRemoteData(stateObj, json.data);
+          } else if (act !== 'login') {
+            applyDeltaResponseToState(stateObj, cleanedPayload, json);
+          }
+        }
+        return json;
+      }
+
       const wirePayload =
-        actionName === 'login' || actionName === 'setupDatabase'
+        act === 'login' || act === 'setupDatabase'
           ? payload
           : Object.assign({}, payload, {
               deltaOnly: true,
@@ -2245,7 +2629,7 @@ window.StudySnapStore = (function () {
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify(wirePayload)
         },
-        hasHeavyBody ? 45000 : 25000
+        hasHeavyBody ? 90000 : 25000
       );
       const json = await response.json();
       if (json && json.ok) {
@@ -2254,7 +2638,7 @@ window.StudySnapStore = (function () {
             stateObj.syncVersion = String(json.version);
           }
           mergeRemoteData(stateObj, json.data);
-        } else if (actionName !== 'login') {
+        } else if (act !== 'login') {
           applyDeltaResponseToState(stateObj, payload, json);
         }
       }
@@ -2277,8 +2661,9 @@ window.StudySnapStore = (function () {
   }
 
   async function fetchBootstrapFromGas(stateObj) {
-    const url = getGasUrl();
-    if (!url) return null;
+    const canProbeD1 = canProbeD1Endpoint() && backendMode !== 'gas';
+    const gasUrl = getGasUrl();
+    if (!canProbeD1 && !gasUrl) return null;
     if (inflightBootstrapPromise) {
       return await inflightBootstrapPromise;
     }
@@ -2288,11 +2673,54 @@ window.StudySnapStore = (function () {
 
     inflightBootstrapPromise = (async function () {
       try {
+        if (canProbeD1) {
+          try {
+            const hasD1State = Boolean(
+              stateObj && stateObj.syncBackend === 'd1' && stateObj.syncVersion && stateObj.lastRemoteBootstrapAt
+            );
+            const d1BootUrl =
+              D1_API_ENDPOINT +
+              '?action=bootstrap' +
+              (hasD1State ? '&v=' + encodeURIComponent(String(stateObj.syncVersion)) : '');
+            const d1Res = await fetchWithTimeout(d1BootUrl, {}, 12000);
+            const d1Json = await d1Res.json();
+
+            if (d1Res.ok && d1Json && d1Json.backend === 'cloudflare-d1' && !d1Json.d1Missing) {
+              backendMode = 'd1';
+              if (d1Json.needsMigration) {
+                return await ensureD1Migrated(stateObj);
+              }
+              if (d1Json.unchanged) {
+                if (d1Json.version && stateObj) {
+                  stateObj.syncVersion = String(d1Json.version);
+                  stateObj.syncBackend = 'd1';
+                  saveState(stateObj);
+                }
+                return d1Json;
+              }
+              if (d1Json.ok && d1Json.data) {
+                if (d1Json.version && stateObj) {
+                  stateObj.syncVersion = String(d1Json.version);
+                  stateObj.syncBackend = 'd1';
+                }
+                mergeRemoteData(stateObj, d1Json.data);
+                return d1Json;
+              }
+            }
+            if (d1Json && d1Json.d1Missing) {
+              backendMode = 'gas';
+            }
+          } catch (d1Err) {
+            backendMode = 'gas';
+          }
+        }
+
+        if (!gasUrl) return null;
         const hasBootstrappedState = Boolean(
-          stateObj && stateObj.syncVersion && stateObj.lastRemoteBootstrapAt
+          stateObj && stateObj.syncVersion && stateObj.lastRemoteBootstrapAt && stateObj.syncBackend !== 'd1'
         );
         const bootUrl =
-          url +
+          gasUrl +
           '?action=bootstrap' +
           (hasBootstrappedState ? '&v=' + encodeURIComponent(String(stateObj.syncVersion)) : '');
         const response = await fetchWithTimeout(bootUrl, {}, 25000);
@@ -2576,6 +3004,8 @@ window.StudySnapStore = (function () {
     saveState: saveState,
     getGasUrl: getGasUrl,
     setGasUrl: setGasUrl,
+    isUsingD1: function () { return backendMode === 'd1'; },
+    getBackendMode: function () { return backendMode; },
     syncPostToGas: syncPostToGas,
     fetchBootstrapFromGas: fetchBootstrapFromGas,
     normalizeChineseSentence: normalizeChineseSentence,
