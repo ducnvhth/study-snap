@@ -1223,10 +1223,96 @@ window.StudySnapLoading = (function () {
     getMedia: 'Đang tải tệp âm thanh...'
   };
 
+  const OVERLAY_DETAILS = {
+    bootstrap: {
+      title: 'Đang đồng bộ dữ liệu hệ thống...',
+      desc: 'Hệ thống đang cập nhật dữ liệu mới nhất từ máy chủ. Vui lòng đợi hoàn tất trước khi thao tác để tránh xung đột dữ liệu.'
+    },
+    setupDatabase: {
+      title: 'Đang khởi tạo dữ liệu ban đầu...',
+      desc: 'Hệ thống đang thiết lập dữ liệu mặc định. Vui lòng đợi trong giây lát.'
+    },
+    login: {
+      title: 'Đang xác thực tài khoản...',
+      desc: 'Hệ thống đang kiểm tra thông tin đăng nhập. Vui lòng đợi hoàn tất.'
+    },
+    submitHomework: {
+      title: 'Đang gửi bài tập về nhà...',
+      desc: 'Vui lòng giữ nguyên trang cho đến khi hệ thống xác nhận đã lưu bài nộp.'
+    },
+    submitExitTicket: {
+      title: 'Đang lưu kết quả luyện tập...',
+      desc: 'Vui lòng đợi hệ thống ghi nhận điểm bài luyện tập.'
+    },
+    submitPracticeExercise: {
+      title: 'Đang nộp bài luyện tập cuối buổi...',
+      desc: 'Hệ thống đang chấm điểm và đồng bộ bài làm lên máy chủ. Vui lòng đợi.'
+    },
+    savePracticeExercise: {
+      title: 'Đang lưu & đồng bộ đề luyện tập...',
+      desc: 'Vui lòng đợi quá trình lưu hoàn tất trước khi thao tác tiếp để tránh xung đột dữ liệu.'
+    },
+    deletePracticeExercise: {
+      title: 'Đang xóa đề luyện tập...',
+      desc: 'Vui lòng đợi hệ thống đồng bộ thay đổi.'
+    },
+    gradeManualTranslation: {
+      title: 'Đang lưu điểm chấm câu dịch...',
+      desc: 'Vui lòng đợi hệ thống cập nhật điểm số học sinh.'
+    },
+    addAssignment: {
+      title: 'Đang giao bài tập mới...',
+      desc: 'Vui lòng đợi hệ thống lưu bài tập và đồng bộ danh sách lớp.'
+    },
+    deleteAssignment: {
+      title: 'Đang xóa bài tập...',
+      desc: 'Vui lòng đợi hệ thống cập nhật danh sách bài tập.'
+    },
+    assignExercisesToClass: {
+      title: 'Đang giao bài tập cho lớp...',
+      desc: 'Vui lòng đợi hệ thống phân phối bài tập đến lớp học.'
+    },
+    unassignAssignment: {
+      title: 'Đang hủy giao bài cho lớp...',
+      desc: 'Vui lòng đợi hệ thống cập nhật trạng thái giao bài.'
+    },
+    saveTeacherFeedback: {
+      title: 'Đang lưu nhận xét & phản hồi giọng nói...',
+      desc: 'Vui lòng giữ nguyên trang cho đến khi hệ thống hoàn tất đồng bộ phản hồi.'
+    },
+    createClass: {
+      title: 'Đang tạo lớp học mới...',
+      desc: 'Vui lòng đợi hệ thống cập nhật danh sách lớp học.'
+    },
+    createStudentAccount: {
+      title: 'Đang tạo tài khoản học sinh...',
+      desc: 'Vui lòng đợi hệ thống lưu tài khoản mới lên máy chủ.'
+    },
+    resetStudentPassword: {
+      title: 'Đang cập nhật mật khẩu học sinh...',
+      desc: 'Vui lòng đợi hệ thống đồng bộ mật khẩu mới.'
+    },
+    deleteStudentAccount: {
+      title: 'Đang xóa tài khoản học sinh...',
+      desc: 'Vui lòng đợi hệ thống hoàn tất xóa và đồng bộ dữ liệu.'
+    },
+    addVocabulary: {
+      title: 'Đang thêm từ vựng mới...',
+      desc: 'Vui lòng đợi hệ thống đồng bộ kho từ vựng.'
+    },
+    batchAddVocabulary: {
+      title: 'Đang nhập danh sách từ vựng...',
+      desc: 'Hệ thống đang đồng bộ hàng loạt từ vựng lên máy chủ. Vui lòng chờ.'
+    }
+  };
+
   let activeRequests = [];
   let seqCounter = 0;
   let hideTimer = null;
-  let overlayLockCount = 0;
+  let blockingLocks = [];
+  let lockSeqCounter = 0;
+  let lastFocusedElement = null;
+  let interactionGuardInstalled = false;
   const savedButtons = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
 
   function resolveLabel(actionOrLabel) {
@@ -1234,8 +1320,43 @@ window.StudySnapLoading = (function () {
     return ACTION_LABELS[actionOrLabel] || String(actionOrLabel);
   }
 
+  function resolveOverlayMessage(actionOrTitle, customDesc) {
+    const mapped = actionOrTitle ? OVERLAY_DETAILS[actionOrTitle] : null;
+    if (mapped) {
+      return {
+        title: mapped.title,
+        desc: customDesc ? String(customDesc) : mapped.desc
+      };
+    }
+    return {
+      title: actionOrTitle ? resolveLabel(actionOrTitle) : 'Đang đồng bộ dữ liệu hệ thống...',
+      desc: customDesc
+        ? String(customDesc)
+        : 'Vui lòng đợi hệ thống hoàn tất đồng bộ trước khi thao tác để tránh xung đột dữ liệu.'
+    };
+  }
+
+  function installInteractionGuard() {
+    if (interactionGuardInstalled || typeof document === 'undefined' || !document.addEventListener) return;
+    interactionGuardInstalled = true;
+    const blockIfLocked = function (ev) {
+      if (blockingLocks.length === 0) return;
+      const overlay = document.getElementById('studysnap-loading-overlay');
+      if (overlay && ev && ev.target && overlay.contains && overlay.contains(ev.target)) {
+        return;
+      }
+      if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+      if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+      if (ev && typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+    };
+    ['keydown', 'keypress', 'keyup', 'pointerdown', 'mousedown', 'click', 'submit'].forEach(function (evtName) {
+      document.addEventListener(evtName, blockIfLocked, true);
+    });
+  }
+
   function ensureUi() {
     if (typeof document === 'undefined' || !document.body) return false;
+    installInteractionGuard();
 
     if (!document.getElementById('studysnap-api-progress')) {
       const bar = document.createElement('div');
@@ -1262,16 +1383,21 @@ window.StudySnapLoading = (function () {
       const overlay = document.createElement('div');
       overlay.id = 'studysnap-loading-overlay';
       overlay.className = 'ss-loading-overlay';
-      overlay.setAttribute('role', 'status');
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
       overlay.setAttribute('aria-live', 'assertive');
       overlay.setAttribute('aria-hidden', 'true');
+      overlay.setAttribute('aria-labelledby', 'studysnap-loading-title');
+      overlay.setAttribute('aria-describedby', 'studysnap-loading-desc');
+      overlay.setAttribute('tabindex', '-1');
       overlay.innerHTML =
         '<div class="ss-loading-card">' +
           '<div class="ss-loading-icon-badge" aria-hidden="true">' +
             '<span class="ss-spinner ss-spinner-lg"></span>' +
           '</div>' +
-          '<h3 class="ss-loading-title" id="studysnap-loading-title">Đang xử lý yêu cầu...</h3>' +
-          '<p class="ss-loading-desc" id="studysnap-loading-desc">Vui lòng chờ trong giây lát để hệ thống hoàn tất đồng bộ.</p>' +
+          '<h3 class="ss-loading-title" id="studysnap-loading-title">Đang đồng bộ dữ liệu hệ thống...</h3>' +
+          '<p class="ss-loading-desc" id="studysnap-loading-desc">Vui lòng đợi hệ thống hoàn tất đồng bộ trước khi thao tác để tránh xung đột dữ liệu.</p>' +
+          '<div class="ss-loading-progress-track" aria-hidden="true"><div class="ss-api-progress-fill"></div></div>' +
         '</div>';
       document.body.appendChild(overlay);
     }
@@ -1306,6 +1432,136 @@ window.StudySnapLoading = (function () {
     }
   }
 
+  function setPageInertLocked(locked) {
+    if (typeof document === 'undefined' || !document.body) return;
+    const rootEl = document.documentElement;
+    const overlay = document.getElementById('studysnap-loading-overlay');
+    const ignoredIds = {
+      'studysnap-loading-overlay': true,
+      'studysnap-api-progress': true,
+      'studysnap-api-pill': true
+    };
+    const ignoredTags = { SCRIPT: true, STYLE: true, LINK: true, TEMPLATE: true, NOSCRIPT: true };
+
+    if (locked) {
+      if (!lastFocusedElement && document.activeElement && document.activeElement !== document.body && (!overlay || !overlay.contains || !overlay.contains(document.activeElement))) {
+        lastFocusedElement = document.activeElement;
+        if (typeof lastFocusedElement.blur === 'function') {
+          try {
+            lastFocusedElement.blur();
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+      if (rootEl && rootEl.classList) rootEl.classList.add('ss-sync-locked');
+      if (document.body.classList) document.body.classList.add('ss-sync-locked');
+      document.body.setAttribute('aria-busy', 'true');
+
+      Array.prototype.forEach.call(document.body.children || [], function (child) {
+        if (!child || ignoredIds[child.id] || ignoredTags[child.tagName]) return;
+        if (child.getAttribute('data-ss-sync-inert') === '1') return;
+        if (!child.inert) {
+          child.setAttribute('data-ss-sync-inert', '1');
+          const prevAriaHidden = child.getAttribute('aria-hidden');
+          if (prevAriaHidden !== null) {
+            child.setAttribute('data-ss-prev-aria-hidden', prevAriaHidden);
+          }
+          child.inert = true;
+          child.setAttribute('aria-hidden', 'true');
+        }
+      });
+
+      if (overlay && typeof overlay.focus === 'function') {
+        try {
+          overlay.focus({ preventScroll: true });
+        } catch (e) {
+          try {
+            overlay.focus();
+          } catch (e2) {
+            // ignore
+          }
+        }
+      }
+    } else {
+      if (rootEl && rootEl.classList) rootEl.classList.remove('ss-sync-locked');
+      if (document.body.classList) document.body.classList.remove('ss-sync-locked');
+      document.body.removeAttribute('aria-busy');
+
+      if (typeof document.querySelectorAll === 'function') {
+        document.querySelectorAll('[data-ss-sync-inert="1"]').forEach(function (child) {
+          child.inert = false;
+          const prevAriaHidden = child.getAttribute('data-ss-prev-aria-hidden');
+          if (prevAriaHidden !== null) {
+            child.setAttribute('aria-hidden', prevAriaHidden);
+            child.removeAttribute('data-ss-prev-aria-hidden');
+          } else {
+            child.removeAttribute('aria-hidden');
+          }
+          child.removeAttribute('data-ss-sync-inert');
+        });
+      }
+
+      if (lastFocusedElement) {
+        const focusTarget = lastFocusedElement;
+        lastFocusedElement = null;
+        if (document.body.contains && document.body.contains(focusTarget) && !focusTarget.disabled && typeof focusTarget.focus === 'function') {
+          try {
+            focusTarget.focus({ preventScroll: true });
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+    }
+  }
+
+  function renderOverlayState() {
+    if (blockingLocks.length === 0) {
+      if (typeof document !== 'undefined') {
+        const overlay = document.getElementById('studysnap-loading-overlay');
+        if (overlay) {
+          overlay.classList.remove('is-open');
+          overlay.setAttribute('aria-hidden', 'true');
+        }
+        setPageInertLocked(false);
+      }
+      return;
+    }
+
+    if (!ensureUi()) return;
+    // Ưu tiên thông báo explicit > lock đang thực thi (!isQueued) > lock đầu tiên đang chờ hàng đợi
+    let activeEntry = null;
+    for (let i = blockingLocks.length - 1; i >= 0; i--) {
+      if (blockingLocks[i].isExplicit) {
+        activeEntry = blockingLocks[i];
+        break;
+      }
+    }
+    if (!activeEntry) {
+      for (let i = blockingLocks.length - 1; i >= 0; i--) {
+        if (!blockingLocks[i].isQueued) {
+          activeEntry = blockingLocks[i];
+          break;
+        }
+      }
+    }
+    if (!activeEntry) {
+      activeEntry = blockingLocks[0];
+    }
+
+    const overlay = document.getElementById('studysnap-loading-overlay');
+    const titleEl = document.getElementById('studysnap-loading-title');
+    const descEl = document.getElementById('studysnap-loading-desc');
+    if (titleEl && activeEntry.title) titleEl.textContent = activeEntry.title;
+    if (descEl && activeEntry.desc) descEl.textContent = activeEntry.desc;
+    if (overlay) {
+      overlay.classList.add('is-open');
+      overlay.setAttribute('aria-hidden', 'false');
+    }
+    setPageInertLocked(true);
+  }
+
   function beginRequest(actionOrLabel) {
     seqCounter += 1;
     const id = 'req_' + seqCounter;
@@ -1331,37 +1587,72 @@ window.StudySnapLoading = (function () {
     }
   }
 
+  function beginBlockingSync(actionOrTitle, customDesc, options) {
+    const opts = typeof options === 'boolean' ? { isExplicit: options } : (options || {});
+    lockSeqCounter += 1;
+    const lockId = 'lock_' + lockSeqCounter;
+    const resolved = opts.isExplicit
+      ? {
+          title: actionOrTitle ? String(actionOrTitle) : 'Đang đồng bộ dữ liệu hệ thống...',
+          desc: customDesc ? String(customDesc) : 'Vui lòng đợi trong giây lát để hệ thống hoàn tất đồng bộ.'
+        }
+      : resolveOverlayMessage(actionOrTitle, customDesc);
+    blockingLocks.push({
+      id: lockId,
+      title: resolved.title,
+      desc: resolved.desc,
+      isExplicit: Boolean(opts.isExplicit),
+      isQueued: Boolean(opts.isQueued)
+    });
+    renderOverlayState();
+    return lockId;
+  }
+
+  function activateBlockingSync(lockId) {
+    if (!lockId) return;
+    blockingLocks.forEach(function (item) {
+      if (item.id === lockId) {
+        item.isQueued = false;
+      }
+    });
+    renderOverlayState();
+  }
+
+  function endBlockingSync(lockId) {
+    if (!lockId) return;
+    blockingLocks = blockingLocks.filter(function (item) {
+      return item.id !== lockId;
+    });
+    renderOverlayState();
+  }
+
   function showOverlay(title, desc) {
-    overlayLockCount += 1;
-    if (!ensureUi()) return;
-    const overlay = document.getElementById('studysnap-loading-overlay');
-    const titleEl = document.getElementById('studysnap-loading-title');
-    const descEl = document.getElementById('studysnap-loading-desc');
-    if (titleEl && title) titleEl.textContent = String(title);
-    if (descEl && desc) descEl.textContent = String(desc);
-    if (overlay) {
-      overlay.classList.add('is-open');
-      overlay.setAttribute('aria-hidden', 'false');
-    }
+    return beginBlockingSync(title, desc, true);
   }
 
   function hideOverlay(force) {
-    overlayLockCount = force ? 0 : Math.max(0, overlayLockCount - 1);
-    if (overlayLockCount > 0) return;
-    if (typeof document === 'undefined') return;
-    const overlay = document.getElementById('studysnap-loading-overlay');
-    if (overlay) {
-      overlay.classList.remove('is-open');
-      overlay.setAttribute('aria-hidden', 'true');
+    if (force) {
+      blockingLocks = [];
+    } else if (blockingLocks.length > 0) {
+      let popIdx = -1;
+      for (let i = blockingLocks.length - 1; i >= 0; i--) {
+        if (blockingLocks[i].isExplicit) {
+          popIdx = i;
+          break;
+        }
+      }
+      if (popIdx === -1) popIdx = blockingLocks.length - 1;
+      blockingLocks.splice(popIdx, 1);
     }
+    renderOverlayState();
   }
 
   async function withOverlay(title, desc, asyncFn) {
-    showOverlay(title, desc);
+    const lockId = showOverlay(title, desc);
     try {
       return await asyncFn();
     } finally {
-      hideOverlay();
+      endBlockingSync(lockId);
     }
   }
 
@@ -1436,6 +1727,7 @@ window.StudySnapLoading = (function () {
   if (typeof document !== 'undefined') {
     document.addEventListener('DOMContentLoaded', function () {
       if (activeRequests.length > 0) syncIndicator();
+      if (blockingLocks.length > 0) renderOverlayState();
     });
   }
 
@@ -1445,6 +1737,10 @@ window.StudySnapLoading = (function () {
     beginRequest: beginRequest,
     endRequest: endRequest,
     trackPromise: trackPromise,
+    beginBlockingSync: beginBlockingSync,
+    activateBlockingSync: activateBlockingSync,
+    endBlockingSync: endBlockingSync,
+    isLocked: function () { return blockingLocks.length > 0; },
     showOverlay: showOverlay,
     hideOverlay: hideOverlay,
     withOverlay: withOverlay,
@@ -1460,6 +1756,8 @@ window.StudySnapStore = (function () {
   const STORAGE_KEY = 'studysnap_app_state_zh_v1';
   const GAS_URL_KEY = 'studysnap_gas_webapp_url';
   const DEFAULT_GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwVkdgBgbyjOe9vFz-8dhut231bViQkEOgyUEwJbFHN1ww16w-Vkgq45IB9d1baxNRcaw/exec';
+  let inflightBootstrapPromise = null;
+  let writeSyncQueue = Promise.resolve();
 
   function formatCleanDate(val) {
     if (!val) return '';
@@ -1852,7 +2150,14 @@ window.StudySnapStore = (function () {
           (Array.isArray(payload.vocabulary) && payload.vocabulary.length > 10))
     );
     const reqId = loadingCtrl ? loadingCtrl.beginRequest(customLabel) : null;
-    try {
+    const lockId = loadingCtrl && loadingCtrl.beginBlockingSync
+      ? loadingCtrl.beginBlockingSync(customLabel, null, { isQueued: true })
+      : null;
+
+    const executePost = async function () {
+      if (loadingCtrl && lockId && loadingCtrl.activateBlockingSync) {
+        loadingCtrl.activateBlockingSync(lockId);
+      }
       const response = await fetchWithTimeout(
         url,
         {
@@ -1867,40 +2172,63 @@ window.StudySnapStore = (function () {
         mergeRemoteData(stateObj, json.data);
       }
       return json;
+    };
+
+    const queuedTask = writeSyncQueue.then(executePost, executePost);
+    writeSyncQueue = queuedTask.then(function () {}, function () {});
+
+    try {
+      return await queuedTask;
     } catch (e) {
       return null;
     } finally {
-      if (loadingCtrl && reqId) loadingCtrl.endRequest(reqId);
+      if (loadingCtrl) {
+        if (lockId && loadingCtrl.endBlockingSync) loadingCtrl.endBlockingSync(lockId);
+        if (reqId) loadingCtrl.endRequest(reqId);
+      }
     }
   }
 
   async function fetchBootstrapFromGas(stateObj) {
     const url = getGasUrl();
     if (!url) return null;
+    if (inflightBootstrapPromise) {
+      return await inflightBootstrapPromise;
+    }
     const loadingCtrl = typeof window !== 'undefined' ? window.StudySnapLoading : null;
     const reqId = loadingCtrl ? loadingCtrl.beginRequest('bootstrap') : null;
-    try {
-      const response = await fetchWithTimeout(url + '?action=bootstrap', {}, 25000);
-      const json = await response.json();
-      if (json && json.ok && json.data) {
-        if (
-          json.data.isProduction !== true &&
-          !stateObj.isClearedForProduction &&
-          Array.isArray(json.data.teachers) &&
-          json.data.teachers.length === 0 &&
-          Array.isArray(json.data.students) &&
-          json.data.students.length === 0
-        ) {
-          return await syncPostToGas(stateObj, { action: 'setupDatabase' });
+    const lockId = loadingCtrl && loadingCtrl.beginBlockingSync ? loadingCtrl.beginBlockingSync('bootstrap') : null;
+
+    inflightBootstrapPromise = (async function () {
+      try {
+        const response = await fetchWithTimeout(url + '?action=bootstrap', {}, 25000);
+        const json = await response.json();
+        if (json && json.ok && json.data) {
+          if (
+            json.data.isProduction !== true &&
+            !stateObj.isClearedForProduction &&
+            Array.isArray(json.data.teachers) &&
+            json.data.teachers.length === 0 &&
+            Array.isArray(json.data.students) &&
+            json.data.students.length === 0
+          ) {
+            return await syncPostToGas(stateObj, { action: 'setupDatabase' });
+          }
+          mergeRemoteData(stateObj, json.data);
         }
-        mergeRemoteData(stateObj, json.data);
+        return json;
+      } catch (e) {
+        return null;
+      } finally {
+        inflightBootstrapPromise = null;
+        if (loadingCtrl) {
+          if (lockId && loadingCtrl.endBlockingSync) loadingCtrl.endBlockingSync(lockId);
+          if (reqId) loadingCtrl.endRequest(reqId);
+        }
       }
-      return json;
-    } catch (e) {
-      return null;
-    } finally {
-      if (loadingCtrl && reqId) loadingCtrl.endRequest(reqId);
-    }
+    })();
+
+    return await inflightBootstrapPromise;
   }
 
   async function submitPracticeExercise(stateObj, sub) {

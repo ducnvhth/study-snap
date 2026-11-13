@@ -160,8 +160,9 @@
 
         if (errorBox) errorBox.classList.remove('is-visible');
         setFormInteractive(false);
-        if (loading && submitBtn) {
-          loading.setButtonLoading(submitBtn, true, 'Đang kiểm tra tài khoản...');
+        if (loading) {
+          if (submitBtn) loading.setButtonLoading(submitBtn, true, 'Đang kiểm tra tài khoản...');
+          loading.showOverlay('Đang xác thực tài khoản...', 'Hệ thống đang kiểm tra thông tin đăng nhập. Vui lòng đợi trong giây lát.');
         } else if (submitBtn) {
           submitBtn.disabled = true;
         }

@@ -3768,15 +3768,54 @@ select.form-control {
   transform: translate(-50%, 0);
 }
 
+@keyframes ss-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+html.ss-sync-locked,
+body.ss-sync-locked {
+  overflow: hidden;
+  cursor: wait;
+}
+
+body.ss-sync-locked > :not(#studysnap-loading-overlay):not(#studysnap-api-progress):not(#studysnap-api-pill):not(script):not(style) {
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+body.ss-sync-locked .app-shell,
+body.ss-sync-locked .login-shell,
+body.ss-sync-locked .modal-backdrop {
+  opacity: 0.52;
+  filter: grayscale(10%);
+  transition: opacity 160ms var(--ease-out), filter 160ms var(--ease-out);
+}
+
+body.ss-sync-locked .ss-api-status-chip {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
 .ss-loading-overlay {
   position: fixed;
   inset: 0;
-  z-index: 120;
+  z-index: 9999;
   display: none;
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background-color: rgba(45, 27, 78, 0.42);
+  background-color: rgba(45, 27, 78, 0.48);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  pointer-events: auto;
+  cursor: wait;
 }
 
 .ss-loading-overlay.is-open {
@@ -3785,13 +3824,14 @@ select.form-control {
 
 .ss-loading-card {
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   padding: 28px 30px;
   border-radius: var(--radius-2xl);
   background-color: var(--white);
   border: 1.5px solid var(--pink-md);
-  box-shadow: 0 18px 48px rgba(45, 27, 78, 0.22);
+  box-shadow: 0 18px 48px rgba(45, 27, 78, 0.24);
   text-align: center;
+  animation: ss-dialog-in 160ms var(--ease-out) both;
 }
 
 .ss-loading-icon-badge {
@@ -3818,8 +3858,17 @@ select.form-control {
 .ss-loading-desc {
   font-size: 0.875rem;
   color: var(--muted);
-  margin: 0;
+  margin: 0 auto;
   line-height: 1.55;
+}
+
+.ss-loading-progress-track {
+  width: 100%;
+  height: 6px;
+  margin-top: 18px;
+  border-radius: var(--radius-pill);
+  background-color: var(--pink-lt);
+  overflow: hidden;
 }
 
 .voice-player-bar.is-loading .voice-play-toggle {
