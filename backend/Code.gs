@@ -1272,7 +1272,7 @@ function handleSubmitExitTicket_(ss, payload) {
 function handleAddVocabulary_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.VOCABULARY);
   const vocabId = String(payload.vocab_id || '').trim() || ('V_' + Utilities.getUuid().slice(0, 6).toUpperCase());
-  sheet.appendRow([
+  const rowData = [
     vocabId,
     payload.lesson_id || 'bai-1',
     payload.lesson_title || 'Bài 1',
@@ -1282,7 +1282,15 @@ function handleAddVocabulary_(ss, payload) {
     payload.meaning_vi || '',
     payload.example_en || '',
     payload.example_vi || ''
-  ]);
+  ];
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0] || '').trim() === vocabId) {
+      sheet.getRange(i + 1, 1, 1, rowData.length).setValues([rowData]);
+      return { vocab_id: vocabId, updated: true };
+    }
+  }
+  sheet.appendRow(rowData);
   return { vocab_id: vocabId };
 }
 
@@ -1314,11 +1322,19 @@ function handleBatchAddVocabulary_(ss, payload) {
   const list = Array.isArray(payload.vocabulary) ? payload.vocabulary : [];
   if (!sheet || list.length === 0) return { inserted: 0 };
 
-  const rows = [];
+  const values = sheet.getDataRange().getValues();
+  const existingRowMap = {};
+  for (let r = 1; r < values.length; r++) {
+    const existingId = String(values[r][0] || '').trim();
+    if (existingId) existingRowMap[existingId] = r + 1;
+  }
+
+  const newRows = [];
+  let updatedCount = 0;
   for (let i = 0; i < list.length; i++) {
     const v = list[i] || {};
-    const vocabId = v.vocab_id || ('V_' + Utilities.getUuid().slice(0, 6).toUpperCase());
-    rows.push([
+    const vocabId = String(v.vocab_id || '').trim() || ('V_' + Utilities.getUuid().slice(0, 6).toUpperCase());
+    const rowArr = [
       vocabId,
       v.lesson_id || 'bai-1',
       v.lesson_title || 'Bài 1',
@@ -1328,11 +1344,19 @@ function handleBatchAddVocabulary_(ss, payload) {
       v.meaning_vi || '',
       v.example_en || '',
       v.example_vi || ''
-    ]);
+    ];
+    if (existingRowMap[vocabId]) {
+      sheet.getRange(existingRowMap[vocabId], 1, 1, rowArr.length).setValues([rowArr]);
+      updatedCount++;
+    } else {
+      newRows.push(rowArr);
+    }
   }
-  const startRow = sheet.getLastRow() + 1;
-  sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
-  return { inserted: rows.length };
+  if (newRows.length > 0) {
+    const startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, newRows.length, newRows[0].length).setValues(newRows);
+  }
+  return { inserted: newRows.length, updated: updatedCount };
 }
 
 function handleAddAssignment_(ss, payload) {

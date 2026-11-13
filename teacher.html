@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css?v=20261113g">
+  <link rel="stylesheet" href="styles/main.css?v=20261114a">
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -143,7 +143,8 @@
                 </div>
                 <div style="width: 160px;">
                   <label class="form-label" for="ex-meta-tag" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground); text-transform: uppercase; letter-spacing: 0.05em;">Thuộc bài</label>
-                  <input type="text" id="ex-meta-tag" class="form-control" style="font-weight: 600;" placeholder="Ví dụ: Bài 1" required>
+                  <input type="text" id="ex-meta-tag" list="practice-lesson-tag-datalist" class="form-control" style="font-weight: 600;" placeholder="Ví dụ: Bài 1" required>
+                  <datalist id="practice-lesson-tag-datalist"></datalist>
                 </div>
                 <div style="align-self: flex-end; padding-bottom: 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                   <span class="status-badge status-graded tabular-nums" id="teacher-practice-maxscore-badge" style="font-size: 0.9375rem; font-weight: 700; padding: 8px 14px;">Tổng 35 điểm</span>
@@ -652,7 +653,7 @@
                   <label class="form-label" for="new-vocab-lesson">Thuộc bài học</label>
                   <select id="new-vocab-lesson" class="form-control"></select>
                   <div id="new-vocab-custom-lesson-wrap" style="display: none; margin-top: 8px;">
-                    <input type="text" id="new-vocab-custom-lesson-title" class="form-control" placeholder="Nhập tên bài học mới (VD: Bài 9: Du lịch & Đặt phòng)">
+                    <input type="text" id="new-vocab-custom-lesson-title" class="form-control" placeholder="Nhập tên bài học mới (VD: Ngữ âm Bài 1)">
                   </div>
                 </div>
                 <div class="form-group">
@@ -1147,7 +1148,7 @@
 
         <div class="form-group">
           <label class="form-label" for="new-ex-tag">Thuộc bài số:</label>
-          <input type="text" id="new-ex-tag" class="form-control" placeholder="Ví dụ: Bài 2" required>
+          <input type="text" id="new-ex-tag" list="practice-lesson-tag-datalist" class="form-control" placeholder="Ví dụ: Bài 2" required>
         </div>
 
         <div id="create-ex-modal-hint" style="background: var(--color-surface-muted); padding: 12px 14px; border-radius: var(--radius-md); margin-bottom: 18px; font-size: 0.8125rem; color: var(--color-muted-foreground);">
@@ -1228,7 +1229,7 @@
           <label class="form-label" for="import-vocab-lesson-select" style="font-weight: 700;">Nạp vào Bài học:</label>
           <select id="import-vocab-lesson-select" class="form-control"></select>
           <div id="import-vocab-custom-lesson-wrap" style="display: none; margin-top: 8px;">
-            <input type="text" id="import-vocab-custom-lesson-title" class="form-control" placeholder="Nhập tên bài học mới (VD: Bài 9: Du lịch)">
+            <input type="text" id="import-vocab-custom-lesson-title" class="form-control" placeholder="Nhập tên bài học mới (VD: Ngữ âm Bài 1)">
           </div>
         </div>
         <div class="form-group" style="margin-bottom: 0;">
@@ -1351,7 +1352,7 @@
           </div>
           <div class="form-group" style="margin-bottom: 0;">
             <label class="form-label" for="import-practice-new-tag" style="font-weight: 700;">Thuộc bài số:</label>
-            <input type="text" id="import-practice-new-tag" class="form-control" placeholder="Ví dụ: Bài 2" value="Bài mới">
+            <input type="text" id="import-practice-new-tag" list="practice-lesson-tag-datalist" class="form-control" placeholder="Ví dụ: Bài 2" value="Bài mới">
           </div>
         </div>
 
@@ -1541,11 +1542,11 @@
     <span id="toast-message">Đã lưu thay đổi!</span>
   </div>
 
-  <script src="js/vocab_data.js?v=20261113g"></script>
-  <script src="js/vocab_suite.js?v=20261113g"></script>
-  <script src="js/data.js?v=20261113g"></script>
-  <script src="js/auth.js?v=20261113g"></script>
-  <script src="js/audio.js?v=20261113g"></script>
-  <script src="js/teacher.js?v=20261113g"></script>
+  <script src="js/vocab_data.js?v=20261114a"></script>
+  <script src="js/vocab_suite.js?v=20261114a"></script>
+  <script src="js/data.js?v=20261114a"></script>
+  <script src="js/auth.js?v=20261114a"></script>
+  <script src="js/audio.js?v=20261114a"></script>
+  <script src="js/teacher.js?v=20261114a"></script>
 </body>
 </html>

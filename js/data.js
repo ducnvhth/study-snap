@@ -293,327 +293,10 @@ window.STUDYSNAP_INITIAL_DATA = {
       meaning_vi: 'Du học sinh',
       example_en: '她是汉语留学生。(Tā shì Hànyǔ liúxuéshēng.)',
       example_vi: 'Cô ấy là du học sinh ngành tiếng Trung.'
-    },
-    {
-      vocab_id: 'V05',
-      lesson_id: 'bai-2',
-      lesson_title: 'Bài 2: Học tập & Ngôn ngữ',
-      word: '汉语',
-      ipa: 'Hàn yǔ',
-      part_of_speech: 'Danh từ',
-      meaning_vi: 'Tiếng Trung (Tiếng Hán)',
-      example_en: '汉语发音不太难。(Hànyǔ fāyīn bú tài nán.)',
-      example_vi: 'Phát âm tiếng Trung không khó lắm.'
-    },
-    {
-      vocab_id: 'V06',
-      lesson_id: 'bai-2',
-      lesson_title: 'Bài 2: Học tập & Ngôn ngữ',
-      word: '汉字',
-      ipa: 'Hàn zì',
-      part_of_speech: 'Danh từ',
-      meaning_vi: 'Chữ Hán',
-      example_en: '我每天都练习写汉字。(Wǒ měitiān dōu liànxí xiě Hànzì.)',
-      example_vi: 'Mỗi ngày tôi đều luyện viết chữ Hán.'
-    },
-    {
-      vocab_id: 'V07',
-      lesson_id: 'bai-2',
-      lesson_title: 'Bài 2: Học tập & Ngôn ngữ',
-      word: '发音',
-      ipa: 'fā yīn',
-      part_of_speech: 'Danh từ / Động từ',
-      meaning_vi: 'Phát âm, ngữ âm',
-      example_en: '老师的发音非常标准。(Lǎoshī de fāyīn fēicháng biāozhǔn.)',
-      example_vi: 'Phát âm của cô giáo vô cùng chuẩn.'
-    },
-    {
-      vocab_id: 'V08',
-      lesson_id: 'bai-2',
-      lesson_title: 'Bài 2: Học tập & Ngôn ngữ',
-      word: '努力',
-      ipa: 'nǔ lì',
-      part_of_speech: 'Tính từ',
-      meaning_vi: 'Chăm chỉ, nỗ lực',
-      example_en: '他学习汉语很努力。(Tā xuéxí Hànyǔ hěn nǔlì.)',
-      example_vi: 'Cậu ấy học tiếng Trung rất chăm chỉ.'
-    },
-    {
-      vocab_id: 'V09',
-      lesson_id: 'bai-3',
-      lesson_title: 'Bài 3: Mua sắm & Đời sống',
-      word: '多少钱',
-      ipa: 'duō shao qián',
-      part_of_speech: 'Đại từ nghi vấn',
-      meaning_vi: 'Bao nhiêu tiền?',
-      example_en: '请问，这本书多少钱？(Qǐngwèn, zhè běn shū duōshao qián?)',
-      example_vi: 'Xin hỏi, quyển sách này bao nhiêu tiền?'
-    },
-    {
-      vocab_id: 'V10',
-      lesson_id: 'bai-3',
-      lesson_title: 'Bài 3: Mua sắm & Đời sống',
-      word: '便宜',
-      ipa: 'pián yi',
-      part_of_speech: 'Tính từ',
-      meaning_vi: 'Rẻ, giá hợp lý',
-      example_en: '这件衣服很便宜。(Zhè jiàn yīfu hěn piányi.)',
-      example_vi: 'Bộ quần áo này rất rẻ.'
-    },
-    {
-      vocab_id: 'V11',
-      lesson_id: 'bai-3',
-      lesson_title: 'Bài 3: Mua sắm & Đời sống',
-      word: '准备',
-      ipa: 'zhǔn bèi',
-      part_of_speech: 'Động từ',
-      meaning_vi: 'Chuẩn bị, sẵn sàng',
-      example_en: '我已经做好准备了。(Wǒ yǐjīng zuò hǎo zhǔnbèi le.)',
-      example_vi: 'Tôi đã chuẩn bị sẵn sàng rồi.'
-    },
-    {
-      vocab_id: 'V12',
-      lesson_id: 'bai-3',
-      lesson_title: 'Bài 3: Mua sắm & Đời sống',
-      word: '坚持',
-      ipa: 'jiān chí',
-      part_of_speech: 'Động từ',
-      meaning_vi: 'Kiên trì, bền bỉ',
-      example_en: '坚持每天听汉语录音。(Jiānchí měitiān tīng Hànyǔ lùyīn.)',
-      example_vi: 'Kiên trì nghe băng ghi âm tiếng Trung mỗi ngày.'
-    },
-    {
-      vocab_id: 'V13',
-      lesson_id: 'bai-4',
-      lesson_title: 'Bài 4: Đồ ăn & Nhà hàng',
-      word: '米饭',
-      ipa: 'mǐ fàn',
-      part_of_speech: 'Danh từ',
-      meaning_vi: 'Cơm trắng',
-      example_en: '我想吃一碗米饭。(Wǒ xiǎng chī yì wǎn mǐfàn.)',
-      example_vi: 'Tôi muốn ăn một bát cơm trắng.'
-    },
-    {
-      vocab_id: 'V14',
-      lesson_id: 'bai-4',
-      lesson_title: 'Bài 4: Đồ ăn & Nhà hàng',
-      word: '好吃',
-      ipa: 'hǎo chī',
-      part_of_speech: 'Tính từ',
-      meaning_vi: 'Ngon, thơm ngon',
-      example_en: '中国菜非常好吃。(Zhōngguó cài fēicháng hǎochī.)',
-      example_vi: 'Món ăn Trung Quốc vô cùng ngon.'
-    },
-    {
-      vocab_id: 'V15',
-      lesson_id: 'bai-4',
-      lesson_title: 'Bài 4: Đồ ăn & Nhà hàng',
-      word: '服务员',
-      ipa: 'fú wù yuán',
-      part_of_speech: 'Danh từ',
-      meaning_vi: 'Nhân viên phục vụ',
-      example_en: '服务员，请给我们菜单。(Fúwùyuán, qǐng gěi wǒmen càidān.)',
-      example_vi: 'Phục vụ ơi, vui lòng cho chúng tôi thực đơn.'
-    },
-    {
-      vocab_id: 'V16',
-      lesson_id: 'bai-4',
-      lesson_title: 'Bài 4: Đồ ăn & Nhà hàng',
-      word: '买单',
-      ipa: 'mǎi dān',
-      part_of_speech: 'Động từ',
-      meaning_vi: 'Thanh toán, tính tiền',
-      example_en: '你好，我们买单。(Nǐ hǎo, wǒmen mǎidān.)',
-      example_vi: 'Xin chào, chúng tôi thanh toán.'
-    },
-    {
-      vocab_id: 'V17',
-      lesson_id: 'bai-5',
-      lesson_title: 'Bài 5: Thời gian & Lịch trình',
-      word: '现在',
-      ipa: 'xiàn zài',
-      part_of_speech: 'Danh từ thời gian',
-      meaning_vi: 'Bây giờ, hiện tại',
-      example_en: '现在是上午九点整。(Xiànzài shì shàngwǔ jiǔ diǎn zhěng.)',
-      example_vi: 'Bây giờ là đúng 9 giờ sáng.'
-    },
-    {
-      vocab_id: 'V18',
-      lesson_id: 'bai-5',
-      lesson_title: 'Bài 5: Thời gian & Lịch trình',
-      word: '明天',
-      ipa: 'míng tiān',
-      part_of_speech: 'Danh từ thời gian',
-      meaning_vi: 'Ngày mai',
-      example_en: '明天早上我们一起去图书馆。(Míngtiān zǎoshang wǒmen yìqǐ qù túshūguǎn.)',
-      example_vi: 'Sáng mai chúng ta cùng đi thư viện nhé.'
-    },
-    {
-      vocab_id: 'V19',
-      lesson_id: 'bai-5',
-      lesson_title: 'Bài 5: Thời gian & Lịch trình',
-      word: '开始',
-      ipa: 'kāi shǐ',
-      part_of_speech: 'Động từ',
-      meaning_vi: 'Bắt đầu',
-      example_en: '汉语课八点开始。(Hànyǔ kè bā diǎn kāishǐ.)',
-      example_vi: 'Tiết học tiếng Trung bắt đầu lúc 8 giờ.'
-    },
-    {
-      vocab_id: 'V20',
-      lesson_id: 'bai-5',
-      lesson_title: 'Bài 5: Thời gian & Lịch trình',
-      word: '睡觉',
-      ipa: 'shuì jiào',
-      part_of_speech: 'Động từ',
-      meaning_vi: 'Đi ngủ',
-      example_en: '我通常晚上十一点睡觉。(Wǒ tōngcháng wǎnshang shíyī diǎn shuìjiào.)',
-      example_vi: 'Tôi thường đi ngủ lúc 11 giờ tối.'
-    },
-    {
-      vocab_id: 'V21',
-      lesson_id: 'bai-6',
-      lesson_title: 'Bài 6: Gia đình & Nghề nghiệp',
-      word: '爸爸',
-      ipa: 'bà ba',
-      part_of_speech: 'Danh từ',
-      meaning_vi: 'Bố, cha',
-      example_en: '我爸爸是一名医生。(Wǒ bàba shì yì míng yīshēng.)',
-      example_vi: 'Bố tôi là một bác sĩ.'
-    },
-    {
-      vocab_id: 'V22',
-      lesson_id: 'bai-6',
-      lesson_title: 'Bài 6: Gia đình & Nghề nghiệp',
-      word: '妈妈',
-      ipa: 'mā ma',
-      part_of_speech: 'Danh từ',
-      meaning_vi: 'Mẹ, má',
-      example_en: '我妈妈做菜非常好吃。(Wǒ māma zuò cài fēicháng hǎochī.)',
-      example_vi: 'Mẹ tôi nấu ăn rất ngon.'
-    },
-    {
-      vocab_id: 'V23',
-      lesson_id: 'bai-6',
-      lesson_title: 'Bài 6: Gia đình & Nghề nghiệp',
-      word: '工作',
-      ipa: 'gōng zuò',
-      part_of_speech: 'Danh từ / Động từ',
-      meaning_vi: 'Công việc, làm việc',
-      example_en: '你在哪儿工作？(Nǐ zài nǎr gōngzuò?)',
-      example_vi: 'Bạn làm việc ở đâu?'
-    },
-    {
-      vocab_id: 'V24',
-      lesson_id: 'bai-6',
-      lesson_title: 'Bài 6: Gia đình & Nghề nghiệp',
-      word: '医生',
-      ipa: 'yī shēng',
-      part_of_speech: 'Danh từ',
-      meaning_vi: 'Bác sĩ',
-      example_en: '李医生在医院工作。(Lǐ yīshēng zài yīyuàn gōngzuò.)',
-      example_vi: 'Bác sĩ Lý làm việc ở bệnh viện.'
-    },
-    {
-      vocab_id: 'V25',
-      lesson_id: 'bai-7',
-      lesson_title: 'Bài 7: Phương hướng & Giao thông',
-      word: '哪儿',
-      ipa: 'nǎr',
-      part_of_speech: 'Đại từ',
-      meaning_vi: 'Ở đâu, chỗ nào',
-      example_en: '请问，洗手间在哪儿？(Qǐngwèn, xǐshǒujiān zài nǎr?)',
-      example_vi: 'Xin hỏi, nhà vệ sinh ở đâu?'
-    },
-    {
-      vocab_id: 'V26',
-      lesson_id: 'bai-7',
-      lesson_title: 'Bài 7: Phương hướng & Giao thông',
-      word: '左边',
-      ipa: 'zuǒ biān',
-      part_of_speech: 'Danh từ vị trí',
-      meaning_vi: 'Bên trái',
-      example_en: '超市在学校的左边。(Chāoshì zài xuéxiào de zuǒbiān.)',
-      example_vi: 'Siêu thị nằm ở bên trái trường học.'
-    },
-    {
-      vocab_id: 'V27',
-      lesson_id: 'bai-7',
-      lesson_title: 'Bài 7: Phương hướng & Giao thông',
-      word: '右边',
-      ipa: 'yòu biān',
-      part_of_speech: 'Danh từ vị trí',
-      meaning_vi: 'Bên phải',
-      example_en: '银行在前面右边。(Yínháng zài qiánmiàn yòubiān.)',
-      example_vi: 'Ngân hàng ở phía trước bên tay phải.'
-    },
-    {
-      vocab_id: 'V28',
-      lesson_id: 'bai-7',
-      lesson_title: 'Bài 7: Phương hướng & Giao thông',
-      word: '公共汽车',
-      ipa: 'gōng gòng qì chē',
-      part_of_speech: 'Danh từ',
-      meaning_vi: 'Xe buýt',
-      example_en: '我每天坐公共汽车去上班。(Wǒ měitiān zuò gōnggòng qìchē qù shàngbān.)',
-      example_vi: 'Mỗi ngày tôi đều đi xe buýt đi làm.'
-    },
-    {
-      vocab_id: 'V29',
-      lesson_id: 'bai-8',
-      lesson_title: 'Bài 8: Thời tiết & Cảm xúc',
-      word: '天气',
-      ipa: 'tiān qì',
-      part_of_speech: 'Danh từ',
-      meaning_vi: 'Thời tiết',
-      example_en: '今天天气非常晴朗。(Jīntiān tiānqì fēicháng qínglǎng.)',
-      example_vi: 'Hôm nay thời tiết rất đẹp trời.'
-    },
-    {
-      vocab_id: 'V30',
-      lesson_id: 'bai-8',
-      lesson_title: 'Bài 8: Thời tiết & Cảm xúc',
-      word: '冷',
-      ipa: 'lěng',
-      part_of_speech: 'Tính từ',
-      meaning_vi: 'Lạnh, rét',
-      example_en: '冬天这里很冷。(Dōngtiān zhèlǐ hěn lěng.)',
-      example_vi: 'Mùa đông ở đây rất lạnh.'
-    },
-    {
-      vocab_id: 'V31',
-      lesson_id: 'bai-8',
-      lesson_title: 'Bài 8: Thời tiết & Cảm xúc',
-      word: '热',
-      ipa: 'rè',
-      part_of_speech: 'Tính từ',
-      meaning_vi: 'Nóng, ấm bức',
-      example_en: '夏天天气太热了。(Xiàtiān tiānqì tài rè le.)',
-      example_vi: 'Mùa hè thời tiết nóng quá.'
-    },
-    {
-      vocab_id: 'V32',
-      lesson_id: 'bai-8',
-      lesson_title: 'Bài 8: Thời tiết & Cảm xúc',
-      word: '舒服',
-      ipa: 'shū fu',
-      part_of_speech: 'Tính từ',
-      meaning_vi: 'Thoải mái, dễ chịu',
-      example_en: '秋天微风吹来很舒服。(Qiūtiān wēifēng chuī lái hěn shūfu.)',
-      example_vi: 'Mùa thu gió nhẹ thổi lại rất dễ chịu.'
     }
   ],
 
-  lessons: [
-    { lesson_id: 'bai-1', tag: 'Bài 1', title: 'Bài 1: Chào hỏi & Làm quen', desc: 'Luyện 4 thanh điệu, biến điệu thanh 3 và mẫu câu làm quen cơ bản' },
-    { lesson_id: 'bai-2', tag: 'Bài 2', title: 'Bài 2: Học tập & Ngôn ngữ', desc: 'Phát âm thanh mẫu, vận mẫu và từ vựng học tiếng Hán' },
-    { lesson_id: 'bai-3', tag: 'Bài 3', title: 'Bài 3: Mua sắm & Đời sống', desc: 'Hội thoại mua sắm, hỏi giá cả và đếm số lượng trong tiếng Trung' },
-    { lesson_id: 'bai-4', tag: 'Bài 4', title: 'Bài 4: Đồ ăn & Nhà hàng', desc: 'Gọi món ăn Trung Hoa, khẩu vị và giao tiếp khi đi ăn' },
-    { lesson_id: 'bai-5', tag: 'Bài 5', title: 'Bài 5: Thời gian & Lịch trình', desc: 'Hỏi giờ giấc, ngày tháng và kể lịch trình hoạt động trong ngày' },
-    { lesson_id: 'bai-6', tag: 'Bài 6', title: 'Bài 6: Gia đình & Nghề nghiệp', desc: 'Giới thiệu thành viên gia đình, nghề nghiệp và tuổi tác' },
-    { lesson_id: 'bai-7', tag: 'Bài 7', title: 'Bài 7: Phương hướng & Giao thông', desc: 'Hỏi đường, chỉ hướng đi và các phương tiện giao thông phổ biến' },
-    { lesson_id: 'bai-8', tag: 'Bài 8', title: 'Bài 8: Thời tiết & Cảm xúc', desc: 'Miêu tả thời tiết các mùa, cảm xúc và trạng thái sức khỏe' }
-  ],
+  lessons: [],
 
   exitTickets: [
     {
@@ -1827,13 +1510,11 @@ window.StudySnapStore = (function () {
               });
             }
           });
-          if (!Array.isArray(parsed.lessons) || parsed.lessons.length < 8) {
-            parsed.lessons = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.lessons || []));
-          }
+          parsed.lessons = Array.isArray(parsed.lessons)
+            ? parsed.lessons.filter(function (l) { return Boolean(l && l.isCustom === true); })
+            : [];
           if (!Array.isArray(parsed.vocabulary)) {
             parsed.vocabulary = isProd ? [] : JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.vocabulary || []));
-          } else if (!isProd && parsed.vocabulary.length < 20) {
-            parsed.vocabulary = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.vocabulary || []));
           }
           if (isProd) {
             if (!Array.isArray(parsed.assignments)) parsed.assignments = [];
@@ -2194,6 +1875,13 @@ window.StudySnapStore = (function () {
           created_at: formatCleanDate(pe.created_at) || ''
         };
       });
+    }
+    if (Array.isArray(stateObj.lessons)) {
+      stateObj.lessons = stateObj.lessons.filter(function (l) {
+        return Boolean(l && l.isCustom === true);
+      });
+    } else {
+      stateObj.lessons = [];
     }
 
     if (Array.isArray(remoteData.practiceSubmissions)) {
@@ -3050,7 +2738,14 @@ window.StudySnapStore = (function () {
     if (!stateObj.vocabulary) stateObj.vocabulary = [];
     if (Array.isArray(vocabList) && vocabList.length > 0) {
       vocabList.forEach(function (v) {
-        stateObj.vocabulary.push(v);
+        if (!v) return;
+        const vid = String(v.vocab_id || '').trim();
+        const idx = vid ? stateObj.vocabulary.findIndex(function (cur) { return String(cur.vocab_id || '').trim() === vid; }) : -1;
+        if (idx >= 0) {
+          stateObj.vocabulary[idx] = v;
+        } else {
+          stateObj.vocabulary.push(v);
+        }
       });
       saveState(stateObj);
       return await syncPostToGas(stateObj, {
@@ -3139,6 +2834,169 @@ window.StudySnapStore = (function () {
     });
   }
 
+  function slugifyLessonId(rawText) {
+    const clean = String(rawText || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return clean || 'bai-1';
+  }
+
+  function stripPracticeTitlePrefix(rawTitle) {
+    return String(rawTitle || '')
+      .replace(/^(?:Bài\s*tập\s*)?(?:luyện\s*tập\s*cuối\s*buổi|cuối\s*buổi)\s*(?:—|–|-|:)?\s*/i, '')
+      .trim();
+  }
+
+  function extractShortLessonTag(lessonId, title, fallbackTag) {
+    const fb = String(fallbackTag || '').trim();
+    if (fb) return fb;
+    const raw = String(title || lessonId || '').trim();
+    const match = raw.match(/^(Bài\s*\d+)/i);
+    if (match) return match[1];
+    return raw.length > 20 ? raw.slice(0, 19) + '…' : (raw || 'Bài học');
+  }
+
+  function buildSyncedLessonDisplayTitle(tag, topics) {
+    const cleanTag = String(tag || '').trim();
+    const uniqTopics = [];
+    (topics || []).forEach(function (t) {
+      const clean = String(t || '').trim();
+      if (clean && uniqTopics.indexOf(clean) === -1) uniqTopics.push(clean);
+    });
+    if (uniqTopics.length === 0) return cleanTag || 'Bài học';
+    const first = uniqTopics[0];
+    let baseTitle = first;
+    if (cleanTag) {
+      if (first.toLowerCase() === cleanTag.toLowerCase()) {
+        baseTitle = cleanTag;
+      } else if (first.toLowerCase().indexOf(cleanTag.toLowerCase()) !== 0) {
+        baseTitle = cleanTag + ' — ' + first;
+      }
+    }
+    if (uniqTopics.length > 1) {
+      baseTitle += ' (+' + (uniqTopics.length - 1) + ' bài)';
+    }
+    return baseTitle;
+  }
+
+  function getSyncedLessons(stateObj) {
+    const map = {};
+    const st = stateObj || {};
+    const practices = Array.isArray(st.practiceExercises) ? st.practiceExercises : [];
+    const vocabList = Array.isArray(st.vocabulary) ? st.vocabulary : [];
+    const assignments = Array.isArray(st.assignments) ? st.assignments : [];
+    const customLessons = Array.isArray(st.lessons) ? st.lessons : [];
+
+    // 1. Nguồn chính: đồng bộ theo Bài & Thuộc bài của Luyện tập cuối buổi
+    practices.forEach(function (ex) {
+      if (!ex) return;
+      const rawTag = String(ex.lesson_tag || '').trim();
+      const rawTitle = String(ex.title || '').trim();
+      const cleanTopic = stripPracticeTitlePrefix(rawTitle);
+      const keyBase = rawTag || cleanTopic || ex.exercise_id;
+      if (!keyBase) return;
+      const lid = slugifyLessonId(keyBase);
+      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272') return;
+
+      if (!map[lid]) {
+        map[lid] = {
+          lesson_id: lid,
+          tag: rawTag || extractShortLessonTag(lid, cleanTopic),
+          topics: cleanTopic ? [cleanTopic] : [],
+          title: '',
+          exercise_ids: ex.exercise_id ? [ex.exercise_id] : [],
+          source: 'practice',
+          isCustom: false
+        };
+      } else {
+        if (cleanTopic && map[lid].topics.indexOf(cleanTopic) === -1) {
+          map[lid].topics.push(cleanTopic);
+        }
+        if (ex.exercise_id && map[lid].exercise_ids.indexOf(ex.exercise_id) === -1) {
+          map[lid].exercise_ids.push(ex.exercise_id);
+        }
+      }
+      map[lid].title = buildSyncedLessonDisplayTitle(map[lid].tag, map[lid].topics);
+    });
+
+    // 2. Bài ôn từ đang giao (giữ liên kết hiển thị)
+    assignments.forEach(function (asg) {
+      if (!asg || String(asg.require_media || '').trim().toLowerCase() !== 'vocab') return;
+      const cls = String(asg.class_name || '').trim().toLowerCase();
+      if (!cls || cls === 'unassigned') return;
+      const lid = String(asg.lesson_id || '').trim();
+      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272') return;
+      if (!map[lid]) {
+        const fallbackTitle = String(asg.lesson_tag || lid).trim();
+        map[lid] = {
+          lesson_id: lid,
+          tag: String(asg.lesson_tag || extractShortLessonTag(lid, fallbackTitle)).trim(),
+          topics: [],
+          title: fallbackTitle,
+          exercise_ids: [],
+          source: 'assignment',
+          isCustom: false
+        };
+      }
+    });
+
+    // 3. Bài đã có từ vựng trong kho (giữ nguyên để không mất từ đã nhập)
+    vocabList.forEach(function (v) {
+      if (!v || !v.lesson_id) return;
+      const lid = String(v.lesson_id).trim();
+      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272') return;
+      const vTitle = String(v.lesson_title || lid).trim();
+      if (!map[lid]) {
+        map[lid] = {
+          lesson_id: lid,
+          tag: extractShortLessonTag(lid, vTitle),
+          topics: [],
+          title: vTitle,
+          exercise_ids: [],
+          source: 'vocab',
+          isCustom: false
+        };
+      } else if (!map[lid].title && vTitle) {
+        map[lid].title = vTitle;
+      }
+    });
+
+    // 4. Các bài riêng giáo viên chủ động tạo thêm bằng "+ Tạo bài học mới..."
+    customLessons.forEach(function (cl) {
+      if (!cl || cl.isCustom !== true || !cl.lesson_id) return;
+      const lid = String(cl.lesson_id).trim();
+      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272') return;
+      if (!map[lid]) {
+        const cTitle = String(cl.title || cl.lesson_title || lid).trim();
+        map[lid] = {
+          lesson_id: lid,
+          tag: String(cl.tag || extractShortLessonTag(lid, cTitle)).trim(),
+          topics: [],
+          title: cTitle,
+          exercise_ids: [],
+          source: 'custom',
+          isCustom: true
+        };
+      }
+    });
+
+    return Object.keys(map).map(function (k) {
+      return map[k];
+    }).sort(function (a, b) {
+      const ma = String(a.tag || a.title || a.lesson_id).match(/\d+/);
+      const mb = String(b.tag || b.title || b.lesson_id).match(/\d+/);
+      const wa = ma ? parseInt(ma[0], 10) : 9999;
+      const wb = mb ? parseInt(mb[0], 10) : 9999;
+      if (wa !== wb) return wa - wb;
+      return String(a.title || a.tag || '').localeCompare(String(b.title || b.tag || ''), 'vi');
+    });
+  }
+
   function getInitials(fullName) {
     const parts = String(fullName || '').trim().split(/\s+/);
     if (!parts.length || !parts[0]) return 'HS';
@@ -3170,6 +3028,10 @@ window.StudySnapStore = (function () {
     deleteVocabulary: deleteVocabulary,
     submitVocabCompletion: submitVocabCompletion,
     gradeManualTranslation: gradeManualTranslation,
+    slugifyLessonId: slugifyLessonId,
+    stripPracticeTitlePrefix: stripPracticeTitlePrefix,
+    extractShortLessonTag: extractShortLessonTag,
+    getSyncedLessons: getSyncedLessons,
     getInitials: getInitials,
     loading: typeof window !== 'undefined' ? window.StudySnapLoading : null
   };

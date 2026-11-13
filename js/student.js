@@ -2959,21 +2959,10 @@
   // 4. TAB 3: ÔN TẬP TỪ VỰNG THEO BÀI, KHO 272 TỪ & NHIỆM VỤ ĐƯỢC GIAO
   // =========================================================================
   function getStudentLessonsList() {
-    const map = {};
-    const addEntry = function (entry) {
-      if (!entry || !entry.lesson_id) return;
-      const lid = String(entry.lesson_id).trim();
-      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272') return;
-      const title = String(entry.title || entry.lesson_title || lid).trim();
-      if (!map[lid]) map[lid] = { lesson_id: lid, title: title };
-    };
-    if (Array.isArray(state.lessons)) state.lessons.forEach(addEntry);
-    if (Array.isArray(state.vocabulary)) {
-      state.vocabulary.forEach(function (v) {
-        addEntry({ lesson_id: v.lesson_id, title: v.lesson_title || v.lesson_id });
-      });
+    if (window.StudySnapStore && typeof window.StudySnapStore.getSyncedLessons === 'function') {
+      return window.StudySnapStore.getSyncedLessons(state);
     }
-    return Object.keys(map).map(function (k) { return map[k]; });
+    return [];
   }
 
   function findVocabSubmissionForTask(assignmentId, studentId) {
@@ -3018,7 +3007,7 @@
     const student = getActiveStudent();
     if (!task || !student) return;
     const options = opts || {};
-    const stats = computeMasteryStatsForLesson(task.lesson_id || 'bai-1');
+    const stats = computeMasteryStatsForLesson(task.lesson_id || 'hsk-272');
     const fallbackPct = stats.total > 0 ? Math.min(100, Math.round((stats.masteredCount / stats.total) * 100)) : 100;
     const scoreStr = options.score !== undefined ? String(options.score) : String(fallbackPct);
     const durStr = options.media_duration || (stats.masteredCount + '/' + Math.max(1, stats.total) + ' từ');
@@ -3090,7 +3079,7 @@
         tasks.map(function (task) {
           const sub = findVocabSubmissionForTask(task.assignment_id, student.student_id);
           const isDone = Boolean(sub);
-          const lessonKey = task.lesson_id || 'bai-1';
+          const lessonKey = task.lesson_id || 'hsk-272';
           const statusBadge = isDone
             ? '<span class="status-badge status-graded tabular-nums">Đã hoàn thành' + (sub.score ? ' · ' + escapeHtml(sub.score) + '%' : '') + '</span>'
             : '<span class="status-badge status-missing">Chưa hoàn thành</span>';

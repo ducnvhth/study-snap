@@ -191,6 +191,10 @@
   function buildLessonBuckets(lessonItems) {
     const map = {};
     const defined = typeof adapter.getLessons === 'function' ? (adapter.getLessons() || []) : [];
+    const definedById = {};
+    defined.forEach(function (l) {
+      if (l && l.lesson_id) definedById[String(l.lesson_id).trim()] = l;
+    });
 
     if (adapter.isTeacher) {
       defined.forEach(function (l) {
@@ -200,7 +204,7 @@
         map[lid] = {
           lesson_id: lid,
           title: title,
-          shortLabel: formatShortLessonLabel(lid, l.tag || title),
+          shortLabel: String(l.tag || '').trim() || formatShortLessonLabel(lid, title),
           count: 0
         };
       });
@@ -208,16 +212,21 @@
 
     lessonItems.forEach(function (item) {
       const lid = item.lesson_id;
+      const syncedDef = definedById[lid];
+      const preferredTitle = syncedDef ? String(syncedDef.title || syncedDef.tag || lid).trim() : (item.lesson_title || lid);
+      const preferredShort = syncedDef && syncedDef.tag
+        ? String(syncedDef.tag).trim()
+        : (item.lesson_short || formatShortLessonLabel(lid, preferredTitle));
       if (!map[lid]) {
         map[lid] = {
           lesson_id: lid,
-          title: item.lesson_title || lid,
-          shortLabel: item.lesson_short || formatShortLessonLabel(lid, item.lesson_title),
+          title: preferredTitle,
+          shortLabel: preferredShort,
           count: 0
         };
-      } else if (item.lesson_title && map[lid].title === lid) {
-        map[lid].title = item.lesson_title;
-        map[lid].shortLabel = formatShortLessonLabel(lid, item.lesson_title);
+      } else if (preferredTitle && preferredTitle !== lid && map[lid].title === lid) {
+        map[lid].title = preferredTitle;
+        map[lid].shortLabel = preferredShort;
       }
       map[lid].count++;
     });
@@ -255,6 +264,7 @@
     }
     const firstNonEmpty = buckets.find(function (b) { return b.count > 0; });
     if (firstNonEmpty) return firstNonEmpty.lesson_id;
+    if (adapter.isTeacher && buckets.length > 0) return buckets[0].lesson_id;
     if (lessonItems.length > 0) return 'all-lessons';
     return 'hsk-272';
   }
@@ -346,10 +356,15 @@
         '</div>';
     }
 
+    const emptySyncHint = (adapter.isTeacher && ctx.buckets.length === 0)
+      ? '<span class="vocab-strip-caption" style="font-weight:500;">(Chưa có bài từ tab Luyện tập cuối buổi — tạo bài bên Luyện cuối buổi hoặc chọn "+ Tạo bài học mới..." khi thêm từ)</span>'
+      : '';
+
     strip.innerHTML =
       '<div class="vocab-source-header">' +
         '<span class="vocab-strip-caption">Nguồn từ vựng:</span>' +
         '<strong class="vocab-active-source-name">' + escapeHtml(ctx.sourceLabel) + '</strong>' +
+        emptySyncHint +
       '</div>' +
       '<div class="lesson-selector-bar vocab-lesson-pills-bar" role="group" aria-label="Chọn bài học hoặc kho từ vựng">' +
         lessonPillsHtml +
