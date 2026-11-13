@@ -902,6 +902,18 @@
             return;
           }
 
+          if (remoteRes && remoteRes.submission) {
+            if (remoteRes.submission.submission_id) {
+              submissionRecord.submission_id = remoteRes.submission.submission_id;
+            }
+            if (remoteRes.submission.media_url) {
+              submissionRecord.media_url = remoteRes.submission.media_url;
+            }
+            if (remoteRes.submission.status) {
+              submissionRecord.status = remoteRes.submission.status;
+            }
+          }
+
           const existingIndex = state.submissions.findIndex(function (s) {
             return s.assignment_id === ui.selectedAssignmentId && s.student_id === student.student_id;
           });

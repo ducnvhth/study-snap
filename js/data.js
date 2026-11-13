@@ -1855,8 +1855,80 @@ window.StudySnapStore = (function () {
     localStorage.setItem(GAS_URL_KEY, (url || '').trim());
   }
 
+  function applyDeltaResponseToState(stateObj, payload, json) {
+    if (!stateObj || !json || !json.ok) return;
+    const action = payload && payload.action ? String(payload.action) : '';
+
+    if (action === 'submitHomework' && json.submission) {
+      const targetAsgId = String(payload.assignment_id || '').trim();
+      const targetStuId = String(payload.student_id || '').trim();
+      const subList = Array.isArray(stateObj.submissions) ? stateObj.submissions : [];
+      const found = subList.find(function (s) {
+        return (
+          (json.submission.submission_id && s.submission_id === json.submission.submission_id) ||
+          (s.assignment_id === targetAsgId && s.student_id === targetStuId)
+        );
+      });
+      if (found) {
+        if (json.submission.submission_id) found.submission_id = json.submission.submission_id;
+        if (json.submission.media_url) found.media_url = json.submission.media_url;
+        if (json.submission.status) found.status = json.submission.status;
+      }
+    } else if (action === 'saveTeacherFeedback' && json.submission) {
+      const targetAsgId = String(payload.assignment_id || '').trim();
+      const targetStuId = String(payload.student_id || '').trim();
+      const subList = Array.isArray(stateObj.submissions) ? stateObj.submissions : [];
+      const found = subList.find(function (s) {
+        return (
+          (json.submission.submission_id && s.submission_id === json.submission.submission_id) ||
+          (s.assignment_id === targetAsgId && s.student_id === targetStuId)
+        );
+      });
+      if (found) {
+        if (json.submission.submission_id) found.submission_id = json.submission.submission_id;
+        if (json.submission.teacher_voice_url) found.teacher_voice_url = json.submission.teacher_voice_url;
+        if (json.submission.status) found.status = json.submission.status;
+      }
+    } else if (action === 'savePracticeExercise' && json.practiceExercise) {
+      const pe = json.practiceExercise;
+      const exList = Array.isArray(stateObj.practiceExercises) ? stateObj.practiceExercises : [];
+      const foundEx = exList.find(function (e) {
+        return e.exercise_id === pe.exercise_id;
+      });
+      if (foundEx) {
+        if (Array.isArray(pe.sections)) foundEx.sections = pe.sections;
+        if (pe.updated_at) foundEx.updated_at = pe.updated_at;
+        if (pe.title) foundEx.title = pe.title;
+        if (pe.lesson_tag) foundEx.lesson_tag = pe.lesson_tag;
+        if (pe.total_score !== undefined) foundEx.total_score = pe.total_score;
+        syncLinkedPracticeAssignments(stateObj, foundEx);
+      }
+    } else if (action === 'createStudentAccount' && json.student) {
+      const stu = json.student;
+      const students = Array.isArray(stateObj.students) ? stateObj.students : [];
+      const foundStu = students.find(function (s) {
+        return s.student_id === stu.student_id || (stu.username && s.username === stu.username);
+      });
+      if (foundStu) {
+        foundStu.student_id = stu.student_id || foundStu.student_id;
+      }
+    }
+
+    if (json.version && stateObj.lastRemoteBootstrapAt) {
+      stateObj.syncVersion = String(json.version);
+    }
+    saveState(stateObj);
+  }
+
   function mergeRemoteData(stateObj, remoteData) {
     if (!remoteData) return stateObj;
+    if (
+      Array.isArray(remoteData.teachers) ||
+      Array.isArray(remoteData.students) ||
+      Array.isArray(remoteData.practiceExercises)
+    ) {
+      stateObj.lastRemoteBootstrapAt = Date.now();
+    }
     const initialSeed = window.STUDYSNAP_INITIAL_DATA;
 
     const remoteIsCleared =
@@ -2158,18 +2230,33 @@ window.StudySnapStore = (function () {
       if (loadingCtrl && lockId && loadingCtrl.activateBlockingSync) {
         loadingCtrl.activateBlockingSync(lockId);
       }
+      const actionName = payload && payload.action ? String(payload.action) : '';
+      const wirePayload =
+        actionName === 'login' || actionName === 'setupDatabase'
+          ? payload
+          : Object.assign({}, payload, {
+              deltaOnly: true,
+              clientVersion: stateObj && stateObj.syncVersion ? String(stateObj.syncVersion) : ''
+            });
       const response = await fetchWithTimeout(
         url,
         {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(wirePayload)
         },
         hasHeavyBody ? 45000 : 25000
       );
       const json = await response.json();
-      if (json && json.ok && json.data) {
-        mergeRemoteData(stateObj, json.data);
+      if (json && json.ok) {
+        if (json.data) {
+          if (json.version && stateObj) {
+            stateObj.syncVersion = String(json.version);
+          }
+          mergeRemoteData(stateObj, json.data);
+        } else if (actionName !== 'login') {
+          applyDeltaResponseToState(stateObj, payload, json);
+        }
       }
       return json;
     };
@@ -2201,9 +2288,25 @@ window.StudySnapStore = (function () {
 
     inflightBootstrapPromise = (async function () {
       try {
-        const response = await fetchWithTimeout(url + '?action=bootstrap', {}, 25000);
+        const hasBootstrappedState = Boolean(
+          stateObj && stateObj.syncVersion && stateObj.lastRemoteBootstrapAt
+        );
+        const bootUrl =
+          url +
+          '?action=bootstrap' +
+          (hasBootstrappedState ? '&v=' + encodeURIComponent(String(stateObj.syncVersion)) : '');
+        const response = await fetchWithTimeout(bootUrl, {}, 25000);
         const json = await response.json();
+        if (json && json.ok && json.unchanged) {
+          if (json.version && stateObj) {
+            stateObj.syncVersion = String(json.version);
+          }
+          return json;
+        }
         if (json && json.ok && json.data) {
+          if (json.version && stateObj) {
+            stateObj.syncVersion = String(json.version);
+          }
           if (
             json.data.isProduction !== true &&
             !stateObj.isClearedForProduction &&

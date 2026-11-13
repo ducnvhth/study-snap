@@ -36,8 +36,99 @@
     selectedLesson: 'bai-1',
     selectedPracticeExId: (state.practiceExercises && state.practiceExercises[0]) ? state.practiceExercises[0].exercise_id : 'EX_HSK1_BAI_1',
     activeGradingSubId: null,
-    practiceCurrentView: 'builder'
+    practiceCurrentView: 'builder',
+    practiceDirtyMap: {}
   };
+
+  function isPracticeExerciseDirty(exId) {
+    return Boolean(exId && ui.practiceDirtyMap && ui.practiceDirtyMap[exId]);
+  }
+
+  function updatePracticeDraftStatusUi(ex) {
+    const targetEx = ex || getActivePracticeExercise();
+    const isDirty = Boolean(targetEx && isPracticeExerciseDirty(targetEx.exercise_id));
+    const stickySummary = document.getElementById('gform-sticky-summary');
+    const maxScoreBadge = document.getElementById('teacher-practice-maxscore-badge');
+    const btnSaveSticky = document.getElementById('btn-save-sticky-bar');
+    const btnSaveTop = document.getElementById('btn-save-top-bar');
+
+    if (stickySummary && targetEx) {
+      const baseSummary = (targetEx.sections || []).length + ' phần • Tổng ' + (targetEx.total_score || 0) + ' điểm';
+      stickySummary.textContent = isDirty ? baseSummary + ' • Chưa lưu lên máy chủ' : baseSummary;
+    }
+    if (maxScoreBadge && targetEx) {
+      maxScoreBadge.textContent = isDirty
+        ? 'Tổng ' + (targetEx.total_score || 0) + ' điểm (nháp chưa lưu)'
+        : 'Tổng ' + (targetEx.total_score || 0) + ' điểm';
+    }
+    [btnSaveSticky, btnSaveTop].forEach(function (btn) {
+      if (!btn) return;
+      btn.classList.toggle('has-unsaved-draft', isDirty);
+    });
+  }
+
+  function markPracticeExerciseDirty(ex, saveToLocal) {
+    if (!ex || !ex.exercise_id) return;
+    if (!ui.practiceDirtyMap) ui.practiceDirtyMap = {};
+    ui.practiceDirtyMap[ex.exercise_id] = true;
+    if (saveToLocal !== false) {
+      window.StudySnapStore.saveState(state);
+    }
+    updatePracticeDraftStatusUi(ex);
+  }
+
+  function clearPracticeExerciseDirty(exId) {
+    if (!exId || !ui.practiceDirtyMap) return;
+    delete ui.practiceDirtyMap[exId];
+    updatePracticeDraftStatusUi(getActivePracticeExercise());
+  }
+
+  function savePracticeDraftLocally(ex) {
+    if (!ex) return;
+    if (!Array.isArray(state.practiceExercises)) state.practiceExercises = [];
+    let totalScore = 0;
+    (ex.sections || []).forEach(function (s) {
+      totalScore += Number(s.max_score || 0);
+    });
+    ex.total_score = totalScore;
+    const idx = state.practiceExercises.findIndex(function (e) {
+      return e.exercise_id === ex.exercise_id;
+    });
+    if (idx >= 0) {
+      state.practiceExercises[idx] = ex;
+    } else {
+      state.practiceExercises.push(ex);
+    }
+    if (window.StudySnapStore.syncLinkedPracticeAssignments) {
+      window.StudySnapStore.syncLinkedPracticeAssignments(state, ex);
+    }
+    markPracticeExerciseDirty(ex, true);
+  }
+
+  async function flushPendingPracticeDraft(ex, triggerBtn) {
+    if (!ex || !isPracticeExerciseDirty(ex.exercise_id)) {
+      return { ok: true, skipped: true };
+    }
+    const activeEx = getActivePracticeExercise();
+    if (activeEx && activeEx.exercise_id === ex.exercise_id) {
+      collectExerciseFromDom();
+    }
+    const res = await runWithLoading(
+      triggerBtn || null,
+      'Đang đồng bộ bản nháp đề...',
+      async function () {
+        return await window.StudySnapStore.savePracticeExercise(state, ex);
+      },
+      {
+        title: 'Đang lưu thay đổi đề trước khi tiếp tục...',
+        desc: 'Hệ thống đang đồng bộ các câu hỏi vừa chỉnh sửa lên máy chủ trước khi giao cho lớp.'
+      }
+    );
+    if (!res || res.ok !== false) {
+      clearPracticeExerciseDirty(ex.exercise_id);
+    }
+    return res;
+  }
 
   function escapeHtml(str) {
     return String(str === undefined || str === null ? '' : str)
@@ -1744,6 +1835,7 @@
             await runWithLoading(btnEmptyNew, 'Đang tạo bài...', async function () {
               await window.StudySnapStore.savePracticeExercise(state, newEx);
             });
+            clearPracticeExerciseDirty(newEx.exercise_id);
             switchPracticeSubView('builder');
             renderTeacherPracticeTab();
             showToast('Đã tạo bài luyện tập cuối buổi mới!');
@@ -1767,6 +1859,7 @@
             await runWithLoading(btnEmptyTpl, 'Đang nạp mẫu...', async function () {
               await window.StudySnapStore.savePracticeExercise(state, tpl);
             });
+            clearPracticeExerciseDirty(tpl.exercise_id);
             switchPracticeSubView('builder');
             renderTeacherPracticeTab();
             showToast('Đã nạp bộ câu hỏi mẫu chuẩn HSK!');
@@ -1821,6 +1914,7 @@
       stickySummaryBadge.textContent =
         (ex.sections || []).length + ' phần • Tổng ' + (ex.total_score || 0) + ' điểm';
     }
+    updatePracticeDraftStatusUi(ex);
 
     // Update submissions pill count
     const subs = (state.practiceSubmissions || []).filter(function (s) {
@@ -1867,6 +1961,7 @@
           await runWithLoading(btnFill, 'Đang nạp mẫu...', async function () {
             await window.StudySnapStore.savePracticeExercise(state, ex);
           });
+          clearPracticeExerciseDirty(ex.exercise_id);
           renderTeacherPracticeTab();
           showToast('Đã nạp sẵn 5 câu hỏi mẫu vào bài tập!');
         });
@@ -2661,14 +2756,28 @@
         document.querySelectorAll('[data-sec-score]').forEach(function (el) {
           sum += parseInt(el.value, 10) || 0;
         });
-        const maxScoreBadge = document.getElementById('teacher-practice-maxscore-badge');
-        const stickySummary = document.getElementById('gform-sticky-summary');
-        if (maxScoreBadge) maxScoreBadge.textContent = 'Tổng ' + sum + ' điểm';
-        if (stickySummary) {
-          stickySummary.textContent = (ex.sections || []).length + ' phần • Tổng ' + sum + ' điểm';
-        }
+        ex.total_score = sum;
+        markPracticeExerciseDirty(ex, false);
       });
     });
+
+    const builderListEl = document.getElementById('teacher-builder-sections-list');
+    if (builderListEl && builderListEl.dataset.dirtyBound !== '1') {
+      builderListEl.dataset.dirtyBound = '1';
+      builderListEl.addEventListener('input', function (ev) {
+        if (!ev.target || ev.target.hasAttribute('data-sec-score')) return;
+        const activeEx = getActivePracticeExercise();
+        if (activeEx) markPracticeExerciseDirty(activeEx, false);
+      });
+      builderListEl.addEventListener('change', function (ev) {
+        if (!ev.target || ev.target.hasAttribute('data-sec-score')) return;
+        const activeEx = getActivePracticeExercise();
+        if (activeEx) {
+          collectExerciseFromDom();
+          markPracticeExerciseDirty(activeEx, true);
+        }
+      });
+    }
 
     // 1. Move Up / Down / Delete Section
     document.querySelectorAll('[data-sec-move-up]').forEach(function (btn) {
@@ -2682,7 +2791,7 @@
           ex.sections.forEach(function (s, i) {
             s.section_num = i + 1;
           });
-          window.StudySnapStore.savePracticeExercise(state, ex);
+          savePracticeDraftLocally(ex);
           renderTeacherPracticeTab();
         }
       });
@@ -2699,7 +2808,7 @@
           ex.sections.forEach(function (s, i) {
             s.section_num = i + 1;
           });
-          window.StudySnapStore.savePracticeExercise(state, ex);
+          savePracticeDraftLocally(ex);
           renderTeacherPracticeTab();
         }
       });
@@ -2721,9 +2830,9 @@
             total += Number(s.max_score || 0);
           });
           ex.total_score = total;
-          window.StudySnapStore.savePracticeExercise(state, ex);
+          savePracticeDraftLocally(ex);
           renderTeacherPracticeTab();
-          showToast('Đã xóa phần bài tập!');
+          showToast('Đã xóa phần bài tập! Nhớ bấm "Lưu đề nhanh" để đồng bộ lên máy chủ.');
         }
       });
     });
@@ -2750,7 +2859,7 @@
         sec.data.answer[String(nextLeftId)] = nextRightId;
         sec.max_score = sec.data.left.length;
 
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
       });
     });
@@ -2792,7 +2901,7 @@
           sec.data.answer = newAnswer;
           sec.max_score = newLeft.length;
 
-          window.StudySnapStore.savePracticeExercise(state, ex);
+          savePracticeDraftLocally(ex);
           renderTeacherPracticeTab();
         }
       });
@@ -2819,7 +2928,7 @@
         });
         sec.max_score = sec.data.items.length;
 
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
       });
     });
@@ -2841,7 +2950,7 @@
         });
         sec.max_score = sec.data.items.length;
 
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
       });
     });
@@ -2849,7 +2958,7 @@
     document.querySelectorAll('[data-mc-radio]').forEach(function (radio) {
       radio.addEventListener('change', function () {
         collectExerciseFromDom();
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
       });
     });
 
@@ -2872,7 +2981,7 @@
         });
         sec.max_score = sec.data.items.length;
 
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
       });
     });
@@ -2894,7 +3003,7 @@
         });
         sec.max_score = sec.data.items.length;
 
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
       });
     });
@@ -2919,7 +3028,7 @@
         });
         sec.max_score = sec.data.items.length;
 
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
       });
     });
@@ -2941,7 +3050,7 @@
         });
         sec.max_score = sec.data.items.length;
 
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
       });
     });
@@ -2968,7 +3077,7 @@
         });
         sec.max_score = sec.data.items.length;
 
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
       });
     });
@@ -2990,7 +3099,7 @@
         });
         sec.max_score = sec.data.items.length;
 
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
       });
     });
@@ -3048,7 +3157,7 @@
         if (prevMode === nextMode) return;
 
         sec.data.listening_mode = nextMode;
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
         showToast(
           nextMode === 'per_question'
@@ -3057,6 +3166,14 @@
         );
       });
     });
+
+    function updateExerciseTotalScore(targetEx) {
+      let sum = 0;
+      ((targetEx && targetEx.sections) || []).forEach(function (s) {
+        sum += Number(s.max_score || 0);
+      });
+      if (targetEx) targetEx.total_score = sum;
+    }
 
     document.querySelectorAll('[data-add-ls-q]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -3080,8 +3197,9 @@
           explanation: ''
         });
         sec.max_score = sec.data.items.length;
+        updateExerciseTotalScore(ex);
 
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
       });
     });
@@ -3102,8 +3220,9 @@
           return it.id !== itemId;
         });
         sec.max_score = Math.max(1, sec.data.items.length);
+        updateExerciseTotalScore(ex);
 
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
       });
     });
@@ -3111,7 +3230,7 @@
     document.querySelectorAll('[data-ls-radio]').forEach(function (radio) {
       radio.addEventListener('change', function () {
         collectExerciseFromDom();
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
       });
     });
 
@@ -3135,17 +3254,20 @@
             resolved.targetObj.audio_label =
               resolved.defaultLabelPrefix || file.name.replace(/\.[^/.]+$/, '');
           }
-          await runWithLoading(
+          const saveAudioRes = await runWithLoading(
             null,
             null,
             async function () {
-              await window.StudySnapStore.savePracticeExercise(state, ex);
+              return await window.StudySnapStore.savePracticeExercise(state, ex);
             },
             {
               title: resolved.loadingTitle,
               desc: 'Hệ thống đang tải lên và đồng bộ tệp âm thanh cho bài tập.'
             }
           );
+          if (!saveAudioRes || saveAudioRes.ok !== false) {
+            clearPracticeExerciseDirty(ex.exercise_id);
+          }
           renderTeacherPracticeTab();
           showToast('Đã gắn file nghe: ' + file.name);
         });
@@ -3177,17 +3299,20 @@
             if (labelSpan) labelSpan.textContent = 'Ghi âm trực tiếp';
             resolved.targetObj.audio_url = recInfo.dataUrl;
             resolved.targetObj.audio_duration = recInfo.duration || '00:30';
-            await runWithLoading(
+            const recSaveRes = await runWithLoading(
               btn,
               'Đang lưu bản thu...',
               async function () {
-                await window.StudySnapStore.savePracticeExercise(state, ex);
+                return await window.StudySnapStore.savePracticeExercise(state, ex);
               },
               {
                 title: resolved.loadingTitle,
                 desc: 'Hệ thống đang đồng bộ bản ghi âm lên máy chủ.'
               }
             );
+            if (!recSaveRes || recSaveRes.ok !== false) {
+              clearPracticeExerciseDirty(ex.exercise_id);
+            }
             renderTeacherPracticeTab();
             showToast('Đã ghi âm đoạn nghe (' + recInfo.duration + ')!');
           },
@@ -3224,9 +3349,9 @@
         const resolved = resolveListeningAudioTarget(targetKey);
         if (!resolved) return;
         resolved.targetObj.audio_url = '';
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
-        showToast('Đã gỡ file âm thanh.');
+        showToast('Đã gỡ file âm thanh (hãy bấm "Lưu đề nhanh" để cập nhật lên máy chủ).');
       });
     });
   }
@@ -3586,6 +3711,7 @@
       await runWithLoading(submitBtn, 'Đang nhập đề...', async function () {
         await window.StudySnapStore.savePracticeExercise(state, parsed);
       });
+      clearPracticeExerciseDirty(parsed.exercise_id);
       ui.selectedPracticeExId = parsed.exercise_id;
       renderTeacherPracticeTab();
 
@@ -3720,6 +3846,7 @@
     await runWithLoading(submitExcelBtn, 'Đang lưu dữ liệu...', async function () {
       await window.StudySnapStore.savePracticeExercise(state, ex);
     });
+    clearPracticeExerciseDirty(ex.exercise_id);
     renderTeacherPracticeTab();
 
     const modal = document.getElementById('modal-excel-paste');
@@ -3826,7 +3953,11 @@
         triggerBtns,
         loadingLabel || 'Đang lưu tên & thuộc bài...',
         async function () {
-          return await window.StudySnapStore.savePracticeExercise(state, ex);
+          const saveRes = await window.StudySnapStore.savePracticeExercise(state, ex);
+          if (!saveRes || saveRes.ok !== false) {
+            clearPracticeExerciseDirty(ex.exercise_id);
+          }
+          return saveRes;
         },
         {
           title: 'Đang lưu tên & thuộc bài...',
@@ -3923,6 +4054,7 @@
         await runWithLoading(submitBtn, 'Đang tạo bài tập...', async function () {
           await window.StudySnapStore.savePracticeExercise(state, newEx);
         });
+        clearPracticeExerciseDirty(newEx.exercise_id);
         ui.selectedPracticeExId = newEx.exercise_id;
         ui.practiceCurrentView = 'builder';
         closePracticeMetaModal();
@@ -3943,7 +4075,7 @@
       if (metaTagInput && metaTagInput.value.trim()) {
         ex.lesson_tag = metaTagInput.value.trim();
       }
-      window.StudySnapStore.saveState(state);
+      markPracticeExerciseDirty(ex, true);
       const sel = document.getElementById('teacher-practice-select');
       if (sel) {
         const opt = sel.querySelector('option[value="' + ex.exercise_id + '"]');
@@ -4029,9 +4161,9 @@
         });
         ex.total_score = total;
 
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
-        showToast('Đã thêm mẫu ' + newSec.title + ' vào bài tập!');
+        showToast('Đã thêm mẫu ' + newSec.title + ' (hãy bấm "Lưu đề nhanh" khi soạn xong).');
 
         setTimeout(function () {
           const newCard = document.querySelector('[data-sec-card="' + newSec.section_id + '"]');
@@ -4089,6 +4221,7 @@
           alert(res.error || 'Không thể lưu bài tập lên máy chủ. Vui lòng thử lại.');
           return;
         }
+        clearPracticeExerciseDirty(ex.exercise_id);
         renderAll();
         showToast('Đã lưu bài tập "' + ex.title + '" thành công!');
       });
@@ -4110,6 +4243,7 @@
           await runWithLoading(btnDeleteEx, 'Đang xóa...', async function () {
             await window.StudySnapStore.deletePracticeExercise(state, ex.exercise_id);
           });
+          clearPracticeExerciseDirty(ex.exercise_id);
           ui.selectedPracticeExId =
             state.practiceExercises && state.practiceExercises[0]
               ? state.practiceExercises[0].exercise_id
@@ -4138,9 +4272,9 @@
         });
         ex.total_score = total;
 
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
-        showToast('Đã thêm phần mới vào bài tập!');
+        showToast('Đã thêm phần mới (hãy bấm "Lưu đề nhanh" khi soạn xong).');
       });
     }
 
@@ -4513,6 +4647,12 @@
         });
         if (existingActive) {
           showToast('Đề này hiện đã được giao cho "' + (classVal === 'all' ? 'Tất cả các lớp' : classVal) + '" rồi!');
+          return;
+        }
+
+        const draftSyncRes = await flushPendingPracticeDraft(ex, submitBtn);
+        if (draftSyncRes && draftSyncRes.ok === false) {
+          alert(draftSyncRes.error || 'Không thể đồng bộ thay đổi đề lên máy chủ trước khi giao bài. Vui lòng thử lại.');
           return;
         }
 
@@ -6302,6 +6442,7 @@
             desc: 'Hệ thống đang lưu ' + importedSections.length + ' phần (' + parsedPracticeResult.totalItems + ' câu hỏi) lên máy chủ.'
           }
         );
+        clearPracticeExerciseDirty(targetEx.exercise_id);
         switchPracticeSubView('builder');
         renderTeacherPracticeTab();
 
@@ -6686,6 +6827,7 @@
         await runWithLoading(createPracticeBtn, 'Đang tạo đề...', async function () {
           await window.StudySnapStore.savePracticeExercise(state, newEx);
         });
+        clearPracticeExerciseDirty(newEx.exercise_id);
         switchTeacherTab('practice');
         renderTeacherPracticeTab();
         showToast('Đã khởi tạo đề mới cho ' + tag + '! Hãy bấm chọn dạng bài bên dưới để soạn câu hỏi.');
@@ -6720,6 +6862,19 @@
     renderStudentAccountsTab();
     renderTeacherPracticeTab();
     renderContentAndExitLogsTab();
+  }
+
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('beforeunload', function (ev) {
+      const dirtyMap = ui.practiceDirtyMap || {};
+      const hasDirty = Object.keys(dirtyMap).some(function (id) {
+        return Boolean(dirtyMap[id]);
+      });
+      if (hasDirty) {
+        ev.preventDefault();
+        ev.returnValue = '';
+      }
+    });
   }
 
   document.addEventListener('DOMContentLoaded', function () {

@@ -676,6 +676,22 @@ select.form-control {
   box-shadow: 0 8px 24px rgba(255, 107, 157, 0.32);
 }
 
+.btn-primary.has-unsaved-draft {
+  box-shadow: 0 0 0 3px var(--yellow), 0 8px 22px rgba(255, 107, 157, 0.34);
+}
+
+.btn-primary.has-unsaved-draft::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ylt);
+  border: 1.5px solid var(--ink);
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
 .btn-secondary {
   background-color: #B8F5E3;
   background-image: linear-gradient(135deg, #D5FBF0 0%, #CBEFFF 100%);

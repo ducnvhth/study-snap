@@ -179,14 +179,49 @@
             });
 
             if (remoteAuth && remoteAuth.ok && remoteAuth.user) {
-              window.StudySnapAuth.setCurrentUser(remoteAuth.user);
-              if (loading) {
-                if (submitBtn) loading.setButtonLoading(submitBtn, true, 'Đang tải dữ liệu lớp học...');
-                loading.showOverlay('Đăng nhập thành công!', 'Đang tải dữ liệu lớp học và mở không gian làm việc...');
+              const authUser = remoteAuth.user;
+              if (authUser.role === 'teacher') {
+                if (!Array.isArray(state.teachers)) state.teachers = [];
+                const hasTeacher = state.teachers.some(function (t) {
+                  return (
+                    (authUser.id && String(t.teacher_id || '') === String(authUser.id)) ||
+                    (authUser.username && String(t.username || '').toLowerCase() === String(authUser.username).toLowerCase())
+                  );
+                });
+                if (!hasTeacher) {
+                  state.teachers.push({
+                    teacher_id: authUser.id || 'GV01',
+                    full_name: authUser.full_name || '',
+                    username: authUser.username || '',
+                    subject: authUser.subject || 'Giáo viên phụ trách'
+                  });
+                }
+              } else if (authUser.role === 'student') {
+                if (!Array.isArray(state.students)) state.students = [];
+                const sId = authUser.student_id || authUser.id || '';
+                const hasStudent = state.students.some(function (s) {
+                  return (
+                    (sId && String(s.student_id || '') === String(sId)) ||
+                    (authUser.username && String(s.username || '').toLowerCase() === String(authUser.username).toLowerCase())
+                  );
+                });
+                if (!hasStudent) {
+                  state.students.push({
+                    student_id: sId,
+                    full_name: authUser.full_name || '',
+                    username: authUser.username || '',
+                    class_name: authUser.class_name || '',
+                    avatar_initials: authUser.avatar_initials || ''
+                  });
+                }
               }
-              await window.StudySnapStore.fetchBootstrapFromGas(state);
-              state = window.StudySnapStore.loadState();
-              result = { ok: true, user: remoteAuth.user };
+              window.StudySnapStore.saveState(state);
+              window.StudySnapAuth.setCurrentUser(authUser);
+              if (loading) {
+                if (submitBtn) loading.setButtonLoading(submitBtn, true, 'Đang chuyển trang...');
+                loading.showOverlay('Đăng nhập thành công!', 'Đang mở không gian làm việc StudySnap...');
+              }
+              result = { ok: true, user: authUser };
             } else if (remoteAuth) {
               if (loading && submitBtn) {
                 loading.setButtonLoading(submitBtn, true, 'Đang cập nhật thông tin...');

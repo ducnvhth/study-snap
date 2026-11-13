@@ -84,14 +84,191 @@ function menuSetupDatabase_() {
   ui.alert(result.message || 'Đã khởi tạo tài khoản Giáo viên Hồ Châu Uyển Nhi thành công.');
 }
 
+const SCHEMA_CACHE_KEY = 'STUDYSNAP_SCHEMA_OK_V3';
+const SCHEMA_CACHE_TTL_SEC = 21600;
+const BOOTSTRAP_HOT_VER_KEY = 'STUDYSNAP_BS_HOT_VER_V3';
+const BOOTSTRAP_META_KEY = 'STUDYSNAP_BS_META_V3';
+const BOOTSTRAP_CHUNK_PREFIX = 'STUDYSNAP_BS_CHUNK_V3_';
+const BOOTSTRAP_CACHE_TTL_SEC = 180;
+const BOOTSTRAP_CHUNK_SIZE = 85000;
+const DATA_VERSION_PROP_KEY = 'STUDYSNAP_DATA_VERSION';
+
+function getScriptCacheSafe_() {
+  try {
+    if (typeof CacheService !== 'undefined' && CacheService && typeof CacheService.getScriptCache === 'function') {
+      return CacheService.getScriptCache();
+    }
+  } catch (err) {}
+  return null;
+}
+
+function getScriptPropsSafe_() {
+  try {
+    if (typeof PropertiesService !== 'undefined' && PropertiesService && typeof PropertiesService.getScriptProperties === 'function') {
+      return PropertiesService.getScriptProperties();
+    }
+  } catch (err) {}
+  return null;
+}
+
+function getDataVersion_() {
+  const props = getScriptPropsSafe_();
+  if (!props) return '';
+  try {
+    let ver = String(props.getProperty(DATA_VERSION_PROP_KEY) || '').trim();
+    if (!ver) {
+      ver = 'v_' + new Date().getTime() + '_0';
+      props.setProperty(DATA_VERSION_PROP_KEY, ver);
+    }
+    return ver;
+  } catch (err) {
+    return '';
+  }
+}
+
+function bumpDataVersion_() {
+  const props = getScriptPropsSafe_();
+  const nextVer = 'v_' + new Date().getTime() + '_' + Math.floor(Math.random() * 100000);
+  if (props) {
+    try {
+      props.setProperty(DATA_VERSION_PROP_KEY, nextVer);
+    } catch (err) {}
+  }
+  return nextVer;
+}
+
+function markSchemaReadyCache_() {
+  const cache = getScriptCacheSafe_();
+  if (!cache) return;
+  try {
+    cache.put(SCHEMA_CACHE_KEY, '1', SCHEMA_CACHE_TTL_SEC);
+  } catch (err) {}
+}
+
+function invalidateSchemaCache_() {
+  const cache = getScriptCacheSafe_();
+  if (!cache) return;
+  try {
+    cache.remove(SCHEMA_CACHE_KEY);
+  } catch (err) {}
+}
+
+function markHotVersion_(version) {
+  const cache = getScriptCacheSafe_();
+  if (!cache || !version) return;
+  try {
+    cache.put(BOOTSTRAP_HOT_VER_KEY, String(version), BOOTSTRAP_CACHE_TTL_SEC);
+  } catch (err) {}
+}
+
+function invalidateBootstrapCache_() {
+  const cache = getScriptCacheSafe_();
+  if (!cache) return;
+  try {
+    const keysToRemove = [BOOTSTRAP_HOT_VER_KEY, BOOTSTRAP_META_KEY];
+    for (let i = 0; i < 12; i++) {
+      keysToRemove.push(BOOTSTRAP_CHUNK_PREFIX + i);
+    }
+    if (typeof cache.removeAll === 'function') {
+      cache.removeAll(keysToRemove);
+    } else {
+      keysToRemove.forEach(function (k) {
+        cache.remove(k);
+      });
+    }
+  } catch (err) {}
+}
+
+function ensureSheetsExistFast_(ss) {
+  const cache = getScriptCacheSafe_();
+  if (cache) {
+    try {
+      if (cache.get(SCHEMA_CACHE_KEY) === '1') {
+        return true;
+      }
+    } catch (err) {}
+  }
+  ensureSheetsExist_(ss);
+  markSchemaReadyCache_();
+  return true;
+}
+
+function readCachedBootstrapPayload_(expectedVersion) {
+  const cache = getScriptCacheSafe_();
+  if (!cache || !expectedVersion) return null;
+  try {
+    const hotVer = String(cache.get(BOOTSTRAP_HOT_VER_KEY) || '');
+    if (hotVer !== expectedVersion) return null;
+    const metaRaw = cache.get(BOOTSTRAP_META_KEY);
+    if (!metaRaw) return null;
+    const meta = JSON.parse(metaRaw);
+    if (!meta || meta.version !== expectedVersion || !meta.chunks || meta.chunks <= 0) {
+      return null;
+    }
+    const chunkKeys = [];
+    for (let i = 0; i < meta.chunks; i++) {
+      chunkKeys.push(BOOTSTRAP_CHUNK_PREFIX + i);
+    }
+    const map = typeof cache.getAll === 'function' ? cache.getAll(chunkKeys) : null;
+    let joined = '';
+    for (let i = 0; i < chunkKeys.length; i++) {
+      const part = map ? map[chunkKeys[i]] : cache.get(chunkKeys[i]);
+      if (typeof part !== 'string') return null;
+      joined += part;
+    }
+    return {
+      spreadsheetName: meta.spreadsheetName || '',
+      spreadsheetUrl: meta.spreadsheetUrl || '',
+      data: JSON.parse(joined)
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+function writeCachedBootstrapPayload_(version, ssName, ssUrl, dataObj) {
+  const cache = getScriptCacheSafe_();
+  if (!cache || !version) return;
+  try {
+    const rawData = JSON.stringify(dataObj);
+    const chunks = [];
+    for (let i = 0; i < rawData.length; i += BOOTSTRAP_CHUNK_SIZE) {
+      chunks.push(rawData.slice(i, i + BOOTSTRAP_CHUNK_SIZE));
+    }
+    if (chunks.length === 0 || chunks.length > 10) {
+      markHotVersion_(version);
+      return;
+    }
+    const batchMap = {};
+    batchMap[BOOTSTRAP_HOT_VER_KEY] = String(version);
+    batchMap[BOOTSTRAP_META_KEY] = JSON.stringify({
+      version: String(version),
+      chunks: chunks.length,
+      spreadsheetName: ssName || '',
+      spreadsheetUrl: ssUrl || ''
+    });
+    for (let i = 0; i < chunks.length; i++) {
+      batchMap[BOOTSTRAP_CHUNK_PREFIX + i] = chunks[i];
+    }
+    if (typeof cache.putAll === 'function') {
+      cache.putAll(batchMap, BOOTSTRAP_CACHE_TTL_SEC);
+    } else {
+      Object.keys(batchMap).forEach(function (k) {
+        cache.put(k, batchMap[k], BOOTSTRAP_CACHE_TTL_SEC);
+      });
+    }
+  } catch (err) {}
+}
+
 function doGet(e) {
   try {
     const action = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'bootstrap';
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
 
     if (action === 'ping') {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
       return jsonResponse({
         ok: true,
+        version: getDataVersion_(),
         spreadsheetName: ss.getName(),
         spreadsheetUrl: ss.getUrl(),
         timestamp: new Date().toISOString()
@@ -115,12 +292,45 @@ function doGet(e) {
       });
     }
 
-    ensureSheetsExist_(ss);
+    const curVer = getDataVersion_();
+    const clientVer = (e && e.parameter && e.parameter.v) ? String(e.parameter.v).trim() : '';
+    const cache = getScriptCacheSafe_();
+    if (clientVer && curVer && clientVer === curVer && cache) {
+      try {
+        if (String(cache.get(BOOTSTRAP_HOT_VER_KEY) || '') === curVer) {
+          return jsonResponse({
+            ok: true,
+            unchanged: true,
+            version: curVer
+          });
+        }
+      } catch (err) {}
+    }
+
+    const cachedBootstrap = readCachedBootstrapPayload_(curVer);
+    if (cachedBootstrap) {
+      return jsonResponse({
+        ok: true,
+        cached: true,
+        version: curVer,
+        spreadsheetName: cachedBootstrap.spreadsheetName,
+        spreadsheetUrl: cachedBootstrap.spreadsheetUrl,
+        data: cachedBootstrap.data
+      });
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    ensureSheetsExistFast_(ss);
+    const ssName = ss.getName();
+    const ssUrl = ss.getUrl();
+    const bootstrapData = getBootstrapData_(ss);
+    writeCachedBootstrapPayload_(curVer, ssName, ssUrl, bootstrapData);
     return jsonResponse({
       ok: true,
-      spreadsheetName: ss.getName(),
-      spreadsheetUrl: ss.getUrl(),
-      data: getBootstrapData_(ss)
+      version: curVer,
+      spreadsheetName: ssName,
+      spreadsheetUrl: ssUrl,
+      data: bootstrapData
     });
   } catch (err) {
     return jsonResponse({
@@ -128,6 +338,37 @@ function doGet(e) {
       error: 'Không thể tải dữ liệu lúc này. Vui lòng thử lại sau.'
     });
   }
+}
+
+function buildMutationResponse_(ss, payload, preVer, extraFields) {
+  invalidateBootstrapCache_();
+  const nextVer = bumpDataVersion_();
+  markHotVersion_(nextVer);
+
+  const clientVer = payload && payload.clientVersion ? String(payload.clientVersion).trim() : '';
+  const wantsDeltaOnly = payload && payload.deltaOnly === true;
+  const hasVersionConflict = Boolean(clientVer && preVer && clientVer !== preVer);
+  const needsBootstrap =
+    (payload && payload.includeBootstrap === true) ||
+    !wantsDeltaOnly ||
+    hasVersionConflict;
+
+  const out = Object.assign(
+    {
+      ok: true,
+      version: nextVer,
+      conflictRefreshed: hasVersionConflict
+    },
+    extraFields || {}
+  );
+
+  if (needsBootstrap) {
+    const bootstrapData = getBootstrapData_(ss);
+    writeCachedBootstrapPayload_(nextVer, ss.getName(), ss.getUrl(), bootstrapData);
+    out.data = bootstrapData;
+  }
+
+  return jsonResponse(out);
 }
 
 function doPost(e) {
@@ -138,14 +379,18 @@ function doPost(e) {
     const payload = JSON.parse(rawBody);
     const action = payload.action || '';
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    ensureSheetsExist_(ss);
+    ensureSheetsExistFast_(ss);
 
     if (action === 'setupDatabase') {
       const setupRes = setupDatabase();
+      const nextVer = getDataVersion_();
+      const bootstrapData = getBootstrapData_(ss);
+      writeCachedBootstrapPayload_(nextVer, ss.getName(), ss.getUrl(), bootstrapData);
       return jsonResponse({
         ok: true,
+        version: nextVer,
         message: setupRes.message,
-        data: getBootstrapData_(ss)
+        data: bootstrapData
       });
     }
 
@@ -158,79 +403,57 @@ function doPost(e) {
 
     if (action === 'login') {
       const authResult = handleLogin_(ss, payload);
+      if (authResult && authResult.ok) {
+        authResult.version = getDataVersion_();
+      }
       return jsonResponse(authResult);
     }
 
+    const preVer = getDataVersion_();
+
     if (action === 'createStudentAccount') {
       const student = handleCreateStudentAccount_(ss, payload);
-      return jsonResponse({
-        ok: true,
-        student: student,
-        data: getBootstrapData_(ss)
-      });
+      return buildMutationResponse_(ss, payload, preVer, { student: student });
     }
 
     if (action === 'resetStudentPassword') {
       const updated = handleResetStudentPassword_(ss, payload);
-      return jsonResponse({
-        ok: true,
-        student: updated,
-        data: getBootstrapData_(ss)
-      });
+      return buildMutationResponse_(ss, payload, preVer, { student: updated });
     }
 
     if (action === 'deleteStudentAccount') {
       const deletedStudent = handleDeleteStudentAccount_(ss, payload);
-      return jsonResponse({
-        ok: true,
-        deletedStudent: deletedStudent,
-        data: getBootstrapData_(ss)
-      });
+      return buildMutationResponse_(ss, payload, preVer, { deletedStudent: deletedStudent });
     }
 
     if (action === 'submitHomework') {
       const result = handleSubmitHomework_(ss, payload);
-      return jsonResponse({
-        ok: true,
-        submission: result,
-        data: getBootstrapData_(ss)
-      });
+      return buildMutationResponse_(ss, payload, preVer, { submission: result });
     }
 
     if (action === 'saveTeacherFeedback') {
       const result = handleSaveTeacherFeedback_(ss, payload);
-      return jsonResponse({
-        ok: true,
-        submission: result,
-        data: getBootstrapData_(ss)
-      });
+      return buildMutationResponse_(ss, payload, preVer, { submission: result });
     }
 
     if (action === 'submitExitTicket') {
       const result = handleSubmitExitTicket_(ss, payload);
-      return jsonResponse({
-        ok: true,
-        exitResult: result,
-        data: getBootstrapData_(ss)
-      });
+      return buildMutationResponse_(ss, payload, preVer, { exitResult: result });
     }
 
     if (action === 'addVocabulary') {
       const result = handleAddVocabulary_(ss, payload);
-      return jsonResponse({
-        ok: true,
-        vocab: result,
-        data: getBootstrapData_(ss)
-      });
+      return buildMutationResponse_(ss, payload, preVer, { vocab: result });
+    }
+
+    if (action === 'batchAddVocabulary') {
+      const result = handleBatchAddVocabulary_(ss, payload);
+      return buildMutationResponse_(ss, payload, preVer, { importedVocab: result });
     }
 
     if (action === 'addAssignment') {
       const result = handleAddAssignment_(ss, payload);
-      return jsonResponse({
-        ok: true,
-        assignment: result,
-        data: getBootstrapData_(ss)
-      });
+      return buildMutationResponse_(ss, payload, preVer, { assignment: result });
     }
 
     if (action === 'assignExercisesToClass') {
@@ -239,11 +462,7 @@ function doPost(e) {
         ? payload.assignment_ids
         : (payload.assignment_id ? [payload.assignment_id] : []);
       const result = updateAssignmentsClass_(ss, ids, targetClass);
-      return jsonResponse({
-        ok: true,
-        updated: result,
-        data: getBootstrapData_(ss)
-      });
+      return buildMutationResponse_(ss, payload, preVer, { updated: result });
     }
 
     if (action === 'unassignAssignment') {
@@ -251,54 +470,34 @@ function doPost(e) {
         ? payload.assignment_ids
         : (payload.assignment_id ? [payload.assignment_id] : []);
       const result = updateAssignmentsClass_(ss, ids, 'unassigned');
-      return jsonResponse({
-        ok: true,
-        updated: result,
-        data: getBootstrapData_(ss)
-      });
+      return buildMutationResponse_(ss, payload, preVer, { updated: result });
     }
 
     if (action === 'deleteAssignment') {
       const result = handleDeleteAssignment_(ss, payload);
-      return jsonResponse({
-        ok: true,
-        deletedAssignment: result,
-        data: getBootstrapData_(ss)
-      });
+      return buildMutationResponse_(ss, payload, preVer, { deletedAssignment: result });
     }
 
     if (action === 'submitPracticeExercise') {
       const result = handleSubmitPracticeExercise_(ss, payload);
-      return jsonResponse({
-        ok: true,
-        practiceSubmission: result,
-        data: getBootstrapData_(ss)
-      });
+      return buildMutationResponse_(ss, payload, preVer, { practiceSubmission: result });
     }
 
     if (action === 'gradeManualTranslation') {
       const result = handleGradeManualTranslation_(ss, payload);
-      return jsonResponse({
-        ok: true,
-        practiceSubmission: result,
-        data: getBootstrapData_(ss)
-      });
+      return buildMutationResponse_(ss, payload, preVer, { practiceSubmission: result });
     }
 
     if (action === 'savePracticeExercise') {
       const result = handleSavePracticeExercise_(ss, payload);
-      return jsonResponse({
-        ok: true,
-        practiceExercise: result,
-        data: getBootstrapData_(ss)
-      });
+      return buildMutationResponse_(ss, payload, preVer, { practiceExercise: result });
     }
 
     if (action === 'deletePracticeExercise') {
-      handleDeletePracticeExercise_(ss, payload);
-      return jsonResponse({
-        ok: true,
-        data: getBootstrapData_(ss)
+      const deleted = handleDeletePracticeExercise_(ss, payload);
+      return buildMutationResponse_(ss, payload, preVer, {
+        deleted: deleted,
+        exercise_id: String(payload.exercise_id || '')
       });
     }
 
@@ -333,6 +532,9 @@ function setupDatabase() {
 
   PropertiesService.getScriptProperties().setProperty('STUDYSNAP_IS_PRODUCTION', 'true');
 
+  markSchemaReadyCache_();
+  invalidateBootstrapCache_();
+  bumpDataVersion_();
   return {
     ok: true,
     message: 'Đã khởi tạo cấu trúc hệ thống với duy nhất 1 tài khoản Giáo viên: Hồ Châu Uyển Nhi (tên đăng nhập: gv_uyennhi).'
@@ -371,6 +573,9 @@ function clearAllData() {
   const trashedFiles = trashAllDriveUploadFiles_();
   PropertiesService.getScriptProperties().setProperty('STUDYSNAP_IS_PRODUCTION', 'true');
 
+  markSchemaReadyCache_();
+  invalidateBootstrapCache_();
+  bumpDataVersion_();
   return {
     ok: true,
     isProduction: true,
@@ -402,6 +607,9 @@ function clearAllDataCompletely() {
   const trashedFiles = trashAllDriveUploadFiles_();
   PropertiesService.getScriptProperties().setProperty('STUDYSNAP_IS_PRODUCTION', 'true');
 
+  invalidateSchemaCache_();
+  invalidateBootstrapCache_();
+  bumpDataVersion_();
   return {
     ok: true,
     isProduction: true,
@@ -557,22 +765,45 @@ function ensureSheetsExist_(ss) {
 
 function getBootstrapData_(ss) {
   const isProdProp = PropertiesService.getScriptProperties().getProperty('STUDYSNAP_IS_PRODUCTION') === 'true';
+  let teachersSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
+  let studentsSheet = ss.getSheetByName(SHEET_NAMES.STUDENTS);
+  let assignmentsSheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS);
+  let submissionsSheet = ss.getSheetByName(SHEET_NAMES.SUBMISSIONS);
+  let exitTicketsSheet = ss.getSheetByName(SHEET_NAMES.EXIT_TICKETS);
+  let vocabSheet = ss.getSheetByName(SHEET_NAMES.VOCABULARY);
+  let practiceExSheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_EXERCISES);
+  let practiceSubSheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_SUBMISSIONS);
+
+  if (!teachersSheet || !studentsSheet || !assignmentsSheet || !submissionsSheet || !exitTicketsSheet || !vocabSheet || !practiceExSheet || !practiceSubSheet) {
+    ensureSheetsExist_(ss);
+    markSchemaReadyCache_();
+    teachersSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
+    studentsSheet = ss.getSheetByName(SHEET_NAMES.STUDENTS);
+    assignmentsSheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS);
+    submissionsSheet = ss.getSheetByName(SHEET_NAMES.SUBMISSIONS);
+    exitTicketsSheet = ss.getSheetByName(SHEET_NAMES.EXIT_TICKETS);
+    vocabSheet = ss.getSheetByName(SHEET_NAMES.VOCABULARY);
+    practiceExSheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_EXERCISES);
+    practiceSubSheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_SUBMISSIONS);
+  }
+
   return {
     isProduction: isProdProp,
-    teachers: readSheetRows_(ss.getSheetByName(SHEET_NAMES.TEACHERS)),
-    students: readSheetRows_(ss.getSheetByName(SHEET_NAMES.STUDENTS)),
-    assignments: readSheetRows_(ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS)),
-    submissions: readSheetRows_(ss.getSheetByName(SHEET_NAMES.SUBMISSIONS)),
-    exitTicketLogs: readSheetRows_(ss.getSheetByName(SHEET_NAMES.EXIT_TICKETS)),
-    vocabulary: readSheetRows_(ss.getSheetByName(SHEET_NAMES.VOCABULARY)),
-    practiceExercises: readSheetRows_(ss.getSheetByName(SHEET_NAMES.PRACTICE_EXERCISES)),
-    practiceSubmissions: readSheetRows_(ss.getSheetByName(SHEET_NAMES.PRACTICE_SUBMISSIONS))
+    teachers: readSheetRows_(teachersSheet),
+    students: readSheetRows_(studentsSheet),
+    assignments: readSheetRows_(assignmentsSheet),
+    submissions: readSheetRows_(submissionsSheet),
+    exitTicketLogs: readSheetRows_(exitTicketsSheet),
+    vocabulary: readSheetRows_(vocabSheet),
+    practiceExercises: readSheetRows_(practiceExSheet),
+    practiceSubmissions: readSheetRows_(practiceSubSheet)
   };
 }
 
 function readSheetRows_(sheet) {
-  if (!sheet || sheet.getLastRow() <= 1) return [];
+  if (!sheet) return [];
   const values = sheet.getDataRange().getValues();
+  if (!values || values.length <= 1) return [];
   const headers = values[0];
   const rows = [];
   for (let r = 1; r < values.length; r++) {
@@ -956,6 +1187,32 @@ function handleAddVocabulary_(ss, payload) {
   return { vocab_id: vocabId };
 }
 
+function handleBatchAddVocabulary_(ss, payload) {
+  const sheet = ss.getSheetByName(SHEET_NAMES.VOCABULARY);
+  const list = Array.isArray(payload.vocabulary) ? payload.vocabulary : [];
+  if (!sheet || list.length === 0) return { inserted: 0 };
+
+  const rows = [];
+  for (let i = 0; i < list.length; i++) {
+    const v = list[i] || {};
+    const vocabId = v.vocab_id || ('V_' + Utilities.getUuid().slice(0, 6).toUpperCase());
+    rows.push([
+      vocabId,
+      v.lesson_id || 'bai-1',
+      v.lesson_title || 'Bài 1',
+      v.word || '',
+      v.ipa || '',
+      v.part_of_speech || '',
+      v.meaning_vi || '',
+      v.example_en || '',
+      v.example_vi || ''
+    ]);
+  }
+  const startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
+  return { inserted: rows.length };
+}
+
 function handleAddAssignment_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS);
   const headers = ensureSheetHeaders_(sheet, ASSIGNMENT_HEADERS);
@@ -983,12 +1240,20 @@ function handleAddAssignment_(ss, payload) {
 
 function updateAssignmentsClass_(ss, assignmentIds, targetClass) {
   const sheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS);
-  if (!sheet || sheet.getLastRow() <= 1 || !Array.isArray(assignmentIds) || assignmentIds.length === 0) {
+  if (!sheet || !Array.isArray(assignmentIds) || assignmentIds.length === 0) {
     return { updated_count: 0, target_class: targetClass };
   }
-  const headers = ensureSheetHeaders_(sheet, ASSIGNMENT_HEADERS);
-  const classColIdx = headers.indexOf('class_name');
-  if (classColIdx === -1) return { updated_count: 0, target_class: targetClass };
+  const values = sheet.getDataRange().getValues();
+  if (!values || values.length <= 1) {
+    return { updated_count: 0, target_class: targetClass };
+  }
+  let headers = values[0];
+  let classColIdx = headers.indexOf('class_name');
+  if (classColIdx === -1) {
+    headers = ensureSheetHeaders_(sheet, ASSIGNMENT_HEADERS);
+    classColIdx = headers.indexOf('class_name');
+    if (classColIdx === -1) return { updated_count: 0, target_class: targetClass };
+  }
 
   const idSet = {};
   assignmentIds.forEach(function (id) {
@@ -996,12 +1261,12 @@ function updateAssignmentsClass_(ss, assignmentIds, targetClass) {
     if (clean) idSet[clean] = true;
   });
 
-  const values = sheet.getDataRange().getValues();
   let updatedCount = 0;
+  const normalizedTarget = String(targetClass || 'unassigned').trim();
   for (let i = 1; i < values.length; i++) {
     const rowId = String(values[i][0] || '').trim();
     if (idSet[rowId]) {
-      sheet.getRange(i + 1, classColIdx + 1).setValue(String(targetClass || 'unassigned').trim());
+      sheet.getRange(i + 1, classColIdx + 1).setValue(normalizedTarget);
       updatedCount++;
     }
   }
@@ -1123,17 +1388,26 @@ function formatPracticeAssignmentTitle_(rawTitle) {
 
 function syncLinkedPracticeAssignmentMeta_(ss, exId, cleanTitle, cleanTag) {
   const asgSheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS);
-  if (!asgSheet || asgSheet.getLastRow() <= 1 || !exId) return 0;
+  if (!asgSheet || !exId) return 0;
 
-  const headers = ensureSheetHeaders_(asgSheet, ASSIGNMENT_HEADERS);
-  const titleColIdx = headers.indexOf('title');
-  const tagColIdx = headers.indexOf('lesson_tag');
-  const reqColIdx = headers.indexOf('require_media');
-  const exIdColIdx = headers.indexOf('exercise_id');
-  if (exIdColIdx === -1 || titleColIdx === -1 || tagColIdx === -1) return 0;
+  const values = asgSheet.getDataRange().getValues();
+  if (!values || values.length <= 1) return 0;
+
+  let headers = values[0];
+  let titleColIdx = headers.indexOf('title');
+  let tagColIdx = headers.indexOf('lesson_tag');
+  let reqColIdx = headers.indexOf('require_media');
+  let exIdColIdx = headers.indexOf('exercise_id');
+  if (exIdColIdx === -1 || titleColIdx === -1 || tagColIdx === -1) {
+    headers = ensureSheetHeaders_(asgSheet, ASSIGNMENT_HEADERS);
+    titleColIdx = headers.indexOf('title');
+    tagColIdx = headers.indexOf('lesson_tag');
+    reqColIdx = headers.indexOf('require_media');
+    exIdColIdx = headers.indexOf('exercise_id');
+    if (exIdColIdx === -1 || titleColIdx === -1 || tagColIdx === -1) return 0;
+  }
 
   const formattedAsgTitle = formatPracticeAssignmentTitle_(cleanTitle);
-  const values = asgSheet.getDataRange().getValues();
   let updatedCount = 0;
 
   for (let i = 1; i < values.length; i++) {
@@ -1215,7 +1489,15 @@ function handleSavePracticeExercise_(ss, payload) {
     sheet.appendRow(rowData);
   }
   syncLinkedPracticeAssignmentMeta_(ss, exId, cleanTitle, cleanTag);
-  return { exercise_id: exId };
+  return {
+    exercise_id: exId,
+    title: cleanTitle,
+    lesson_tag: cleanTag,
+    total_score: rowData[3],
+    thresholds: typeof ex.thresholds === 'object' ? ex.thresholds : undefined,
+    sections: Array.isArray(ex.sections) ? ex.sections : undefined,
+    updated_at: nowStr
+  };
 }
 
 function handleDeletePracticeExercise_(ss, payload) {
