@@ -2425,15 +2425,30 @@ window.StudySnapStore = (function () {
     }
   }
 
+  function inferMimeAndExtFromDataUrl(dataUrl, fallbackMime) {
+    const mimeMatch = String(dataUrl || '').match(/^data:([^;]+);base64,/i);
+    const mimeType = (mimeMatch && mimeMatch[1] ? mimeMatch[1] : fallbackMime || 'audio/webm').toLowerCase();
+    let ext = '.webm';
+    if (mimeType.indexOf('wav') >= 0) ext = '.wav';
+    else if (mimeType.indexOf('mp3') >= 0 || mimeType.indexOf('mpeg') >= 0) ext = '.mp3';
+    else if (mimeType.indexOf('video') >= 0) ext = '.mp4';
+    else if (mimeType.indexOf('mp4') >= 0 || mimeType.indexOf('m4a') >= 0) ext = '.m4a';
+    return { mimeType: mimeType, ext: ext };
+  }
+
   async function prepareD1MediaPayload(stateObj, rawPayload) {
     const payloadCopy = Object.assign({}, rawPayload || {});
     const actionName = String(payloadCopy.action || '');
 
     if (actionName === 'submitHomework' && payloadCopy.media_base64 && String(payloadCopy.media_base64).indexOf('data:') === 0) {
+      const hwMeta = inferMimeAndExtFromDataUrl(
+        payloadCopy.media_base64,
+        payloadCopy.media_mime_type || (payloadCopy.media_type === 'video' ? 'video/mp4' : 'audio/webm')
+      );
       const up = await uploadMediaToDriveViaGas({
         base64_data: payloadCopy.media_base64,
-        mime_type: payloadCopy.media_mime_type || (payloadCopy.media_type === 'video' ? 'video/mp4' : 'audio/webm'),
-        filename: payloadCopy.media_filename || ('BVN_' + (payloadCopy.assignment_id || 'EX') + '_' + (payloadCopy.student_id || 'HS') + '_' + Date.now())
+        mime_type: hwMeta.mimeType,
+        filename: payloadCopy.media_filename || ('BVN_' + (payloadCopy.assignment_id || 'EX') + '_' + (payloadCopy.student_id || 'HS') + '_' + Date.now() + hwMeta.ext)
       });
       if (!up.ok) return { errorResponse: up };
       payloadCopy.media_url = up.media_url;
@@ -2451,10 +2466,14 @@ window.StudySnapStore = (function () {
     }
 
     if (actionName === 'saveTeacherFeedback' && payloadCopy.teacher_voice_base64 && String(payloadCopy.teacher_voice_base64).indexOf('data:') === 0) {
+      const fbMeta = inferMimeAndExtFromDataUrl(
+        payloadCopy.teacher_voice_base64,
+        payloadCopy.teacher_voice_mime_type || 'audio/webm'
+      );
       const upVoice = await uploadMediaToDriveViaGas({
         base64_data: payloadCopy.teacher_voice_base64,
-        mime_type: payloadCopy.teacher_voice_mime_type || 'audio/webm',
-        filename: 'VoiceFeedback_' + (payloadCopy.assignment_id || 'EX') + '_' + (payloadCopy.student_id || 'HS') + '_' + Date.now()
+        mime_type: fbMeta.mimeType,
+        filename: 'VoiceFeedback_' + (payloadCopy.assignment_id || 'EX') + '_' + (payloadCopy.student_id || 'HS') + '_' + Date.now() + fbMeta.ext
       });
       if (!upVoice.ok) return { errorResponse: upVoice };
       payloadCopy.teacher_voice_url = upVoice.media_url;
@@ -2508,15 +2527,11 @@ window.StudySnapStore = (function () {
           const chunk = uploadTasks.slice(i, i + CONCURRENCY);
           const results = await Promise.all(
             chunk.map(function (task) {
-              const mimeMatch = task.dataUrl.match(/^data:([^;]+);base64,/i);
-              const mimeType = mimeMatch && mimeMatch[1] ? mimeMatch[1] : 'audio/webm';
-              const ext = mimeType.indexOf('mp3') >= 0 || mimeType.indexOf('mpeg') >= 0
-                ? '.mp3'
-                : (mimeType.indexOf('wav') >= 0 ? '.wav' : (mimeType.indexOf('mp4') >= 0 || mimeType.indexOf('m4a') >= 0 ? '.m4a' : '.webm'));
+              const meta = inferMimeAndExtFromDataUrl(task.dataUrl, 'audio/webm');
               return uploadMediaToDriveViaGas({
                 base64_data: task.dataUrl,
-                mime_type: mimeType,
-                filename: task.prefix + '_' + Date.now() + ext
+                mime_type: meta.mimeType,
+                filename: task.prefix + '_' + Date.now() + meta.ext
               });
             })
           );

@@ -771,21 +771,28 @@
           function (result) {
             btnStartRec.style.display = 'inline-flex';
             btnStopRec.style.display = 'none';
+            btnStopRec.disabled = false;
             if (recZone) recZone.classList.remove('is-recording');
             ui.pendingMedia = {
               media_type: 'audio',
               media_url: result.dataUrl,
+              mimeType: result.mimeType || 'audio/wav',
               media_duration: result.duration
             };
             if (recStatusText) {
-              recStatusText.textContent = 'Đã thu âm xong (' + result.duration + ')';
+              recStatusText.textContent = 'Đã thu âm & lọc tạp âm (' + result.duration + ')';
             }
             renderPendingMediaPreview();
-            showToast('Đã thu âm xong (' + result.duration + '). Em có thể nghe lại hoặc bấm "Nộp Bài Tập Về Nhà Ngay".');
+            showToast(
+              result.trimmedSeconds >= 1
+                ? 'Đã thu âm, lọc tạp âm & cắt ' + result.trimmedSeconds + 's khoảng trống (' + result.duration + '). Em có thể nghe lại hoặc nộp bài!'
+                : 'Đã thu âm & lọc tạp âm xong (' + result.duration + '). Em có thể nghe lại hoặc bấm "Nộp Bài Tập Về Nhà Ngay".'
+            );
           },
           function (errMsg) {
             btnStartRec.style.display = 'inline-flex';
             btnStopRec.style.display = 'none';
+            btnStopRec.disabled = false;
             if (recZone) recZone.classList.remove('is-recording');
             ui.pendingMedia = {
               media_type: 'audio',
@@ -802,6 +809,8 @@
       });
 
       btnStopRec.addEventListener('click', function () {
+        btnStopRec.disabled = true;
+        if (recStatusText) recStatusText.textContent = 'Đang lọc tạp âm & cắt khoảng trống...';
         window.StudySnapAudio.stopRecording();
       });
     }
@@ -885,7 +894,7 @@
               media_url: submissionRecord.media_url,
               media_duration: submissionRecord.media_duration,
               media_base64: hasBinaryMedia ? mediaData.media_url : '',
-              media_mime_type: mediaData.media_type === 'video' ? 'video/mp4' : 'audio/webm'
+              media_mime_type: mediaData.mimeType || (mediaData.media_type === 'video' ? 'video/mp4' : 'audio/webm')
             });
           };
 

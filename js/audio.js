@@ -604,15 +604,515 @@ window.StudySnapAudio = (function () {
   }
 
   /**
-   * Bắt đầu thu âm bằng Microphone trình duyệt
+   * Bộ FFT Radix-2 thực dụng thuần JS cho lọc tạp âm STFT không cần thư viện ngoài
+   */
+  function fftRadix2(re, im, inverse) {
+    const n = re.length;
+    for (let i = 1, j = 0; i < n; i++) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) {
+        j ^= bit;
+      }
+      j ^= bit;
+      if (i < j) {
+        const tr = re[i];
+        re[i] = re[j];
+        re[j] = tr;
+        const ti = im[i];
+        im[i] = im[j];
+        im[j] = ti;
+      }
+    }
+    for (let len = 2; len <= n; len <<= 1) {
+      const halfLen = len >> 1;
+      const angle = ((inverse ? 2 : -2) * Math.PI) / len;
+      const wStepRe = Math.cos(angle);
+      const wStepIm = Math.sin(angle);
+      for (let i = 0; i < n; i += len) {
+        let wRe = 1;
+        let wIm = 0;
+        for (let j = 0; j < halfLen; j++) {
+          const idx1 = i + j;
+          const idx2 = idx1 + halfLen;
+          const tRe = re[idx2] * wRe - im[idx2] * wIm;
+          const tIm = re[idx2] * wIm + im[idx2] * wRe;
+          re[idx2] = re[idx1] - tRe;
+          im[idx2] = im[idx1] - tIm;
+          re[idx1] += tRe;
+          im[idx1] += tIm;
+          const nextWRe = wRe * wStepRe - wIm * wStepIm;
+          wIm = wRe * wStepIm + wIm * wStepRe;
+          wRe = nextWRe;
+        }
+      }
+    }
+    if (inverse) {
+      for (let i = 0; i < n; i++) {
+        re[i] /= n;
+        im[i] /= n;
+      }
+    }
+  }
+
+  function percentileFromSorted(sortedArr, ratio) {
+    if (!sortedArr || sortedArr.length === 0) return 0;
+    const idx = Math.min(sortedArr.length - 1, Math.max(0, Math.floor((sortedArr.length - 1) * ratio)));
+    return sortedArr[idx];
+  }
+
+  /**
+   * Lọc tạp âm phổ STFT Wiener mượt (tránh méo/nước sôi) từ các khung nền yên tĩnh nhất
+   */
+  function spectralSuppressStationaryNoise(samples) {
+    const n = samples.length;
+    const fftSize = 512;
+    const hop = 256;
+    if (n < fftSize * 4) {
+      return new Float32Array(samples);
+    }
+
+    const halfBins = (fftSize >> 1) + 1;
+    const win = new Float32Array(fftSize);
+    for (let i = 0; i < fftSize; i++) {
+      win[i] = Math.sin((Math.PI * (i + 0.5)) / fftSize);
+    }
+
+    const frameStarts = [];
+    for (let pos = 0; pos + fftSize <= n; pos += hop) {
+      frameStarts.push(pos);
+    }
+    if (frameStarts.length === 0 || frameStarts[frameStarts.length - 1] + fftSize < n) {
+      frameStarts.push(Math.max(0, n - fftSize));
+    }
+    const numFrames = frameStarts.length;
+    if (numFrames < 8) {
+      return new Float32Array(samples);
+    }
+
+    const frameInfos = [];
+    const nonZeroEnergies = [];
+    const re = new Float32Array(fftSize);
+    const im = new Float32Array(fftSize);
+
+    for (let f = 0; f < numFrames; f++) {
+      const start = frameStarts[f];
+      let timeEnergy = 0;
+      for (let j = 0; j < fftSize; j++) {
+        const s = start + j < n ? samples[start + j] : 0;
+        const w = s * win[j];
+        re[j] = w;
+        im[j] = 0;
+        timeEnergy += w * w;
+      }
+      fftRadix2(re, im, false);
+      const specRe = new Float32Array(halfBins);
+      const specIm = new Float32Array(halfBins);
+      const pow = new Float32Array(halfBins);
+      for (let k = 0; k < halfBins; k++) {
+        specRe[k] = re[k];
+        specIm[k] = im[k];
+        pow[k] = re[k] * re[k] + im[k] * im[k];
+      }
+      frameInfos.push({ start: start, specRe: specRe, specIm: specIm, pow: pow, energy: timeEnergy });
+      if (timeEnergy > 1e-8) {
+        nonZeroEnergies.push(timeEnergy);
+      }
+    }
+
+    if (nonZeroEnergies.length < 6) {
+      return new Float32Array(samples);
+    }
+    const sortedEnergies = nonZeroEnergies.slice().sort(function (a, b) { return a - b; });
+    const quietThreshold = percentileFromSorted(sortedEnergies, 0.14);
+    const speechRefEnergy = percentileFromSorted(sortedEnergies, 0.85);
+    if (speechRefEnergy <= quietThreshold * 1.6) {
+      return new Float32Array(samples);
+    }
+
+    const noisePow = new Float32Array(halfBins);
+    let noiseFramesCount = 0;
+    for (let f = 0; f < numFrames; f++) {
+      if (frameInfos[f].energy > 1e-8 && frameInfos[f].energy <= quietThreshold * 1.08) {
+        for (let k = 0; k < halfBins; k++) {
+          noisePow[k] += frameInfos[f].pow[k];
+        }
+        noiseFramesCount++;
+      }
+    }
+    if (noiseFramesCount === 0) {
+      return new Float32Array(samples);
+    }
+    for (let k = 0; k < halfBins; k++) {
+      noisePow[k] /= noiseFramesCount;
+    }
+
+    const out = new Float32Array(n);
+    const olaWeight = new Float32Array(n);
+    const prevPow = new Float32Array(halfBins);
+    const prevGain = new Float32Array(halfBins);
+    prevGain.fill(1.0);
+    const overSub = 1.65;
+    const minSpecGain = 0.20;
+
+    for (let f = 0; f < numFrames; f++) {
+      const info = frameInfos[f];
+      const pow = info.pow;
+
+      for (let k = 0; k < halfBins; k++) {
+        const left = k > 0 ? pow[k - 1] : pow[k];
+        const right = k < halfBins - 1 ? pow[k + 1] : pow[k];
+        const freqSmooth = 0.2 * left + 0.6 * pow[k] + 0.2 * right;
+        const timeSmooth = f === 0 ? freqSmooth : 0.55 * prevPow[k] + 0.45 * freqSmooth;
+        prevPow[k] = timeSmooth;
+
+        const targetG = Math.max(minSpecGain, Math.min(1.0, (timeSmooth - overSub * noisePow[k]) / (timeSmooth + 1e-12)));
+        const g = 0.5 * prevGain[k] + 0.5 * targetG;
+        prevGain[k] = g;
+
+        re[k] = info.specRe[k] * g;
+        im[k] = info.specIm[k] * g;
+        if (k > 0 && k < fftSize - k) {
+          const mirrorIdx = fftSize - k;
+          re[mirrorIdx] = info.specRe[k] * g;
+          im[mirrorIdx] = -info.specIm[k] * g;
+        }
+      }
+      im[0] = 0;
+      if ((fftSize & 1) === 0) {
+        im[fftSize >> 1] = 0;
+      }
+
+      fftRadix2(re, im, true);
+      const start = info.start;
+      for (let j = 0; j < fftSize && start + j < n; j++) {
+        const w = win[j];
+        out[start + j] += re[j] * w;
+        olaWeight[start + j] += w * w;
+      }
+    }
+
+    for (let i = 0; i < n; i++) {
+      out[i] = olaWeight[i] > 1e-6 ? out[i] / olaWeight[i] : samples[i];
+    }
+    return out;
+  }
+
+  /**
+   * Cắt khoảng im lặng + tiếng click chuột đầu/cuối, giữ lại lề tự nhiên & lọc cổng nhiễu mượt
+   */
+  function cleanAndTrimMonoSamples(inputSamples, sampleRate) {
+    const sr = sampleRate || 22050;
+    const rawLen = inputSamples ? inputSamples.length : 0;
+    if (!rawLen) {
+      return {
+        samples: new Float32Array(0),
+        sampleRate: sr,
+        rawDurationSec: 0,
+        trimmedDurationSec: 0,
+        trimmedSeconds: 0
+      };
+    }
+
+    const rawDurationSec = rawLen / sr;
+    const dcCentered = new Float32Array(rawLen);
+    let mean = 0;
+    for (let i = 0; i < rawLen; i++) mean += inputSamples[i];
+    mean /= rawLen;
+    for (let i = 0; i < rawLen; i++) dcCentered[i] = inputSamples[i] - mean;
+
+    const denoised = spectralSuppressStationaryNoise(dcCentered);
+
+    const frameSize = Math.max(64, Math.round(sr * 0.01));
+    const numFrames = Math.max(1, Math.ceil(rawLen / frameSize));
+    const frameRms = new Float32Array(numFrames);
+    const activeRmsVals = [];
+    for (let f = 0; f < numFrames; f++) {
+      const s0 = f * frameSize;
+      const s1 = Math.min(rawLen, s0 + frameSize);
+      let sumSq = 0;
+      for (let i = s0; i < s1; i++) {
+        sumSq += denoised[i] * denoised[i];
+      }
+      const rms = Math.sqrt(sumSq / Math.max(1, s1 - s0));
+      frameRms[f] = rms;
+      if (rms > 1e-5) activeRmsVals.push(rms);
+    }
+
+    const sortedRms = activeRmsVals.slice().sort(function (a, b) { return a - b; });
+    const noiseRms = Math.max(0.0008, percentileFromSorted(sortedRms, 0.18));
+    const speechRms = percentileFromSorted(sortedRms, 0.88);
+    const hasSpeech = speechRms >= Math.max(0.005, noiseRms * 1.85);
+
+    let trimStartSample = 0;
+    let trimEndSample = rawLen;
+
+    if (hasSpeech && numFrames >= 8) {
+      const trimThresh = Math.min(speechRms * 0.36, Math.max(noiseRms * 2.5, speechRms * 0.08, 0.009));
+      const activeMask = new Uint8Array(numFrames);
+      for (let f = 0; f < numFrames; f++) {
+        activeMask[f] = frameRms[f] >= trimThresh ? 1 : 0;
+      }
+
+      const winLen = 6;
+      const minHits = 4;
+      let firstSpeechFrame = -1;
+      for (let f = 0; f <= numFrames - winLen; f++) {
+        let hits = 0;
+        for (let k = 0; k < winLen; k++) hits += activeMask[f + k];
+        if (hits >= minHits) {
+          firstSpeechFrame = f;
+          break;
+        }
+      }
+
+      let lastSpeechFrame = -1;
+      for (let f = numFrames - winLen; f >= 0; f--) {
+        let hits = 0;
+        for (let k = 0; k < winLen; k++) hits += activeMask[f + k];
+        if (hits >= minHits) {
+          lastSpeechFrame = f + winLen - 1;
+          break;
+        }
+      }
+
+      if (firstSpeechFrame >= 0 && lastSpeechFrame >= firstSpeechFrame) {
+        const preRollSamples = Math.round(sr * 0.11);
+        const postRollSamples = Math.round(sr * 0.15);
+        trimStartSample = Math.max(0, firstSpeechFrame * frameSize - preRollSamples);
+        trimEndSample = Math.min(rawLen, (lastSpeechFrame + 1) * frameSize + postRollSamples);
+        const minKeep = Math.min(rawLen, Math.round(sr * 0.35));
+        if (trimEndSample - trimStartSample < minKeep) {
+          trimEndSample = Math.min(rawLen, trimStartSample + minKeep);
+          trimStartSample = Math.max(0, trimEndSample - minKeep);
+        }
+      }
+    }
+
+    const keptLen = Math.max(1, trimEndSample - trimStartSample);
+    const trimmed = denoised.slice(trimStartSample, trimEndSample);
+
+    if (hasSpeech) {
+      const keptFrames = Math.max(1, Math.ceil(keptLen / frameSize));
+      const keptRms = new Float32Array(keptFrames);
+      for (let f = 0; f < keptFrames; f++) {
+        const s0 = f * frameSize;
+        const s1 = Math.min(keptLen, s0 + frameSize);
+        let sumSq = 0;
+        for (let i = s0; i < s1; i++) sumSq += trimmed[i] * trimmed[i];
+        keptRms[f] = Math.sqrt(sumSq / Math.max(1, s1 - s0));
+      }
+
+      const gateOpen = Math.min(speechRms * 0.34, Math.max(noiseRms * 2.2, speechRms * 0.06, 0.007));
+      const gateClose = Math.max(0.0005, noiseRms * 1.15);
+      const minGateGain = 0.06;
+      const frameTargetGain = new Float32Array(keptFrames);
+
+      for (let f = 0; f < keptFrames; f++) {
+        const r0 = keptRms[f];
+        const r1 = f + 1 < keptFrames ? keptRms[f + 1] : r0;
+        const r2 = f + 2 < keptFrames ? keptRms[f + 2] : r1;
+        const lookRms = Math.max(r0, r1, r2);
+        if (lookRms >= gateOpen) {
+          frameTargetGain[f] = 1.0;
+        } else if (lookRms <= gateClose) {
+          frameTargetGain[f] = minGateGain;
+        } else {
+          const ratio = (lookRms - gateClose) / Math.max(1e-6, gateOpen - gateClose);
+          frameTargetGain[f] = minGateGain + (1.0 - minGateGain) * ratio * ratio;
+        }
+      }
+
+      const holdFrames = 14;
+      let holdCounter = 0;
+      for (let f = 0; f < keptFrames; f++) {
+        if (frameTargetGain[f] > 0.75) {
+          holdCounter = holdFrames;
+        } else if (holdCounter > 0) {
+          frameTargetGain[f] = Math.max(frameTargetGain[f], 0.85);
+          holdCounter--;
+        }
+      }
+
+      let env = frameTargetGain[0];
+      const atkCoeff = Math.exp(-1 / Math.max(1, sr * 0.006));
+      const relCoeff = Math.exp(-1 / Math.max(1, sr * 0.16));
+      for (let i = 0; i < keptLen; i++) {
+        const f = Math.min(keptFrames - 1, Math.floor(i / frameSize));
+        const tgt = frameTargetGain[f];
+        const c = tgt > env ? atkCoeff : relCoeff;
+        env = c * env + (1 - c) * tgt;
+        trimmed[i] *= env;
+      }
+    }
+
+    const fadeInLen = Math.min(Math.floor(keptLen / 3), Math.round(sr * 0.012));
+    for (let i = 0; i < fadeInLen; i++) {
+      trimmed[i] *= i / Math.max(1, fadeInLen);
+    }
+    const fadeOutLen = Math.min(Math.floor(keptLen / 3), Math.round(sr * 0.022));
+    for (let i = 0; i < fadeOutLen; i++) {
+      trimmed[keptLen - 1 - i] *= i / Math.max(1, fadeOutLen);
+    }
+
+    let maxAbs = 0;
+    for (let i = 0; i < keptLen; i++) {
+      const a = Math.abs(trimmed[i]);
+      if (a > maxAbs) maxAbs = a;
+    }
+    if (hasSpeech && maxAbs > 0.008) {
+      const normGain = Math.min(10, 0.85 / maxAbs);
+      for (let i = 0; i < keptLen; i++) {
+        const v = trimmed[i] * normGain;
+        trimmed[i] = Math.abs(v) > 0.88 ? Math.tanh(v / 0.88) * 0.88 : v;
+      }
+    }
+
+    const trimmedDurationSec = keptLen / sr;
+    const trimmedSeconds = Math.max(0, Math.round(rawDurationSec - trimmedDurationSec));
+    return {
+      samples: trimmed,
+      sampleRate: sr,
+      rawDurationSec: rawDurationSec,
+      trimmedDurationSec: trimmedDurationSec,
+      trimmedSeconds: trimmedSeconds
+    };
+  }
+
+  function encodeMonoWavBytes(samples, sampleRate) {
+    const numSamples = samples.length;
+    const byteLength = 44 + numSamples * 2;
+    const buffer = new ArrayBuffer(byteLength);
+    const view = new DataView(buffer);
+
+    function writeAscii(offset, str) {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    }
+
+    writeAscii(0, 'RIFF');
+    view.setUint32(4, 36 + numSamples * 2, true);
+    writeAscii(8, 'WAVE');
+    writeAscii(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeAscii(36, 'data');
+    view.setUint32(40, numSamples * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < numSamples; i++) {
+      const clamped = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+      offset += 2;
+    }
+    return new Uint8Array(buffer);
+  }
+
+  async function processRecordedAudioBlob(rawBlob, rawElapsedSec) {
+    if (!rawBlob || typeof window === 'undefined') {
+      return { blob: rawBlob, durationSec: rawElapsedSec, trimmedSeconds: 0, enhanced: false };
+    }
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!AudioCtx || !OfflineCtx || typeof rawBlob.arrayBuffer !== 'function') {
+      return { blob: rawBlob, durationSec: rawElapsedSec, trimmedSeconds: 0, enhanced: false };
+    }
+
+    let ctx = null;
+    try {
+      ctx = new AudioCtx();
+      const arrBuf = await rawBlob.arrayBuffer();
+      const decoded = await ctx.decodeAudioData(arrBuf);
+      const chCount = Math.max(1, decoded.numberOfChannels || 1);
+      const monoBuf = ctx.createBuffer(1, decoded.length, decoded.sampleRate);
+      const monoOut = monoBuf.getChannelData(0);
+      for (let c = 0; c < chCount; c++) {
+        const chData = decoded.getChannelData(c);
+        for (let i = 0; i < decoded.length; i++) {
+          monoOut[i] += chData[i] / chCount;
+        }
+      }
+
+      const targetRate = decoded.duration > 60 ? 16000 : 22050;
+      const outLen = Math.max(1, Math.ceil(decoded.duration * targetRate));
+      const offline = new OfflineCtx(1, outLen, targetRate);
+      const src = offline.createBufferSource();
+      src.buffer = monoBuf;
+
+      const hp = offline.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 95;
+      hp.Q.value = 0.707;
+
+      const lp = offline.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = Math.min(7800, Math.round(targetRate * 0.44));
+      lp.Q.value = 0.707;
+
+      src.connect(hp);
+      hp.connect(lp);
+      lp.connect(offline.destination);
+      src.start(0);
+
+      const rendered = await offline.startRendering();
+      const filteredSamples = rendered.getChannelData(0);
+      const cleaned = cleanAndTrimMonoSamples(filteredSamples, targetRate);
+      const wavBytes = encodeMonoWavBytes(cleaned.samples, targetRate);
+      const wavBlob = new Blob([wavBytes], { type: 'audio/wav' });
+      return {
+        blob: wavBlob,
+        durationSec: Math.max(1, Math.round(cleaned.trimmedDurationSec)),
+        rawDurationSec: Math.max(1, Math.round(cleaned.rawDurationSec)),
+        trimmedSeconds: cleaned.trimmedSeconds,
+        enhanced: true
+      };
+    } catch (e) {
+      return { blob: rawBlob, durationSec: rawElapsedSec, trimmedSeconds: 0, enhanced: false };
+    } finally {
+      if (ctx && typeof ctx.close === 'function') {
+        try { await ctx.close(); } catch (closeErr) {}
+      }
+    }
+  }
+
+  /**
+   * Bắt đầu thu âm bằng Microphone trình duyệt (kèm lọc tạp âm & cắt im lặng đầu/cuối)
    */
   async function startRecording(onTick, onComplete, onError) {
     try {
       pauseAllExcept(null);
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      if (activeRecorder && activeRecorder.state !== 'inactive') {
+        try {
+          activeRecorder.onstop = null;
+          activeRecorder.stop();
+        } catch (stopErr) {}
+      }
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('Trình duyệt hiện tại không hỗ trợ thu âm trực tiếp. Vui lòng chọn tải file lên.');
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: false
+          }
+        });
+      } catch (constraintErr) {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+
       recordedChunks = [];
       let mimeType = 'audio/webm';
       if (typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function') {
@@ -625,13 +1125,13 @@ window.StudySnapAudio = (function () {
 
       const recorderOptions = {
         mimeType: mimeType,
-        audioBitsPerSecond: 32000
+        audioBitsPerSecond: 96000
       };
       try {
         activeRecorder = new MediaRecorder(stream, recorderOptions);
       } catch (optErr) {
         try {
-          activeRecorder = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
+          activeRecorder = new MediaRecorder(stream, { audioBitsPerSecond: 64000 });
         } catch (fallbackErr) {
           activeRecorder = new MediaRecorder(stream);
         }
@@ -642,28 +1142,39 @@ window.StudySnapAudio = (function () {
         }
       };
 
-      activeRecorder.onstop = function () {
+      activeRecorder.onstop = async function () {
         clearInterval(timerInterval);
         const elapsedSeconds = Math.max(1, Math.round((Date.now() - startTime) / 1000));
-        const durationText = formatDuration(elapsedSeconds);
-        const blob = new Blob(recordedChunks, { type: mimeType });
+        const rawBlob = new Blob(recordedChunks, { type: mimeType });
 
         stream.getTracks().forEach(function (track) {
           track.stop();
         });
+
+        const processed = await processRecordedAudioBlob(rawBlob, elapsedSeconds);
+        const finalBlob = processed.blob || rawBlob;
+        const durationText = formatDuration(processed.durationSec || elapsedSeconds);
 
         const reader = new FileReader();
         reader.onloadend = function () {
           if (typeof onComplete === 'function') {
             onComplete({
               dataUrl: reader.result,
-              mimeType: blob.type || 'audio/webm',
+              mimeType: finalBlob.type || mimeType || 'audio/wav',
               duration: durationText,
-              sizeKB: Math.round(blob.size / 1024)
+              rawDuration: formatDuration(elapsedSeconds),
+              trimmedSeconds: processed.trimmedSeconds || 0,
+              enhanced: Boolean(processed.enhanced),
+              sizeKB: Math.round(finalBlob.size / 1024)
             });
           }
         };
-        reader.readAsDataURL(blob);
+        reader.onerror = function () {
+          if (typeof onError === 'function') {
+            onError('Không thể đọc dữ liệu bản thu âm vừa tạo.');
+          }
+        };
+        reader.readAsDataURL(finalBlob);
       };
 
       startTime = Date.now();
@@ -768,6 +1279,8 @@ window.StudySnapAudio = (function () {
     speakText: speakText,
     playMediaOrDemo: playMediaOrDemo,
     renderVoicePlayer: renderVoicePlayer,
+    cleanAndTrimMonoSamples: cleanAndTrimMonoSamples,
+    encodeMonoWavBytes: encodeMonoWavBytes,
     pauseAll: function () { pauseAllExcept(null); }
   };
 })();

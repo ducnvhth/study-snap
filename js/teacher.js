@@ -3278,9 +3278,12 @@
       btn.addEventListener('click', function () {
         if (!window.StudySnapAudio) return;
         const targetKey = btn.getAttribute('data-ls-audio-rec');
+        const labelSpan = btn.querySelector('span');
         if (btn.getAttribute('data-recording') === '1') {
-          window.StudySnapAudio.stopRecording();
+          btn.disabled = true;
           btn.setAttribute('data-recording', '0');
+          if (labelSpan) labelSpan.textContent = 'Đang lọc tạp âm & cắt im lặng...';
+          window.StudySnapAudio.stopRecording();
           return;
         }
 
@@ -3289,12 +3292,12 @@
         if (!resolved) return;
 
         btn.setAttribute('data-recording', '1');
-        const labelSpan = btn.querySelector('span');
         window.StudySnapAudio.startRecording(
           function (timeStr) {
             if (labelSpan) labelSpan.textContent = 'Đang thu ' + timeStr + ' (Bấm dừng)';
           },
           async function (recInfo) {
+            btn.disabled = false;
             btn.setAttribute('data-recording', '0');
             if (labelSpan) labelSpan.textContent = 'Ghi âm trực tiếp';
             resolved.targetObj.audio_url = recInfo.dataUrl;
@@ -3314,9 +3317,14 @@
               clearPracticeExerciseDirty(ex.exercise_id);
             }
             renderTeacherPracticeTab();
-            showToast('Đã ghi âm đoạn nghe (' + recInfo.duration + ')!');
+            showToast(
+              recInfo.trimmedSeconds >= 1
+                ? 'Đã ghi âm, lọc tạp âm & cắt ' + recInfo.trimmedSeconds + 's khoảng trống (' + recInfo.duration + ')!'
+                : 'Đã ghi âm & lọc tạp âm (' + recInfo.duration + ')!'
+            );
           },
           function (errMsg) {
+            btn.disabled = false;
             btn.setAttribute('data-recording', '0');
             if (labelSpan) labelSpan.textContent = 'Ghi âm trực tiếp';
             showToast(errMsg || 'Không thể mở micro để ghi âm.');
@@ -4738,6 +4746,7 @@
             },
             function (result) {
               ui.isTeacherRecording = false;
+              btnTeacherRecord.disabled = false;
               btnTeacherRecord.textContent = 'Thu âm phản hồi Voice';
               if (teacherRecorderBar) teacherRecorderBar.classList.remove('is-recording');
               ui.teacherDraftVoice = {
@@ -4746,16 +4755,23 @@
                 duration: result.duration
               };
               renderGradingPanel();
-              showToast('Đã thu âm phản hồi Voice (' + result.duration + ')!');
+              showToast(
+                result.trimmedSeconds >= 1
+                  ? 'Đã thu Voice, lọc tạp âm & cắt ' + result.trimmedSeconds + 's khoảng trống (' + result.duration + ')!'
+                  : 'Đã thu âm & lọc tạp âm Voice (' + result.duration + ')!'
+              );
             },
             function (errMsg) {
               ui.isTeacherRecording = false;
+              btnTeacherRecord.disabled = false;
               btnTeacherRecord.textContent = 'Thu âm phản hồi Voice';
               if (teacherRecorderBar) teacherRecorderBar.classList.remove('is-recording');
               showToast(errMsg);
             }
           );
         } else {
+          btnTeacherRecord.disabled = true;
+          btnTeacherRecord.textContent = 'Đang lọc tạp âm...';
           window.StudySnapAudio.stopRecording();
         }
       });
