@@ -1,10 +1,10 @@
 /**
  * StudySnap — Logic Cổng Học Sinh (`student.html`)
  * - Bảo vệ trang theo vai trò `student` (`StudySnapAuth.enforceRole('student')`)
- * - Nộp BVN đa phương tiện (Ghi âm trực tiếp hoặc tải file Audio/Video) cho đúng tài khoản học sinh đang đăng nhập
+ * - Nộp bài luyện tập cuối buổi (Ghi âm trực tiếp hoặc tải file Audio/Video) cho đúng tài khoản học sinh đang đăng nhập
  * - Xem điểm số, nhận xét văn bản và bấm nghe trực tiếp Voice Feedback của Giáo viên
- * - Bảng theo dõi tiến độ BVN & nhận xét của riêng học sinh đang đăng nhập
- * - Bài luyện tập cuối giờ (Exit Ticket) tương tác & lưu lịch sử cá nhân
+ * - Bảng theo dõi tiến độ & nhận xét của riêng học sinh đang đăng nhập
+ * - Bài luyện tập cuối buổi tương tác & lưu lịch sử cá nhân
  * - Web ôn từ vựng chia theo từng bài (`Bài 1`, `Bài 2`, `Bài 3`...) và chế độ `"Tổng hợp"` toàn khóa
  */
 
@@ -171,7 +171,7 @@
       welcomeDesc.textContent =
         'Lớp: ' +
         (student.class_name || 'Lớp Tiếng Trung HSK 2') +
-        '. Nộp bài tập về nhà bằng thu âm trực tiếp hoặc tải video, nghe giáo viên sửa phát âm bằng giọng nói (Voice Feedback), làm bài luyện tập cuối giờ và ôn từ vựng theo từng bài hoặc tổng hợp.';
+        '. Làm bài luyện tập cuối buổi có hệ thống tự chấm, nộp bài thu âm trực tiếp hoặc tải video để nghe giáo viên sửa phát âm bằng giọng nói (Voice Feedback) và ôn từ vựng theo từng bài hoặc tổng hợp.';
     }
     if (accountBadge) {
       accountBadge.textContent = student.student_id + ' • ' + student.full_name;
@@ -198,6 +198,18 @@
       }
     });
 
+    const visiblePracticeExercises = getVisiblePracticeExercises(student);
+    const totalPracticeCount = visiblePracticeExercises.length;
+    let submittedPracticeCount = 0;
+    visiblePracticeExercises.forEach(function (ex) {
+      const hasSubmitted = (state.practiceSubmissions || []).some(function (sub) {
+        return String(sub.exercise_id) === String(ex.exercise_id) && String(sub.student_id) === String(student.student_id);
+      });
+      if (hasSubmitted) {
+        submittedPracticeCount++;
+      }
+    });
+
     const avgScore = scoreCount > 0 ? (scoreTotal / scoreCount).toFixed(1) : '—';
     const totalVocab = state.vocabulary.length;
     const validMasteredCount = ui.masteredIds.filter(function (id) {
@@ -213,7 +225,7 @@
     const elPracticeScore = document.getElementById('student-stat-practice-score');
     const elPracticeRating = document.getElementById('student-stat-practice-rating');
 
-    if (elSubmitted) elSubmitted.textContent = submittedCount + '/' + totalAssignments;
+    if (elSubmitted) elSubmitted.textContent = submittedPracticeCount + '/' + totalPracticeCount;
     if (elGraded) elGraded.textContent = String(gradedWithVoiceCount);
     if (elAvg) elAvg.textContent = String(avgScore);
     if (elVocab) elVocab.textContent = validMasteredCount + '/' + totalVocab;
@@ -375,9 +387,9 @@
     const summaryText = document.getElementById('student-session-summary-text');
     if (summaryText) {
       if (ui.selectedHomeworkSession === 'all') {
-        summaryText.textContent = 'Toàn bộ ' + studentAssignments.length + ' bài tập về nhà';
+        summaryText.textContent = 'Toàn bộ ' + studentAssignments.length + ' bài luyện tập cuối buổi';
       } else {
-        summaryText.textContent = 'Đang xem ' + ui.selectedHomeworkSession + ' (' + filteredAssignments.length + ' bài tập)';
+        summaryText.textContent = 'Đang xem ' + ui.selectedHomeworkSession + ' (' + filteredAssignments.length + ' bài)';
       }
     }
 
@@ -439,13 +451,13 @@
           practiceCallout.innerHTML =
             '<div style="background:var(--color-primary-soft);border:1.5px solid var(--color-primary);border-radius:var(--radius-xl);padding:18px 20px;margin-bottom:16px;">' +
               '<div style="font-weight:800;color:var(--color-primary-deep);font-size:1rem;margin-bottom:4px;">' +
-                '📝 Đây là Bài tập luyện tập cuối bài (Làm trực tiếp trên Web)' +
+                'Đây là Bài luyện tập cuối buổi (Làm trực tiếp trên Web)' +
               '</div>' +
               '<p style="font-size:0.875rem;color:var(--color-muted-foreground);margin-bottom:14px;line-height:1.5;">' +
-                'Bài tập bao gồm các phần câu hỏi tương tác (Nối từ, Trắc nghiệm, Điền từ, Sửa câu sai, Dịch câu). Hệ thống sẽ tự chấm điểm và xếp loại kết quả ngay sau khi nộp bài.' +
+                'Bài tập bao gồm các phần câu hỏi tương tác (Nối từ, Trắc nghiệm, Điền từ, Sửa câu sai, Dịch câu, Nghe hiểu). Hệ thống sẽ tự chấm điểm và xếp loại kết quả ngay sau khi nộp bài.' +
               '</p>' +
               '<button type="button" class="btn btn-primary" id="btn-student-do-practice-now" data-ex-id="' + escapeHtml(currentAsg.exercise_id || '') + '" style="font-weight:700;width:100%;">' +
-                '<span>🚀 Bắt đầu làm bài luyện tập ngay ➔</span>' +
+                '<span>Bắt đầu làm bài luyện tập cuối buổi ngay →</span>' +
               '</button>' +
             '</div>';
           const btnDo = practiceCallout.querySelector('#btn-student-do-practice-now');
@@ -497,7 +509,7 @@
       bodyEl.innerHTML =
         '<div class="assignment-brief-box">' +
         '<div class="assignment-brief-title">Chưa có bài tập cần nộp</div>' +
-        '<p class="assignment-brief-desc">Hiện lớp của em chưa có bài tập về nhà nào đang mở. Hãy kiểm tra lại khi giáo viên giao bài nhé.</p>' +
+        '<p class="assignment-brief-desc">Hiện lớp của em chưa có bài luyện tập cuối buổi nào đang mở. Hãy kiểm tra lại khi giáo viên giao bài nhé.</p>' +
         '</div>';
       return;
     }
@@ -512,7 +524,7 @@
         '<div class="assignment-brief-title">Em chưa nộp ' +
         escapeHtml(assignment.lesson_tag || assignment.title) +
         '</div>' +
-        '<p class="assignment-brief-desc">Hãy thu âm trực tiếp hoặc tải file Audio/Video ở cột bên trái và bấm <strong>Nộp Bài Tập Về Nhà Ngay</strong>. Sau khi giáo viên chấm, điểm số cùng nhận xét và giọng nói sửa bài sẽ hiển thị tại đây.</p>' +
+        '<p class="assignment-brief-desc">Hãy thu âm trực tiếp hoặc tải file Audio/Video ở cột bên trái và bấm <strong>Nộp Bài Luyện Tập Cuối Buổi Ngay</strong>. Sau khi giáo viên chấm, điểm số cùng nhận xét và giọng nói sửa bài sẽ hiển thị tại đây.</p>' +
         '</div>';
       return;
     }
@@ -585,7 +597,7 @@
       escapeHtml(submission.submitted_at || 'Vừa nộp') +
       '</div>' +
       '<p class="assignment-brief-desc">Ghi chú của em: "' +
-      escapeHtml(submission.student_note || 'Em gửi bài tập về nhà ạ.') +
+      escapeHtml(submission.student_note || 'Em gửi bài luyện tập cuối buổi ạ.') +
       '"</p>' +
       '<div class="media-player-box">' +
       window.StudySnapAudio.renderVoicePlayer({
@@ -612,7 +624,7 @@
     if (studentAssignments.length === 0) {
       tbody.innerHTML =
         '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--color-muted-foreground);">' +
-          'Hiện giáo viên chưa giao bài tập về nhà cho lớp của em.' +
+          'Hiện giáo viên chưa giao bài luyện tập cuối buổi nào cho lớp của em.' +
         '</td></tr>';
       if (summaryBadge) summaryBadge.textContent = '0/0 bài tập';
       return;
@@ -786,7 +798,7 @@
             showToast(
               result.trimmedSeconds >= 1
                 ? 'Đã thu âm, lọc tạp âm & cắt ' + result.trimmedSeconds + 's khoảng trống (' + result.duration + '). Em có thể nghe lại hoặc nộp bài!'
-                : 'Đã thu âm & lọc tạp âm xong (' + result.duration + '). Em có thể nghe lại hoặc bấm "Nộp Bài Tập Về Nhà Ngay".'
+                : 'Đã thu âm & lọc tạp âm xong (' + result.duration + '). Em có thể nghe lại hoặc bấm "Nộp Bài Luyện Tập Cuối Buổi Ngay".'
             );
           },
           function (errMsg) {
@@ -831,7 +843,7 @@
               'Đã chọn: ' + mediaInfo.fileName + ' (' + mediaInfo.duration + ')';
           }
           renderPendingMediaPreview();
-          showToast('Đã tải file "' + mediaInfo.fileName + '". Nhấn "Nộp Bài Tập Về Nhà Ngay" để gửi!');
+          showToast('Đã tải file "' + mediaInfo.fileName + '". Nhấn "Nộp Bài Luyện Tập Cuối Buổi Ngay" để gửi!');
         });
       });
     }
@@ -872,7 +884,7 @@
           assignment_id: ui.selectedAssignmentId,
           student_id: student.student_id,
           submitted_at: timestamp,
-          student_note: noteText || 'Em nộp bản thu âm bài tập về nhà ạ.',
+          student_note: noteText || 'Em nộp bản thu âm bài luyện tập cuối buổi ạ.',
           media_type: mediaData.media_type,
           media_url: mediaData.media_url,
           media_duration: mediaData.media_duration,
@@ -901,7 +913,7 @@
 
           const remoteRes = loading
             ? await loading.withOverlay(
-                hasBinaryMedia ? 'Đang tải tệp bài nộp lên hệ thống...' : 'Đang gửi bài tập về nhà...',
+                hasBinaryMedia ? 'Đang tải tệp bài nộp lên hệ thống...' : 'Đang nộp bài luyện tập cuối buổi...',
                 'Vui lòng giữ nguyên trang cho đến khi hệ thống xác nhận đã nhận bài.',
                 runSync
               )
@@ -946,7 +958,7 @@
           showToast(
             remoteRes === null && window.StudySnapStore.getGasUrl()
               ? 'Đã lưu bài nộp trên thiết bị (mất kết nối máy chủ).'
-              : 'Đã nộp Bài Tập Về Nhà thành công cho tài khoản ' + student.full_name + '!'
+              : 'Đã nộp Bài luyện tập cuối buổi thành công cho tài khoản ' + student.full_name + '!'
           );
         };
 
@@ -964,7 +976,7 @@
   }
 
   // =========================================================================
-  // 3. TAB 2: INTERACTIVE EXIT TICKET (BÀI LUYỆN TẬP CUỐI GIỜ)
+  // 3. INTERACTIVE EXIT TICKET (BÀI LUYỆN TẬP CUỐI BUỔI)
   // =========================================================================
   function renderExitTicketSection() {
     const student = getActiveStudent();
@@ -1013,7 +1025,7 @@
       if (ui.quizFinished) {
         quizBox.innerHTML =
           '<div class="assignment-brief-box">' +
-          '<span class="status-badge status-graded">Đã hoàn thành bài luyện tập cuối giờ</span>' +
+          '<span class="status-badge status-graded">Đã hoàn thành bài luyện tập cuối buổi</span>' +
           '<h3 style="margin: 10px 0 6px;">Kết quả của ' +
           escapeHtml(student.full_name) +
           ': ' +
@@ -1174,7 +1186,7 @@
                 ui.quizFinished = true;
                 state.exitTicketLogs.unshift(logRecord);
                 window.StudySnapStore.saveState(state);
-                showToast('Đã lưu kết quả bài luyện tập cuối giờ của ' + student.full_name + '!');
+                showToast('Đã lưu kết quả bài luyện tập cuối buổi của ' + student.full_name + '!');
                 renderExitTicketSection();
               };
 
@@ -1417,7 +1429,7 @@
           '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>' +
           '</div>' +
           '<h3>Chưa có bài tập nào được giao cho lớp của em</h3>' +
-          '<p>Giáo viên sẽ sớm cập nhật bài tập luyện tập cuối bài cho lớp tại đây.</p>' +
+          '<p>Giáo viên sẽ sớm cập nhật bài luyện tập cuối buổi cho lớp tại đây.</p>' +
           '</div>';
       }
       return;
@@ -1460,6 +1472,7 @@
           ui.selectedWordBankChip = null;
           ui.selectedTargetBlank = null;
           ui.practiceViewingResult = false;
+          renderStudentHeaderAndStats();
           renderPracticeSection();
         });
       });
@@ -2373,7 +2386,7 @@
       '<div class="practice-result-card">' +
       '<div class="practice-score-header">' +
       '<div>' +
-      '<div style="font-size:0.875rem;color:var(--color-muted-foreground);font-weight:600;margin-bottom:4px;">KẾT QUẢ ĐÁNH GIÁ BÀI TẬP CUỐI BÀI</div>' +
+      '<div style="font-size:0.875rem;color:var(--color-muted-foreground);font-weight:600;margin-bottom:4px;">KẾT QUẢ ĐÁNH GIÁ BÀI LUYỆN TẬP CUỐI BUỔI</div>' +
       '<div class="practice-big-score tabular-nums">' +
       totalScore +
       ' / ' +
@@ -2721,6 +2734,7 @@
           } catch (e) {
             // ignore
           }
+          renderStudentHeaderAndStats();
           renderPracticeSection();
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -2917,6 +2931,7 @@
               (exercise.total_score || 35) +
               ' điểm'
           );
+          renderStudentHeaderAndStats();
           renderPracticeSection();
           window.scrollTo({ top: 0, behavior: 'smooth' });
         };

@@ -1,7 +1,7 @@
 /**
  * StudySnap — Logic Cổng Giáo Viên (`teacher.html`)
- * Bao gồm: Chấm chữa BVN bằng Voice, Bảng tổng hợp tự động, Giao BVN mới,
- * Tạo & Quản lý Tài khoản Học sinh, Quản lý Kho từ vựng & Xem kết quả cuối giờ.
+ * Bao gồm: Chữa bài Ghi âm / Video bằng Voice, Bảng tổng hợp tự động, Giao bài mới,
+ * Tạo & Quản lý Tài khoản Học sinh, Quản lý Kho từ vựng & Soạn bài luyện tập cuối buổi.
  */
 
 (function () {
@@ -957,7 +957,7 @@
   }
 
   /**
-   * TAB 3: KHO TỪ VỰNG & KẾT QUẢ BÀI CUỐI GIỜ
+   * TAB 3: KHO TỪ VỰNG & ÔN TẬP
    */
   function renderTeacherVocabTable() {
     const tbody = document.getElementById('teacher-vocab-tbody');
@@ -1051,7 +1051,7 @@
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = 'StudySnap_Bang_Tong_Hop_BVN.csv';
+    link.download = 'StudySnap_Bang_Tong_Hop_Bai_Luyen_Tap_Cuoi_Buoi.csv';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1059,7 +1059,7 @@
   }
 
   // =========================================================================
-  // TAB 4: QUẢN LÝ BÀI TẬP LUYỆN TẬP CUỐI BÀI (FORM BUILDER)
+  // TAB 1: QUẢN LÝ BÀI LUYỆN TẬP CUỐI BUỔI (FORM BUILDER)
   // =========================================================================
   function getActivePracticeExercise() {
     if (!Array.isArray(state.practiceExercises) || state.practiceExercises.length === 0) {
@@ -1082,7 +1082,7 @@
     const resolvedTitle =
       (title && String(title).trim()) ||
       (titleInp && titleInp.value.trim()) ||
-      (withTemplate ? 'Bài tập luyện tập cuối bài — HSK 1: Bài 1' : 'Bài luyện tập cuối buổi — Bài 1');
+      (withTemplate ? 'Bài luyện tập cuối buổi — HSK 1: Bài 1' : 'Bài luyện tập cuối buổi — Bài 1');
     const resolvedTag =
       (tag && String(tag).trim()) || (tagInp && tagInp.value.trim()) || 'Bài 1';
 
@@ -1852,7 +1852,7 @@
         if (btnEmptyTpl) {
           btnEmptyTpl.addEventListener('click', async function () {
             const tpl = createFreshPracticeExercise(
-              'Bài tập luyện tập cuối bài — HSK 1: Bài 1',
+              'Bài luyện tập cuối buổi — HSK 1: Bài 1',
               'Bài 1',
               true
             );
@@ -3928,7 +3928,7 @@
             'Hệ thống sẽ tự động tạo sẵn bài tập mới để giáo viên thêm các phần câu hỏi hoặc nhập từ Excel.';
         }
         if (submitBtnEl) submitBtnEl.textContent = 'Tạo bài tập ngay';
-        if (titleInp) titleInp.value = 'Bài tập luyện tập cuối bài — HSK 1: Bài ' + nextNum;
+        if (titleInp) titleInp.value = 'Bài luyện tập cuối buổi — HSK 1: Bài ' + nextNum;
         if (tagInp) tagInp.value = 'Bài ' + nextNum;
       }
 
@@ -4529,7 +4529,7 @@
       });
     }
 
-    // Nút Xóa bài tập về nhà
+    // Nút Xóa bài luyện tập cuối buổi
     const btnDeleteAsg = document.getElementById('btn-delete-current-asg');
     if (btnDeleteAsg) {
       btnDeleteAsg.addEventListener('click', async function () {
@@ -4597,7 +4597,7 @@
       }
 
       if (noteInp && !noteInp.value) {
-        noteInp.value = 'Làm bài luyện tập cuối bài cẩn thận, mục tiêu đạt từ ' + ((ex.thresholds && ex.thresholds.good) || 25) + ' điểm trở lên nhé các em!';
+        noteInp.value = 'Làm bài luyện tập cuối buổi cẩn thận, mục tiêu đạt từ ' + ((ex.thresholds && ex.thresholds.good) || 25) + ' điểm trở lên nhé các em!';
       }
 
       renderAssignModalActiveDeliveries(ex);
@@ -4664,13 +4664,16 @@
           return;
         }
 
+        const formattedAsgTitle = window.StudySnapStore.formatPracticeAssignmentTitle
+          ? window.StudySnapStore.formatPracticeAssignmentTitle(ex.title)
+          : 'Luyện tập cuối buổi: ' + ex.title.replace(/^(?:Bài tập luyện tập cuối bài|Bài luyện tập cuối buổi)\s*—\s*/i, '');
         const newAsg = {
           assignment_id: 'ASG_PRAC_' + Date.now(),
-          title: 'Luyện tập cuối bài: ' + ex.title.replace(/^Bài tập luyện tập cuối bài\s*—\s*/i, ''),
+          title: formattedAsgTitle,
           lesson_tag: ex.lesson_tag || 'Bài tập',
           lesson_id: ui.selectedLesson || 'bai-1',
           due_date: dueVal || '20/11/2026',
-          description: noteVal || 'Làm bài kiểm tra luyện tập cuối bài trực tiếp trên hệ thống.',
+          description: noteVal || 'Làm bài kiểm tra luyện tập cuối buổi trực tiếp trên hệ thống.',
           require_media: 'practice',
           exercise_id: ex.exercise_id,
           class_name: classVal
@@ -4856,7 +4859,7 @@
       });
     }
 
-    // Giáo viên Giao BVN mới
+    // Giáo viên Giao bài luyện tập cuối buổi mới
     const createAsgForm = document.getElementById('create-assignment-form');
     if (createAsgForm) {
       createAsgForm.addEventListener('submit', async function (ev) {
@@ -6531,7 +6534,7 @@
             '</div>' +
             '<div class="tabular-nums" style="font-size: 0.8125rem; color: var(--color-muted-foreground); margin-top: 4px;">' +
               'Tên đăng nhập: <strong>' + escapeHtml(uname) + '</strong> • ' +
-              subCount + ' bài nộp BVN • ' + pracCount + ' bài luyện tập' +
+              subCount + ' bài nộp ghi âm/video • ' + pracCount + ' bài luyện tập cuối buổi' +
             '</div>' +
           '</div>';
       }
@@ -6855,7 +6858,7 @@
         const title = createPracticeBtn.getAttribute('data-lesson-title') || ('Bài tập luyện tập ' + tag);
         const newEx = {
           exercise_id: 'EX_' + Date.now(),
-          title: 'Bài tập luyện tập cuối bài — ' + title,
+          title: 'Bài luyện tập cuối buổi — ' + title,
           lesson_tag: tag,
           total_score: 0,
           thresholds: { very_good: 31, good: 25 },

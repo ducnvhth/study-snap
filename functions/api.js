@@ -633,8 +633,13 @@ async function generateNextStudentId(db) {
 
 function formatPracticeAssignmentTitle(rawTitle) {
   const clean = String(rawTitle || '').trim() || 'Bài tập mới';
-  if (/^Luyện tập cuối bài:/i.test(clean)) return clean;
-  return 'Luyện tập cuối bài: ' + clean.replace(/^Bài tập luyện tập cuối bài\s*—\s*/i, '');
+  if (/^Luyện tập cuối (buổi|bài):/i.test(clean)) {
+    return 'Luyện tập cuối buổi:' + clean.replace(/^Luyện tập cuối (?:buổi|bài):/i, '');
+  }
+  return (
+    'Luyện tập cuối buổi: ' +
+    clean.replace(/^(?:Bài tập luyện tập cuối bài|Bài luyện tập cuối buổi)\s*—\s*/i, '')
+  );
 }
 
 async function handleDriveMediaProxy(request, url, ctx) {

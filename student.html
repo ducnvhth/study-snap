@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cổng Học Sinh — StudySnap (Nộp BVN, Nghe Phản Hồi Voice, Luyện Tập &amp; Ôn Từ Vựng)</title>
-  <meta name="description" content="Không gian học tập dành riêng cho Học sinh: nộp bài tập về nhà bằng ghi âm hoặc video, nghe giáo viên sửa bài bằng giọng nói, làm bài luyện tập cuối giờ và ôn từ vựng theo từng bài hoặc tổng hợp.">
+  <title>Cổng Học Sinh — StudySnap (Bài Luyện Tập Cuối Buổi, Nộp Ghi Âm / Video &amp; Ôn Từ Vựng)</title>
+  <meta name="description" content="Không gian học tập dành riêng cho Học sinh: làm bài luyện tập cuối buổi trực tiếp, nộp ghi âm hoặc video để nghe giáo viên sửa bài bằng giọng nói và ôn từ vựng theo từng bài hoặc tổng hợp.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://script.google.com" crossorigin>
@@ -26,7 +26,7 @@
         </div>
         <div>
           <div class="brand-title">StudySnap • Cổng Học Sinh</div>
-          <p class="brand-subtitle" id="student-header-subtitle">Nộp BVN đa phương tiện, Luyện tập cuối giờ &amp; Ôn từ vựng theo bài</p>
+          <p class="brand-subtitle" id="student-header-subtitle">Bài luyện tập cuối buổi, Nộp Ghi âm / Video &amp; Ôn từ vựng theo bài</p>
         </div>
       </div>
 
@@ -48,7 +48,7 @@
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
             <line x1="12" x2="12" y1="19" y2="22"></line>
           </svg>
-          <span>2. BVN &amp; Phản Hồi Giáo Viên</span>
+          <span>2. Nộp Ghi Âm / Video &amp; Phản Hồi</span>
         </button>
 
         <button type="button" class="nav-tab" data-student-tab="vocabulary">
@@ -71,11 +71,11 @@
       <div>
         <h1 id="student-welcome-heading">Xin chào Nguyễn Minh Anh!</h1>
         <p id="student-welcome-desc">
-          Nộp bài tập về nhà bằng thu âm trực tiếp hoặc tải video, nghe giáo viên nhận xét bằng giọng nói (Voice Feedback), làm bài tập luyện tập cuối buổi có hệ thống tự chấm và ôn tập từ vựng tương tác.
+          Làm bài luyện tập cuối buổi có hệ thống tự chấm, nộp bài thu âm trực tiếp hoặc tải video để nghe giáo viên nhận xét bằng giọng nói (Voice Feedback) và ôn tập từ vựng tương tác.
         </p>
         <div class="banner-actions">
           <button type="button" class="btn btn-primary" id="btn-banner-go-practice">
-            <span>Làm Bài Tập Luyện Tập Cuối Bài</span>
+            <span>Làm Bài Luyện Tập Cuối Buổi</span>
           </button>
           <button type="button" class="btn btn-outline" id="btn-banner-go-vocab-all">
             <span>Ôn Tổng Hợp Tất Cả Từ Vựng</span>
@@ -86,11 +86,11 @@
       <div class="summary-stats-grid">
         <div class="stat-tile">
           <div class="stat-value tabular-nums" id="student-stat-hw-submitted">3/3</div>
-          <div class="stat-label">Bài tập về nhà đã nộp</div>
+          <div class="stat-label">Bài luyện tập cuối buổi đã nộp</div>
         </div>
         <div class="stat-tile">
           <div class="stat-value tabular-nums" id="student-stat-practice-score">33/35</div>
-          <div class="stat-label">Điểm Luyện tập cuối bài</div>
+          <div class="stat-label">Điểm Luyện tập cuối buổi</div>
         </div>
         <div class="stat-tile">
           <div class="stat-value tabular-nums" id="student-stat-practice-rating">Rất tốt 🌟</div>
@@ -118,7 +118,7 @@
                 <line x1="16" y1="17" x2="8" y2="17"></line>
                 <polyline points="10 9 9 9 8 9"></polyline>
               </svg>
-              <h2 id="student-practice-title">Bài tập luyện tập cuối bài (HSK 1 – Bài 1, Tổng 35 điểm)</h2>
+              <h2 id="student-practice-title">Bài luyện tập cuối buổi (HSK 1 – Bài 1, Tổng 35 điểm)</h2>
             </div>
             <div class="filter-pill-group" id="student-practice-exercise-selector" role="tablist" aria-label="Chọn bài tập cần làm">
               <!-- Populated by js/student.js -->
@@ -163,11 +163,11 @@
       </section>
 
       <!-- ====================================================================
-           TAB 2: NỘP BÀI TẬP VỀ NHÀ & NGHE PHẢN HỒI VOICE TỪ GIÁO VIÊN
+           TAB 2: NỘP BÀI LUYỆN TẬP CUỐI BUỔI (GHI ÂM / VIDEO) & NGHE PHẢN HỒI VOICE TỪ GIÁO VIÊN
            ==================================================================== -->
-      <section id="student-tab-homework" class="module-section" aria-label="Nộp BVN và xem phản hồi của giáo viên">
+      <section id="student-tab-homework" class="module-section" aria-label="Nộp bài ghi âm hoặc video và xem phản hồi của giáo viên">
         <div class="bvn-workspace-grid">
-          <!-- Cột Trái: Nộp BVN của Học sinh đang đăng nhập -->
+          <!-- Cột Trái: Nộp bài ghi âm / video của Học sinh đang đăng nhập -->
           <div class="surface-panel">
             <div class="panel-header">
               <div class="panel-title-row">
@@ -176,7 +176,7 @@
                   <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
                   <line x1="12" x2="12" y1="19" y2="22"></line>
                 </svg>
-                <h2>Nộp Bài Tập Về Nhà Của Em</h2>
+                <h2>Nộp Bài Luyện Tập Cuối Buổi (Ghi Âm / Video)</h2>
               </div>
               <span class="status-badge status-graded" id="student-account-badge">HS01 • Nguyễn Minh Anh</span>
             </div>
@@ -191,7 +191,7 @@
                   </span>
                   <span style="font-size:0.8125rem;color:var(--color-muted-foreground);" id="student-session-summary-text">Chọn buổi để xem bài tập tương ứng</span>
                 </div>
-                <div class="session-pills-row" id="student-session-pills-row" role="tablist" aria-label="Danh sách buổi học BVN">
+                <div class="session-pills-row" id="student-session-pills-row" role="tablist" aria-label="Danh sách buổi học">
                   <!-- Dynamically populated by student.js -->
                 </div>
                 <div class="sub-asg-chips-row" id="student-subtask-chips-row">
@@ -200,7 +200,7 @@
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="student-assignment-select">Chọn Bài tập về nhà cần làm / nộp</label>
+                <label class="form-label" for="student-assignment-select">Chọn Bài luyện tập cuối buổi cần làm / nộp</label>
                 <select id="student-assignment-select" class="form-control"></select>
               </div>
 
@@ -248,7 +248,7 @@
               </div>
 
               <button type="submit" class="btn btn-primary" style="width: 100%;">
-                <span>Nộp Bài Tập Về Nhà Ngay</span>
+                <span>Nộp Bài Luyện Tập Cuối Buổi Ngay</span>
               </button>
             </form>
           </div>
@@ -282,16 +282,16 @@
                 <path d="M3 9h18"></path>
                 <path d="M9 21V9"></path>
               </svg>
-              <h2>Bảng Theo Dõi Tiến Độ BVN &amp; Ý Kiến Giáo Viên Của Em</h2>
+              <h2>Bảng Theo Dõi Tiến Độ &amp; Ý Kiến Giáo Viên Của Em</h2>
             </div>
             <span class="status-badge status-graded" id="student-table-summary-badge">Theo dõi toàn khóa</span>
           </div>
 
           <div class="matrix-scroll-wrapper">
-            <table class="progress-matrix-table" aria-label="Bảng tổng hợp bài tập về nhà và ý kiến giáo viên của học sinh">
+            <table class="progress-matrix-table" aria-label="Bảng tổng hợp bài luyện tập cuối buổi và ý kiến giáo viên của học sinh">
               <thead>
                 <tr>
-                  <th>Bài tập về nhà</th>
+                  <th>Bài luyện tập cuối buổi</th>
                   <th>Hạn nộp</th>
                   <th>Trạng thái làm bài</th>
                   <th>Điểm số</th>

@@ -1,6 +1,6 @@
 # Hướng Dẫn Sử Dụng StudySnap (Dành cho Giáo viên & Học sinh)
 
-Tài liệu này hướng dẫn từng bước cách sử dụng các tính năng trên **StudySnap** cho cả hai vai trò **Giáo viên** (`teacher.html`) và **Học sinh** (`student.html`), từ đăng nhập đến soạn đề (bao gồm dạng bài Nghe hiểu), chữa Bài tập về nhà bằng giọng nói và ôn tập từ vựng.
+Tài liệu này hướng dẫn từng bước cách sử dụng các tính năng trên **StudySnap** cho cả hai vai trò **Giáo viên** (`teacher.html`) và **Học sinh** (`student.html`), từ đăng nhập đến soạn bài luyện tập cuối buổi (bao gồm dạng bài Nghe hiểu), chữa bài ghi âm/video bằng giọng nói và ôn tập từ vựng.
 
 ---
 
@@ -33,7 +33,7 @@ Giao diện giáo viên được chia thành **4 tab** theo đúng thứ tự l�
 
 #### A. Tạo, chọn hoặc nhập bài tập hàng loạt từ Excel
 1. Chọn một bài tập có sẵn trong danh sách **Bài tập:** hoặc bấm **`+ Tạo bài tập mới`**.
-2. Trong hộp thoại tạo mới, nhập **Tiêu đề bài tập** (VD: *Bài tập luyện tập cuối bài — HSK 1: Bài 2*) và **Thuộc bài số** (VD: *Bài 2*), rồi bấm **`Tạo bài tập ngay`**.
+2. Trong hộp thoại tạo mới, nhập **Tiêu đề bài tập** (VD: *Bài luyện tập cuối buổi — HSK 1: Bài 2*) và **Thuộc bài số** (VD: *Bài 2*), rồi bấm **`Tạo bài tập ngay`**.
 3. Để ra đề nhanh bằng bảng tính, bấm **`Nhập từ Excel`** (trên thanh đầu trang hoặc trên thanh trượt nhanh):
    - Mở tab **`Xem file Template mẫu`** để xem trực tiếp bảng cấu trúc 11 cột hỗ trợ cả **6 dạng bài** (có bộ lọc từng dạng) hoặc bấm **`Tải file Template (.xlsx)`** để tải về chỉnh sửa trên Excel / phần mềm bảng tính.
    - Kéo thả/chọn tệp `.xlsx`, `.xls`, `.csv` hoặc copy-paste trực tiếp từ Excel vào ô nhập, xem trước các phần câu hỏi và tổng điểm được phân tích.
@@ -83,9 +83,9 @@ Khi bấm **`+ 6. Nghe hiểu`**, một thẻ bài nghe mới được chèn và
 
 ---
 
-### Tab 2: `2. Chữa BVN & Bảng Theo Dõi` — Quản lý theo Buổi học & Chữa bài Voice
+### Tab 2: `2. Chữa Ghi Âm / Video & Theo Dõi` — Quản lý theo Buổi học & Chữa bài Voice
 
-#### A. Quản lý và giao BVN theo Buổi học (cột bên phải)
+#### A. Quản lý và giao bài luyện tập cuối buổi theo Buổi học (cột bên phải)
 Để tránh rối khi một khóa học có 15+ buổi và mỗi buổi gồm nhiều bài nhỏ:
 1. Tại mục **`1. Chọn Buổi học`**, chọn buổi đang dạy hoặc bấm **`+ Thêm Buổi mới`** để tạo buổi mới (VD: *Buổi 1*, *Buổi 2*...).
 2. Tích chọn các bài tập nhỏ cần giao trong buổi đó (có nút **`Chọn tất cả`** / **`Bỏ chọn`**), chọn lớp tại mục **`Giao bài đã chọn cho Lớp:`** rồi bấm **`Giao cho lớp`**.
@@ -161,16 +161,16 @@ Giao diện học sinh có **3 tab** đồng bộ tên gọi với giáo viên. 
 
 ---
 
-### Tab 2: `2. BVN & Phản Hồi Giáo Viên` — Nộp bài Audio/Video & Nghe chữa bài
+### Tab 2: `2. Nộp Ghi Âm / Video & Phản Hồi` — Nộp bài Audio/Video & Nghe chữa bài
 
 1. Ở mục **`Chọn Buổi học`**, bấm chọn buổi học cần làm (VD: *Buổi 1*, *Buổi 2*...), sau đó chọn từng **bài tập nhỏ** bên trong buổi đó.
 2. Đọc kỹ yêu cầu bài tập, rồi chọn 1 trong 2 cách nộp bài:
    - **`Thu âm bằng Micro`**: bấm thu âm trực tiếp trên điện thoại hoặc máy tính (nhớ bấm **Cho phép / Allow** khi trình duyệt hỏi quyền sử dụng Micro), nghe thử lại bản thu trước khi gửi.
    - **`Tải file Audio / Video từ máy`**: chọn tệp ghi âm hoặc video quay sẵn từ thiết bị.
-3. Nhập ghi chú thêm cho giáo viên (nếu có) và bấm **`Nộp Bài Tập Về Nhà Ngay`**.
+3. Nhập ghi chú thêm cho giáo viên (nếu có) và bấm **`Nộp Bài Luyện Tập Cuối Buổi Ngay`**.
 4. Khi giáo viên chấm xong:
    - Xem điểm số, nhận xét chi tiết và bấm nghe trực tiếp bản ghi âm chữa bài ở mục **`Phản Hồi & Giọng Nói Chữa Bài Từ Giáo Viên`** (bên phải).
-   - Theo dõi toàn bộ lịch sử nộp bài và nhận xét qua các buổi ở **`Bảng Theo Dõi Tiến Độ BVN & Ý Kiến Giáo Viên Của Em`** (phía dưới).
+   - Theo dõi toàn bộ lịch sử nộp bài và nhận xét qua các buổi ở **`Bảng Theo Dõi Tiến Độ & Ý Kiến Giáo Viên Của Em`** (phía dưới).
 
 ---
 

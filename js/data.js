@@ -123,13 +123,13 @@ window.STUDYSNAP_INITIAL_DATA = {
     {
       assignment_id: 'ASG_PRAC_DEMO_1',
       session_tag: 'Buổi 1',
-      title: 'Luyện tập cuối bài: HSK 1: Bài 1 (Chào hỏi & Làm quen)',
+      title: 'Luyện tập cuối buổi: HSK 1: Bài 1 (Chào hỏi & Làm quen)',
       lesson_tag: 'Bài 1',
       lesson_id: 'bai-1',
       exercise_id: 'EX_HSK1_BAI_1',
       class_name: 'all',
       due_date: '20/11/2026',
-      description: 'Làm bài tập luyện tập cuối bài trực tiếp trên hệ thống.',
+      description: 'Làm bài luyện tập cuối buổi trực tiếp trên hệ thống.',
       require_media: 'practice'
     }
   ],
@@ -619,7 +619,7 @@ window.STUDYSNAP_INITIAL_DATA = {
     {
       ticket_id: 'EXIT_BAI_1',
       lesson_tag: 'Bài 1',
-      title: 'Kiểm tra hiểu bài cuối giờ — Bài 1: Chào hỏi & Biến điệu thanh 3',
+      title: 'Kiểm tra hiểu bài cuối buổi — Bài 1: Chào hỏi & Biến điệu thanh 3',
       questions: [
         {
           id: 'Q1',
@@ -665,7 +665,7 @@ window.STUDYSNAP_INITIAL_DATA = {
     {
       ticket_id: 'EXIT_BAI_2',
       lesson_tag: 'Bài 2',
-      title: 'Kiểm tra hiểu bài cuối giờ — Bài 2: Học tập & Ngữ âm tiếng Hán',
+      title: 'Kiểm tra hiểu bài cuối buổi — Bài 2: Học tập & Ngữ âm tiếng Hán',
       questions: [
         {
           id: 'Q1',
@@ -711,7 +711,7 @@ window.STUDYSNAP_INITIAL_DATA = {
     {
       ticket_id: 'EXIT_BAI_3',
       lesson_tag: 'Bài 3',
-      title: 'Kiểm tra hiểu bài cuối giờ — Bài 3: Mua sắm & Đời sống',
+      title: 'Kiểm tra hiểu bài cuối buổi — Bài 3: Mua sắm & Đời sống',
       questions: [
         {
           id: 'Q1',
@@ -789,7 +789,7 @@ window.STUDYSNAP_INITIAL_DATA = {
   practiceExercises: [
     {
       exercise_id: 'EX_HSK1_BAI_1',
-      title: 'Bài tập luyện tập cuối bài — HSK 1: Bài 1 (Chào hỏi & Làm quen)',
+      title: 'Bài luyện tập cuối buổi — HSK 1: Bài 1 (Chào hỏi & Làm quen)',
       lesson_tag: 'Bài 1',
       total_score: 35,
       thresholds: {
@@ -1203,7 +1203,7 @@ window.StudySnapLoading = (function () {
     bootstrap: 'Đang đồng bộ dữ liệu hệ thống...',
     setupDatabase: 'Đang khởi tạo dữ liệu ban đầu...',
     login: 'Đang xác thực tài khoản...',
-    submitHomework: 'Đang gửi bài tập về nhà...',
+    submitHomework: 'Đang nộp bài luyện tập cuối buổi...',
     submitExitTicket: 'Đang lưu kết quả luyện tập...',
     submitPracticeExercise: 'Đang nộp bài luyện tập cuối buổi...',
     savePracticeExercise: 'Đang lưu đề luyện tập...',
@@ -1241,7 +1241,7 @@ window.StudySnapLoading = (function () {
       desc: 'Hệ thống đang kiểm tra thông tin đăng nhập. Vui lòng đợi hoàn tất.'
     },
     submitHomework: {
-      title: 'Đang gửi bài tập về nhà...',
+      title: 'Đang nộp bài luyện tập cuối buổi...',
       desc: 'Vui lòng giữ nguyên trang cho đến khi hệ thống xác nhận đã lưu bài nộp.'
     },
     submitExitTicket: {
@@ -2805,8 +2805,13 @@ window.StudySnapStore = (function () {
 
   function formatPracticeAssignmentTitle(rawTitle) {
     const clean = String(rawTitle || '').trim() || 'Bài tập mới';
-    if (/^Luyện tập cuối bài:/i.test(clean)) return clean;
-    return 'Luyện tập cuối bài: ' + clean.replace(/^Bài tập luyện tập cuối bài\s*—\s*/i, '');
+    if (/^Luyện tập cuối (buổi|bài):/i.test(clean)) {
+      return 'Luyện tập cuối buổi:' + clean.replace(/^Luyện tập cuối (?:buổi|bài):/i, '');
+    }
+    return (
+      'Luyện tập cuối buổi: ' +
+      clean.replace(/^(?:Bài tập luyện tập cuối bài|Bài luyện tập cuối buổi)\s*—\s*/i, '')
+    );
   }
 
   function syncLinkedPracticeAssignments(stateObj, exercise) {

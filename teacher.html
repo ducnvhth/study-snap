@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cổng Giáo Viên — StudySnap (Chấm BVN Voice, Bảng Tổng Hợp &amp; Quản Lý Học Sinh)</title>
-  <meta name="description" content="Không gian làm việc dành riêng cho Giáo viên: chấm chữa BVN bằng giọng nói, theo dõi bảng tự động tổng hợp tiến độ, tạo tài khoản cho học sinh và quản lý kho từ vựng.">
+  <title>Cổng Giáo Viên — StudySnap (Luyện Tập Cuối Buổi, Chữa Bài Voice &amp; Quản Lý Học Sinh)</title>
+  <meta name="description" content="Không gian làm việc dành riêng cho Giáo viên: soạn bài luyện tập cuối buổi, chấm chữa ghi âm/video bằng giọng nói, theo dõi bảng tự động tổng hợp tiến độ, tạo tài khoản cho học sinh và quản lý kho từ vựng.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://script.google.com" crossorigin>
@@ -28,7 +28,7 @@
         </div>
         <div>
           <div class="brand-title">StudySnap • Cổng Giáo Viên</div>
-          <p class="brand-subtitle" id="teacher-header-subtitle">Quản lý lớp học, chấm BVN Voice &amp; cấp tài khoản học sinh</p>
+          <p class="brand-subtitle" id="teacher-header-subtitle">Quản lý lớp học, bài luyện tập cuối buổi &amp; chấm Voice Feedback</p>
         </div>
       </div>
 
@@ -50,7 +50,7 @@
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
             <line x1="12" x2="12" y1="19" y2="22"></line>
           </svg>
-          <span>2. Chữa BVN &amp; Bảng Theo Dõi</span>
+          <span>2. Chữa Ghi Âm / Video &amp; Theo Dõi</span>
         </button>
 
         <button type="button" class="nav-tab" data-teacher-tab="content">
@@ -83,7 +83,7 @@
       <!-- ====================================================================
            TAB 1: BÀI TẬP LUYỆN TẬP CUỐI BUỔI (GOOGLE FORMS QUIZ MAKER & CHẤM ĐIỂM)
            ==================================================================== -->
-      <section id="teacher-tab-practice" class="module-section is-active" aria-label="Quản lý bài tập luyện tập cuối bài và chấm điểm">
+      <section id="teacher-tab-practice" class="module-section is-active" aria-label="Quản lý bài luyện tập cuối buổi và chấm điểm">
         <!-- Top Toolbar: Cực kỳ tinh gọn -->
         <div class="matrix-toolbar" style="margin-bottom: 20px; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
           <!-- Trái: Chọn bài tập & Nút thêm bài mới -->
@@ -139,7 +139,7 @@
               <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; flex-wrap: wrap;">
                 <div style="flex: 1; min-width: 260px;">
                   <label class="form-label" for="ex-meta-title" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground); text-transform: uppercase; letter-spacing: 0.05em;">Tiêu đề bài tập</label>
-                  <input type="text" id="ex-meta-title" class="form-control" style="font-size: 1.125rem; font-weight: 800; color: var(--ink);" placeholder="Ví dụ: Bài tập luyện tập cuối bài — HSK 1: Bài 1" required>
+                  <input type="text" id="ex-meta-title" class="form-control" style="font-size: 1.125rem; font-weight: 800; color: var(--ink);" placeholder="Ví dụ: Bài luyện tập cuối buổi — HSK 1: Bài 1" required>
                 </div>
                 <div style="width: 160px;">
                   <label class="form-label" for="ex-meta-tag" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground); text-transform: uppercase; letter-spacing: 0.05em;">Thuộc bài</label>
@@ -253,15 +253,15 @@
       </section>
 
       <!-- ====================================================================
-           TAB 2: CHỮA BÀI VỀ NHÀ VÀ BẢNG THEO DÕI
+           TAB 2: CHỮA BÀI LUYỆN TẬP CUỐI BUỔI (GHI ÂM / VIDEO) VÀ BẢNG THEO DÕI
            ==================================================================== -->
-      <section id="teacher-tab-grading" class="module-section" aria-label="Chữa bài về nhà và bảng theo dõi">
+      <section id="teacher-tab-grading" class="module-section" aria-label="Chữa bài ghi âm hoặc video và bảng theo dõi">
         <!-- Banner Thống Kê & Bảng Điều Khiển -->
         <div class="workspace-banner" aria-label="Thống kê tiến độ lớp học">
           <div>
             <h1>Bảng điều khiển giảng dạy &amp; chấm chữa bài</h1>
             <p>
-              Theo dõi toàn diện tiến độ làm bài tập về nhà của học sinh theo từng lớp học, nghe bài thu âm/video và phản hồi bằng giọng nói (Voice Feedback).
+              Theo dõi toàn diện tiến độ làm bài luyện tập cuối buổi của học sinh theo từng lớp học, nghe bài thu âm/video và phản hồi bằng giọng nói (Voice Feedback).
             </p>
             <div class="banner-actions">
               <button type="button" class="btn btn-primary" id="btn-jump-create-student">
@@ -280,11 +280,11 @@
             </div>
             <div class="stat-tile">
               <div class="stat-value tabular-nums" id="stat-submitted-count">7/18</div>
-              <div class="stat-label">Lượt BVN đã nộp</div>
+              <div class="stat-label">Lượt bài luyện tập cuối buổi đã nộp</div>
             </div>
             <div class="stat-tile">
               <div class="stat-value tabular-nums" id="stat-missing-count">11</div>
-              <div class="stat-label">Lượt BVN chưa làm</div>
+              <div class="stat-label">Lượt bài luyện tập cuối buổi chưa làm</div>
             </div>
             <div class="stat-tile">
               <div class="stat-value tabular-nums" id="stat-graded-count">4</div>
@@ -339,7 +339,7 @@
               </div>
               <div class="form-group">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                  <label class="form-label" for="grade-assignment-select" style="margin:0;">Chọn Bài tập về nhà</label>
+                  <label class="form-label" for="grade-assignment-select" style="margin:0;">Chọn Bài luyện tập cuối buổi</label>
                   <button type="button" class="btn-danger-outline" id="btn-delete-current-asg" title="Xóa bài tập này nếu lỡ tạo sai">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                     <span>Xóa bài này</span>
@@ -392,7 +392,7 @@
             </form>
           </div>
 
-          <!-- Cột Phải: Quản lý & Giao BVN theo Buổi học (Phần Chọn & Phần Nhập) -->
+          <!-- Cột Phải: Quản lý & Giao Bài theo Buổi học (Phần Chọn & Phần Nhập) -->
           <div class="surface-panel">
             <div class="panel-header">
               <div class="panel-title-row">
@@ -402,7 +402,7 @@
                   <line x1="12" y1="18" x2="12" y2="12"></line>
                   <line x1="9" x2="15" y1="15" y2="15"></line>
                 </svg>
-                <h2>Quản lý &amp; Giao BVN theo Buổi học</h2>
+                <h2>Quản lý &amp; Giao Bài theo Buổi học</h2>
               </div>
               <span class="status-badge status-graded">Phần chọn &amp; Phần nhập bài cho lớp</span>
             </div>
@@ -496,7 +496,7 @@
                   </div>
 
                   <div class="form-group" style="margin-bottom: 8px;">
-                    <label class="form-label" for="new-asg-title" style="font-size: 0.8125rem;">Tiêu đề Bài tập về nhà</label>
+                    <label class="form-label" for="new-asg-title" style="font-size: 0.8125rem;">Tiêu đề Bài luyện tập cuối buổi</label>
                     <input type="text" id="new-asg-title" class="form-control" placeholder="Ví dụ: Bài 3: Thu âm đàm thoại mua sắm" required>
                   </div>
 
@@ -1083,7 +1083,7 @@
       <form id="form-create-new-practice-ex" data-mode="create">
         <div class="form-group">
           <label class="form-label" for="new-ex-title">Tiêu đề bài tập:</label>
-          <input type="text" id="new-ex-title" class="form-control" placeholder="Ví dụ: Bài tập luyện tập cuối bài — HSK 1: Bài 2" required>
+          <input type="text" id="new-ex-title" class="form-control" placeholder="Ví dụ: Bài luyện tập cuối buổi — HSK 1: Bài 2" required>
         </div>
 
         <div class="form-group">
@@ -1108,7 +1108,7 @@
     <div class="modal-dialog" style="max-width: 540px;">
       <div class="panel-header" style="margin-bottom: 16px;">
         <div class="panel-title-row">
-          <h2 id="assign-practice-modal-title">🚀 Giao Bài Luyện Tập Cho Lớp Học</h2>
+          <h2 id="assign-practice-modal-title">Giao Bài Luyện Tập Cuối Buổi Cho Lớp Học</h2>
         </div>
         <button type="button" class="btn btn-outline btn-sm" id="btn-close-assign-modal">✕</button>
       </div>
@@ -1402,7 +1402,7 @@
       <div id="delete-student-target-summary" class="delete-confirm-target"></div>
 
       <div class="delete-confirm-warning">
-        Thao tác này sẽ xóa vĩnh viễn tài khoản đăng nhập của học sinh cùng toàn bộ bài nộp BVN, phản hồi giọng nói và kết quả bài luyện tập liên quan. Không thể hoàn tác sau khi xóa.
+        Thao tác này sẽ xóa vĩnh viễn tài khoản đăng nhập của học sinh cùng toàn bộ bài nộp ghi âm/video, phản hồi giọng nói và kết quả bài luyện tập cuối buổi liên quan. Không thể hoàn tác sau khi xóa.
       </div>
 
       <div class="banner-actions" style="justify-content: flex-end; gap: 10px;">

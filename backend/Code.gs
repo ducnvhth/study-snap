@@ -2,7 +2,7 @@
  * ============================================================================
  * STUDYSNAP — GOOGLE APPS SCRIPT BACKEND (Code.gs)
  * Hỗ trợ Đăng nhập Phân quyền (Giáo viên / Học sinh), Tạo tài khoản Học sinh,
- * Nộp & Chữa BVN Voice, Bài luyện tập cuối giờ và Kho từ vựng trên Google Sheets.
+ * Nộp & Chữa bài Ghi âm / Video bằng Voice, Bài luyện tập cuối buổi và Kho từ vựng trên Google Sheets.
  * ============================================================================
  */
 
@@ -52,7 +52,7 @@ function menuClearTestData_() {
   const ui = SpreadsheetApp.getUi();
   const res = ui.alert(
     'Xóa toàn bộ dữ liệu test?',
-    'Thao tác này sẽ xóa sạch Học sinh, BVN, Bài nộp, Từ vựng, Luyện tập cuối buổi, Kết quả và File ghi âm/video trên Drive.\nTài khoản Giáo viên vẫn được giữ lại để đăng nhập.',
+    'Thao tác này sẽ xóa sạch Học sinh, Danh sách bài giao, Bài nộp ghi âm/video, Từ vựng, Luyện tập cuối buổi, Kết quả và File ghi âm/video trên Drive.\nTài khoản Giáo viên vẫn được giữ lại để đăng nhập.',
     ui.ButtonSet.YES_NO
   );
   if (res !== ui.Button.YES) return;
@@ -1500,8 +1500,13 @@ function handleGradeManualTranslation_(ss, payload) {
 
 function formatPracticeAssignmentTitle_(rawTitle) {
   const clean = String(rawTitle || '').trim() || 'Bài tập mới';
-  if (/^Luyện tập cuối bài:/i.test(clean)) return clean;
-  return 'Luyện tập cuối bài: ' + clean.replace(/^Bài tập luyện tập cuối bài\s*—\s*/i, '');
+  if (/^Luyện tập cuối (buổi|bài):/i.test(clean)) {
+    return 'Luyện tập cuối buổi:' + clean.replace(/^Luyện tập cuối (?:buổi|bài):/i, '');
+  }
+  return (
+    'Luyện tập cuối buổi: ' +
+    clean.replace(/^(?:Bài tập luyện tập cuối bài|Bài luyện tập cuối buổi)\s*—\s*/i, '')
+  );
 }
 
 function syncLinkedPracticeAssignmentMeta_(ss, exId, cleanTitle, cleanTag) {
