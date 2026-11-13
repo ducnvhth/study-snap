@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css?v=20261113f">
+  <link rel="stylesheet" href="styles/main.css?v=20261113g">
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
 </head>
 <body>
@@ -323,9 +323,15 @@
             <span class="status-badge status-graded" id="vocab-total-badge">272 từ vựng</span>
           </div>
 
-          <p style="margin-top: 0; margin-bottom: 16px; color: var(--color-muted-foreground);">
-            Ôn luyện từ vựng toàn diện với 4 chế độ: Thẻ lật 3D ghi nhớ, Luyện trắc nghiệm phản xạ, Tập viết từng nét chữ Hán chuẩn nét và Tra cứu phát âm toàn bộ từ vựng.
+          <p style="margin-top: 0; margin-bottom: 14px; color: var(--color-muted-foreground);">
+            Ôn luyện từ vựng theo từng bài học, tổng hợp tất cả các bài hoặc kho 272 từ HSK chuẩn qua 4 chế độ: Thẻ lật 3D, Luyện trắc nghiệm, Tập viết từng nét chữ Hán và Bảng tra cứu phát âm.
           </p>
+
+          <!-- Nhiệm vụ ôn từ vựng được giáo viên giao -->
+          <div id="student-vocab-assigned-strip" class="student-vocab-assigned-strip" style="display: none;"></div>
+
+          <!-- Nguồn / Bài học từ vựng (StudySnapVocabSuite tự render pills vào đây) -->
+          <div id="vocab-source-strip" class="vocab-source-strip"></div>
 
           <!-- 4 Sub-Tabs Navigation -->
           <nav class="vocab-subnav" aria-label="Các chế độ ôn tập từ vựng">
@@ -582,10 +588,11 @@
   <!-- Toast Thông Báo -->
   <div class="toast-banner" id="app-toast" role="status" aria-live="polite"></div>
 
-  <script src="js/vocab_data.js?v=20261113f"></script>
-  <script src="js/data.js?v=20261113f"></script>
-  <script src="js/auth.js?v=20261113f"></script>
-  <script src="js/audio.js?v=20261113f"></script>
-  <script src="js/student.js?v=20261113f"></script>
+  <script src="js/vocab_data.js?v=20261113g"></script>
+  <script src="js/vocab_suite.js?v=20261113g"></script>
+  <script src="js/data.js?v=20261113g"></script>
+  <script src="js/auth.js?v=20261113g"></script>
+  <script src="js/audio.js?v=20261113g"></script>
+  <script src="js/student.js?v=20261113g"></script>
 </body>
 </html>

@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css?v=20261113f">
+  <link rel="stylesheet" href="styles/main.css?v=20261113g">
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -565,6 +565,10 @@
 
             <!-- Công cụ quản trị dành riêng cho Giáo viên -->
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <button type="button" class="btn btn-outline btn-sm" id="btn-open-assign-vocab-modal" style="font-weight: 700;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                <span>Giao bài ôn từ cho lớp</span>
+              </button>
               <button type="button" class="btn btn-outline btn-sm" id="btn-open-import-vocab-modal" style="font-weight: 700;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 <span>Nhập từ Excel / CSV</span>
@@ -576,9 +580,61 @@
             </div>
           </div>
 
-          <p style="margin-top: 0; margin-bottom: 16px; color: var(--color-muted-foreground);">
-            Ôn luyện từ vựng toàn diện với 4 chế độ: Thẻ lật 3D ghi nhớ, Luyện trắc nghiệm phản xạ, Tập viết từng nét chữ Hán chuẩn nét và Tra cứu phát âm toàn bộ 272 từ vựng HSK. Giáo viên có thể nhập thêm từ vựng mới qua file Excel/CSV hoặc thêm trực tiếp vào kho từ.
+          <p style="margin-top: 0; margin-bottom: 14px; color: var(--color-muted-foreground);">
+            Quản lý và ôn luyện từ vựng theo từng bài học, tổng hợp theo bài hoặc kho 272 từ HSK chuẩn qua 4 chế độ tương tác. Bấm <strong>Giao bài ôn từ cho lớp</strong> để giao nhiệm vụ ôn từ và theo dõi kết quả hoàn thành của từng học sinh.
           </p>
+
+          <!-- Trạng thái giao bài ôn từ của bài/bộ từ đang chọn -->
+          <div id="teacher-vocab-delivery-bar" class="practice-delivery-bar" style="display: none;"></div>
+
+          <!-- Bảng theo dõi tiến độ ôn từ của học sinh (gọn, mở/thu gọn) -->
+          <div id="teacher-vocab-progress-panel" class="vocab-progress-panel" style="display: none;">
+            <div class="vocab-progress-bar-head">
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <span class="vocab-progress-title">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                  <span>Tiến độ bài ôn từ đã giao cho học sinh</span>
+                </span>
+                <span class="status-badge status-submitted tabular-nums" id="teacher-vocab-progress-summary">0 bài đang giao</span>
+              </div>
+              <button type="button" class="btn btn-outline btn-sm" id="btn-toggle-vocab-progress">Xem danh sách hoàn thành</button>
+            </div>
+
+            <div id="teacher-vocab-progress-body" style="display: none; margin-top: 14px;">
+              <div class="vocab-progress-controls">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1; min-width: 240px;">
+                  <label for="teacher-vocab-assign-filter" style="font-size: 0.8125rem; font-weight: 700; color: var(--ink);">Bài ôn từ:</label>
+                  <select id="teacher-vocab-assign-filter" class="form-control" style="width: auto; min-width: 220px; max-width: 100%; padding: 6px 10px; font-size: 0.8125rem;"></select>
+                  <button type="button" class="btn btn-danger-outline btn-sm" id="btn-revoke-selected-vocab-task" title="Hủy giao bài ôn từ đang chọn">Hủy giao bài này</button>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <select id="teacher-vocab-status-filter" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8125rem;">
+                    <option value="all">Tất cả học sinh</option>
+                    <option value="completed">Đã hoàn thành</option>
+                    <option value="missing">Chưa làm</option>
+                  </select>
+                </div>
+              </div>
+              <div id="teacher-vocab-task-meta" style="font-size: 0.8125rem; color: var(--color-muted-foreground); margin-bottom: 10px;"></div>
+              <div class="matrix-scroll-wrapper">
+                <table class="progress-matrix-table" style="font-size: 0.875rem;">
+                  <thead>
+                    <tr>
+                      <th>Học sinh</th>
+                      <th>Lớp</th>
+                      <th>Trạng thái</th>
+                      <th>Kết quả ôn từ</th>
+                      <th>Thời gian cập nhật</th>
+                    </tr>
+                  </thead>
+                  <tbody id="teacher-vocab-progress-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Nguồn / Bài học từ vựng (StudySnapVocabSuite tự render pills vào đây) -->
+          <div id="vocab-source-strip" class="vocab-source-strip"></div>
 
           <!-- KHUNG THÊM TỪ VỰNG THỦ CÔNG DÀNH CHO GIÁO VIÊN (Collapsible Box) -->
           <div id="teacher-manual-vocab-box" style="display: none; background: var(--white); border: 1.5px dashed var(--pink-md); border-radius: var(--radius-xl); padding: 18px; margin-bottom: 20px;">
@@ -595,6 +651,9 @@
                 <div class="form-group">
                   <label class="form-label" for="new-vocab-lesson">Thuộc bài học</label>
                   <select id="new-vocab-lesson" class="form-control"></select>
+                  <div id="new-vocab-custom-lesson-wrap" style="display: none; margin-top: 8px;">
+                    <input type="text" id="new-vocab-custom-lesson-title" class="form-control" placeholder="Nhập tên bài học mới (VD: Bài 9: Du lịch & Đặt phòng)">
+                  </div>
                 </div>
                 <div class="form-group">
                   <label class="form-label" for="new-vocab-word">Từ vựng tiếng Trung (Chữ Hán)</label>
@@ -1168,6 +1227,9 @@
         <div class="form-group" style="margin-bottom: 0;">
           <label class="form-label" for="import-vocab-lesson-select" style="font-weight: 700;">Nạp vào Bài học:</label>
           <select id="import-vocab-lesson-select" class="form-control"></select>
+          <div id="import-vocab-custom-lesson-wrap" style="display: none; margin-top: 8px;">
+            <input type="text" id="import-vocab-custom-lesson-title" class="form-control" placeholder="Nhập tên bài học mới (VD: Bài 9: Du lịch)">
+          </div>
         </div>
         <div class="form-group" style="margin-bottom: 0;">
           <label class="form-label" for="import-vocab-file-input" style="font-weight: 700;">Chọn tệp (.csv, .tsv, .xlsx, .txt):</label>
@@ -1420,15 +1482,70 @@
     </div>
   </div>
 
+  <!-- MODAL 6: GIAO BÀI ÔN TỪ VỰNG CHO LỚP HỌC -->
+  <div class="modal-backdrop" id="modal-assign-vocab" role="dialog" aria-modal="true" aria-labelledby="assign-vocab-modal-title">
+    <div class="modal-dialog">
+      <div class="panel-header" style="margin-bottom: 14px;">
+        <div class="panel-title-row">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--color-primary-deep);">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+          <h2 id="assign-vocab-modal-title">Giao Bài Ôn Từ Vựng Cho Lớp</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-assign-vocab-modal" aria-label="Đóng hộp thoại">✕</button>
+      </div>
+
+      <form id="form-assign-vocab-to-class">
+        <div class="form-group">
+          <label class="form-label" for="assign-vocab-lesson" style="font-weight: 700;">Chọn bài học / bộ từ vựng:</label>
+          <select id="assign-vocab-lesson" class="form-control" required></select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="assign-vocab-title" style="font-weight: 700;">Tên nhiệm vụ ôn từ hiển thị cho học sinh:</label>
+          <input type="text" id="assign-vocab-title" class="form-control" placeholder="Ví dụ: Ôn từ vựng — Bài 1: Chào hỏi & Làm quen" required>
+        </div>
+
+        <div id="assign-vocab-active-box" style="display: none;"></div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label" for="assign-vocab-class" style="font-weight: 700;">Chọn Lớp nhận bài:</label>
+            <select id="assign-vocab-class" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="assign-vocab-due" style="font-weight: 700;">Hạn hoàn thành:</label>
+            <input type="text" id="assign-vocab-due" class="form-control tabular-nums" placeholder="Ví dụ: 20/11/2026" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="assign-vocab-note">Hướng dẫn / Dặn dò học sinh (tùy chọn):</label>
+          <textarea id="assign-vocab-note" class="form-control" rows="2" placeholder="Ví dụ: Các em xem hết Flashcard, luyện viết nét chữ và hoàn thành Trắc nghiệm đạt từ 80% trở lên nhé!"></textarea>
+        </div>
+
+        <div style="background:var(--color-surface-muted);padding:10px 14px;border-radius:var(--radius-md);margin-bottom:18px;font-size:0.8125rem;color:var(--color-muted-foreground);">
+          Sau khi bấm giao bài, học sinh trong lớp được chọn sẽ nhìn thấy nhiệm vụ ôn từ ngay trong mục <strong>3. Ôn Từ Vựng</strong> và tự động lưu kết quả trắc nghiệm / hoàn thành về bảng giáo viên.
+        </div>
+
+        <div class="banner-actions" style="justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn btn-outline" id="btn-cancel-assign-vocab-modal">Hủy</button>
+          <button type="submit" class="btn btn-primary" style="font-weight: 700;">Xác nhận giao bài ôn từ</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="toast-banner" id="toast-banner" role="status" aria-live="polite">
     <span id="toast-message">Đã lưu thay đổi!</span>
   </div>
 
-  <script src="js/vocab_data.js?v=20261113f"></script>
-  <script src="js/vocab_suite.js?v=20261113f"></script>
-  <script src="js/data.js?v=20261113f"></script>
-  <script src="js/auth.js?v=20261113f"></script>
-  <script src="js/audio.js?v=20261113f"></script>
-  <script src="js/teacher.js?v=20261113f"></script>
+  <script src="js/vocab_data.js?v=20261113g"></script>
+  <script src="js/vocab_suite.js?v=20261113g"></script>
+  <script src="js/data.js?v=20261113g"></script>
+  <script src="js/auth.js?v=20261113g"></script>
+  <script src="js/audio.js?v=20261113g"></script>
+  <script src="js/teacher.js?v=20261113g"></script>
 </body>
 </html>

@@ -34,6 +34,9 @@
     isTeacherRecording: false,
     vocabFilter: 'bai-1',
     selectedLesson: 'bai-1',
+    vocabSuiteConfigured: false,
+    vocabProgressExpanded: false,
+    selectedVocabAsgFilter: '',
     selectedPracticeExId: (state.practiceExercises && state.practiceExercises[0]) ? state.practiceExercises[0].exercise_id : 'EX_HSK1_BAI_1',
     activeGradingSubId: null,
     practiceCurrentView: 'builder',
@@ -193,11 +196,101 @@
     { lesson_id: 'bai-8', title: 'Bài 8: Thời tiết & Cảm xúc', tag: 'Bài 8' }
   ];
 
+  function isVocabAssignment(asg) {
+    return Boolean(asg && String(asg.require_media || '').trim().toLowerCase() === 'vocab');
+  }
+
+  function isNonVocabAssignment(asg) {
+    return !isVocabAssignment(asg);
+  }
+
+  function slugifyLessonId(rawTitle) {
+    const clean = String(rawTitle || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return clean || ('bai-' + Date.now());
+  }
+
+  function extractShortLessonTag(lessonId, title) {
+    const raw = String(title || lessonId || '').trim();
+    const match = raw.match(/^(Bài\s*\d+)/i);
+    if (match) return match[1];
+    return raw.length > 18 ? raw.slice(0, 18) : (raw || 'Bài học');
+  }
+
+  function normalizeLessonWeight(lesson) {
+    const m = String((lesson && (lesson.title || lesson.lesson_id)) || '').match(/\d+/);
+    return m ? parseInt(m[0], 10) : 9999;
+  }
+
   function getLessons() {
-    if (Array.isArray(state.lessons) && state.lessons.length > 0) {
-      return state.lessons;
+    const map = {};
+    const addEntry = function (entry) {
+      if (!entry || !entry.lesson_id) return;
+      const lid = String(entry.lesson_id).trim();
+      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272') return;
+      const title = String(entry.title || entry.lesson_title || lid).trim();
+      const tag = String(entry.tag || extractShortLessonTag(lid, title)).trim();
+      if (!map[lid]) {
+        map[lid] = { lesson_id: lid, title: title, tag: tag };
+      } else if (title && title !== lid && map[lid].title === lid) {
+        map[lid].title = title;
+        map[lid].tag = extractShortLessonTag(lid, title);
+      }
+    };
+
+    DEFAULT_LESSONS.forEach(addEntry);
+    if (Array.isArray(state.lessons)) state.lessons.forEach(addEntry);
+    if (Array.isArray(state.vocabulary)) {
+      state.vocabulary.forEach(function (v) {
+        if (!v || !v.lesson_id) return;
+        addEntry({
+          lesson_id: v.lesson_id,
+          title: v.lesson_title || v.lesson_id
+        });
+      });
     }
-    return DEFAULT_LESSONS;
+
+    return Object.keys(map).map(function (k) {
+      return map[k];
+    }).sort(function (a, b) {
+      const wa = normalizeLessonWeight(a);
+      const wb = normalizeLessonWeight(b);
+      if (wa !== wb) return wa - wb;
+      return a.title.localeCompare(b.title, 'vi');
+    });
+  }
+
+  function resolveOrCreateCustomLesson(rawTitle) {
+    const title = String(rawTitle || '').trim();
+    if (!title) return null;
+    const existing = getLessons();
+    const matched = existing.find(function (l) {
+      return l.title.trim().toLowerCase() === title.toLowerCase();
+    });
+    if (matched) return matched;
+
+    let candidateId = slugifyLessonId(title);
+    const used = existing.map(function (l) { return l.lesson_id; });
+    if (used.indexOf(candidateId) !== -1) {
+      candidateId = candidateId + '-' + String(Date.now()).slice(-4);
+    }
+    const created = {
+      lesson_id: candidateId,
+      title: title,
+      tag: extractShortLessonTag(candidateId, title)
+    };
+    if (!Array.isArray(state.lessons) || state.lessons.length === 0) {
+      state.lessons = DEFAULT_LESSONS.slice();
+    }
+    state.lessons.push(created);
+    window.StudySnapStore.saveState(state);
+    return created;
   }
 
   function getAvailableClasses() {
@@ -280,7 +373,7 @@
   }
 
   function getFilteredAssignments(ignoreSessionFilter) {
-    let list = state.assignments;
+    let list = (state.assignments || []).filter(isNonVocabAssignment);
     if (ui.selectedClass && ui.selectedClass !== 'all') {
       list = list.filter(function (asg) {
         return !asg.class_name || asg.class_name === 'all' || asg.class_name.trim() === ui.selectedClass;
@@ -360,9 +453,10 @@
     const newAsgClassSelect = document.getElementById('new-asg-class');
     const hiddenSessionInput = document.getElementById('new-asg-session');
 
-    // 1. Gather all unique sessions
+    // 1. Gather all unique sessions (chỉ lọc các bài Luyện tập cuối buổi / Ghi âm & Video, tách khỏi Ôn từ vựng)
+    const nonVocabAsgs = (state.assignments || []).filter(isNonVocabAssignment);
     const sessions = [];
-    (state.assignments || []).forEach(function (a) {
+    nonVocabAsgs.forEach(function (a) {
       const s = (a.session_tag || 'Buổi 1').trim();
       if (s && sessions.indexOf(s) === -1) sessions.push(s);
     });
@@ -375,14 +469,14 @@
 
     if (picker) {
       picker.innerHTML = sessions.map(function (s) {
-        const count = state.assignments.filter(function (a) { return (a.session_tag || 'Buổi 1').trim() === s; }).length;
+        const count = nonVocabAsgs.filter(function (a) { return (a.session_tag || 'Buổi 1').trim() === s; }).length;
         const sel = s === ui.manageSelectedSession ? ' selected' : '';
         return '<option value="' + escapeHtml(s) + '"' + sel + '>' + escapeHtml(s) + ' (' + count + ' bài)</option>';
       }).join('');
     }
 
     // 2. Render subtasks in selected session
-    const subtasks = (state.assignments || []).filter(function (a) {
+    const subtasks = nonVocabAsgs.filter(function (a) {
       return (a.session_tag || 'Buổi 1').trim() === ui.manageSelectedSession;
     });
 
@@ -959,69 +1053,365 @@
   /**
    * TAB 3: KHO TỪ VỰNG & ÔN TẬP
    */
-  function renderTeacherVocabTable() {
-    const tbody = document.getElementById('teacher-vocab-tbody');
-    const badge = document.getElementById('teacher-vocab-count-badge');
-    if (!tbody) return;
-
-    const filtered = state.vocabulary.filter(function (v) {
-      if (ui.selectedLesson === 'all') return true;
-      return v.lesson_id === ui.selectedLesson;
+  function getVocabSourceOptions() {
+    const lessons = getLessons();
+    const vocabList = Array.isArray(state.vocabulary) ? state.vocabulary : [];
+    const options = lessons.map(function (ls) {
+      const cnt = vocabList.filter(function (v) { return String(v.lesson_id || '') === ls.lesson_id; }).length;
+      return {
+        key: ls.lesson_id,
+        label: ls.title + ' (' + cnt + ' từ)',
+        shortTag: ls.tag || extractShortLessonTag(ls.lesson_id, ls.title),
+        title: ls.title,
+        count: cnt
+      };
     });
+    const totalLessonWords = vocabList.length;
+    options.push({
+      key: 'all-lessons',
+      label: 'Tổng hợp theo bài (' + totalLessonWords + ' từ)',
+      shortTag: 'Tổng hợp',
+      title: 'Tổng hợp từ vựng tất cả các bài',
+      count: totalLessonWords
+    });
+    const hskCount = Array.isArray(window.StudySnapVocabList) ? window.StudySnapVocabList.length : 272;
+    options.push({
+      key: 'hsk-272',
+      label: 'Kho 272 từ HSK chuẩn (' + hskCount + ' từ)',
+      shortTag: 'HSK 272',
+      title: 'Kho 272 từ vựng HSK chuẩn',
+      count: hskCount
+    });
+    return options;
+  }
 
-    if (badge) {
-      badge.textContent = filtered.length + ' từ vựng';
-    }
+  function getVocabDeliveries(sourceKey) {
+    const all = (state.assignments || []).filter(function (a) {
+      if (!isVocabAssignment(a)) return false;
+      if (!sourceKey) return true;
+      return String(a.lesson_id || '').trim() === String(sourceKey).trim();
+    });
+    const active = all.filter(function (a) {
+      const cls = String(a.class_name || '').trim().toLowerCase();
+      return cls && cls !== 'unassigned';
+    });
+    return { all: all, active: active };
+  }
 
-    if (filtered.length === 0) {
-      tbody.innerHTML =
-        '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--color-muted-foreground);">' +
-          'Chưa có từ vựng nào trong bài học này. Hãy nhập từ vựng mới ở biểu mẫu phía trên.' +
-        '</td></tr>';
+  async function revokeVocabDelivery(asgId, triggerBtn) {
+    const asg = (state.assignments || []).find(function (a) { return a.assignment_id === asgId; });
+    if (!asg) return;
+    const clsText = asg.class_name === 'all' ? 'Tất cả các lớp' : asg.class_name;
+    await runWithLoading(triggerBtn, 'Đang hủy giao...', async function () {
+      await window.StudySnapStore.unassignExercises(state, [asgId]);
+    });
+    renderAll();
+    showToast('Đã hủy giao bài ôn từ cho ' + clsText + '.');
+  }
+
+  function renderVocabDeliveryBar() {
+    const bar = document.getElementById('teacher-vocab-delivery-bar');
+    if (!bar) return;
+    const suiteState = (window.StudySnapVocabSuite && typeof window.StudySnapVocabSuite.getState === 'function')
+      ? window.StudySnapVocabSuite.getState()
+      : { sourceKey: 'bai-1', sourceLabel: 'Bài 1' };
+    const sourceKey = suiteState.sourceKey || 'bai-1';
+    const deliveries = getVocabDeliveries(sourceKey);
+    const active = deliveries.active;
+
+    bar.style.display = 'flex';
+    if (active.length === 0) {
+      bar.innerHTML =
+        '<span class="status-badge status-unassigned">Chưa giao lớp nào</span>' +
+        '<span style="font-size:0.8125rem;color:var(--color-muted-foreground);flex:1;min-width:180px;">' +
+          'Bộ <strong>' + escapeHtml(suiteState.sourceLabel || sourceKey) + '</strong> hiện chưa giao làm nhiệm vụ cho lớp nào.' +
+        '</span>' +
+        '<button type="button" class="btn btn-outline btn-sm" id="btn-vocab-bar-assign" data-vocab-assign-key="' + escapeHtml(sourceKey) + '">Giao bài ôn từ này</button>';
       return;
     }
 
-    tbody.innerHTML = filtered.map(function (v) {
-      return '<tr>' +
-        '<td><strong style="font-size:1.125rem;color:var(--color-primary-deep);">' + escapeHtml(v.word) + '</strong></td>' +
-        '<td><span class="mono-text tabular-nums" style="color:var(--color-accent);font-weight:600;">' + escapeHtml(v.ipa || '') + '</span></td>' +
-        '<td><span class="status-badge" style="background:var(--color-surface-muted);color:var(--color-muted-foreground);border-color:var(--color-border-soft);font-size:0.75rem;">' + escapeHtml(v.part_of_speech || 'Từ vựng') + '</span></td>' +
-        '<td><span style="font-weight:600;color:var(--color-foreground);">' + escapeHtml(v.meaning_vi || '') + '</span></td>' +
-        '<td><span style="font-size:0.8125rem;color:var(--color-muted-foreground);">' + escapeHtml(v.example_en || '') + '</span></td>' +
-        '<td><span style="font-size:0.8125rem;font-weight:600;color:var(--color-primary);">' + escapeHtml(v.lesson_title || v.lesson_id) + '</span></td>' +
-        '<td>' +
-          '<button type="button" class="btn btn-outline btn-sm" data-speak-vocab="' + escapeHtml(v.word) + '" title="Phát âm tiếng Trung">' +
-            ICONS.volume +
-            '<span>Nghe</span>' +
-          '</button>' +
-        '</td>' +
-      '</tr>';
-    }).join('');
+    bar.innerHTML =
+      '<span style="font-size:0.8125rem;font-weight:700;color:var(--color-primary-deep);">Đang giao bộ này cho:</span>' +
+      '<div class="delivery-chip-list">' +
+        active.map(function (asg) {
+          const clsLabel = asg.class_name === 'all' ? 'Tất cả các lớp' : (asg.class_name || 'Lớp học');
+          return (
+            '<span class="delivery-chip">' +
+              '<strong>' + escapeHtml(clsLabel) + '</strong>' +
+              (asg.due_date ? '<span class="delivery-chip-due tabular-nums">· Hạn ' + escapeHtml(asg.due_date) + '</span>' : '') +
+              '<button type="button" class="delivery-chip-revoke" data-unassign-vocab-delivery="' + escapeHtml(asg.assignment_id) + '" title="Hủy giao cho ' + escapeHtml(clsLabel) + '" aria-label="Hủy giao ' + escapeHtml(clsLabel) + '">✕</button>' +
+            '</span>'
+          );
+        }).join('') +
+      '</div>' +
+      '<button type="button" class="btn btn-outline btn-sm" id="btn-vocab-bar-assign" data-vocab-assign-key="' + escapeHtml(sourceKey) + '" style="margin-left:auto;">Giao thêm lớp</button>';
   }
 
-  function renderContentAndExitLogsTab() {
-    const lessons = getLessons();
-    const newVocabLessonSelect = document.getElementById('new-vocab-lesson');
-    if (newVocabLessonSelect) {
-      newVocabLessonSelect.innerHTML = lessons.map(function (ls) {
-        return '<option value="' + escapeHtml(ls.lesson_id) + '">' + escapeHtml(ls.title) + '</option>';
+  function renderAssignVocabActiveDeliveries(sourceKey) {
+    const box = document.getElementById('assign-vocab-active-box');
+    if (!box) return;
+    if (!sourceKey) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+    const active = getVocabDeliveries(sourceKey).active;
+    if (active.length === 0) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+
+    box.style.display = 'block';
+    box.innerHTML =
+      '<div style="font-size:0.8125rem;font-weight:700;color:var(--color-primary-deep);margin-bottom:6px;">Các lớp đang nhận bộ từ này:</div>' +
+      '<div class="assign-active-list">' +
+        active.map(function (asg) {
+          const clsLabel = asg.class_name === 'all' ? 'Tất cả các lớp' : (asg.class_name || 'Lớp học');
+          return (
+            '<div class="assign-active-row">' +
+              '<div>' +
+                '<strong>' + escapeHtml(clsLabel) + '</strong>' +
+                (asg.due_date ? ' <span class="tabular-nums" style="font-size:0.8125rem;opacity:0.9;">· Hạn: ' + escapeHtml(asg.due_date) + '</span>' : '') +
+              '</div>' +
+              '<button type="button" class="btn btn-danger-outline btn-sm" data-modal-unassign-vocab="' + escapeHtml(asg.assignment_id) + '">Hủy giao</button>' +
+            '</div>'
+          );
+        }).join('') +
+      '</div>';
+
+    box.querySelectorAll('[data-modal-unassign-vocab]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        const asgId = btn.getAttribute('data-modal-unassign-vocab');
+        await revokeVocabDelivery(asgId, btn);
+        renderAssignVocabActiveDeliveries(sourceKey);
+      });
+    });
+  }
+
+  function openAssignVocabModal(defaultSourceKey) {
+    const modal = document.getElementById('modal-assign-vocab');
+    const lessonSel = document.getElementById('assign-vocab-lesson');
+    const titleInp = document.getElementById('assign-vocab-title');
+    const classSel = document.getElementById('assign-vocab-class');
+    const dueInp = document.getElementById('assign-vocab-due');
+    const noteInp = document.getElementById('assign-vocab-note');
+    if (!modal || !lessonSel) return;
+
+    const opts = getVocabSourceOptions();
+    const targetKey = defaultSourceKey || (window.StudySnapVocabSuite && window.StudySnapVocabSuite.getState().sourceKey) || 'bai-1';
+    lessonSel.innerHTML = opts.map(function (opt) {
+      const sel = opt.key === targetKey ? ' selected' : '';
+      return '<option value="' + escapeHtml(opt.key) + '"' + sel + '>' + escapeHtml(opt.label) + '</option>';
+    }).join('');
+
+    const chosenOpt = opts.find(function (o) { return o.key === lessonSel.value; }) || opts[0];
+    if (titleInp && chosenOpt) {
+      titleInp.value = 'Ôn từ vựng — ' + chosenOpt.title;
+    }
+
+    if (classSel) {
+      const availableClasses = getAvailableClasses();
+      const classOpts = ['<option value="all">Tất cả các lớp học (' + state.students.length + ' học sinh)</option>'];
+      availableClasses.forEach(function (cls) {
+        const countInClass = state.students.filter(function (s) { return (s.class_name || '').trim() === cls; }).length;
+        const sel = (cls === ui.selectedClass && cls !== 'all') ? ' selected' : '';
+        classOpts.push('<option value="' + escapeHtml(cls) + '"' + sel + '>' + escapeHtml(cls) + ' (' + countInClass + ' HS)</option>');
+      });
+      classSel.innerHTML = classOpts.join('');
+    }
+
+    if (dueInp && !dueInp.value) {
+      const now = new Date();
+      now.setDate(now.getDate() + 3);
+      dueInp.value =
+        String(now.getDate()).padStart(2, '0') + '/' +
+        String(now.getMonth() + 1).padStart(2, '0') + '/' +
+        now.getFullYear();
+    }
+
+    if (noteInp && !noteInp.value) {
+      noteInp.value = 'Các em ôn thẻ Flashcard, tập viết nét chữ và hoàn thành bài Luyện Trắc Nghiệm đạt từ 80% trở lên nhé!';
+    }
+
+    renderAssignVocabActiveDeliveries(lessonSel.value);
+    modal.classList.add('is-open', 'is-visible');
+  }
+
+  function renderTeacherVocabProgress() {
+    const panel = document.getElementById('teacher-vocab-progress-panel');
+    const summaryBadge = document.getElementById('teacher-vocab-progress-summary');
+    const body = document.getElementById('teacher-vocab-progress-body');
+    const toggleBtn = document.getElementById('btn-toggle-vocab-progress');
+    const assignFilter = document.getElementById('teacher-vocab-assign-filter');
+    const statusFilter = document.getElementById('teacher-vocab-status-filter');
+    const metaEl = document.getElementById('teacher-vocab-task-meta');
+    const tbody = document.getElementById('teacher-vocab-progress-tbody');
+    if (!panel) return;
+
+    const activeTasks = getVocabDeliveries(null).active;
+    if (activeTasks.length === 0) {
+      panel.style.display = 'none';
+      return;
+    }
+
+    panel.style.display = 'block';
+    if (toggleBtn) {
+      toggleBtn.textContent = ui.vocabProgressExpanded ? 'Thu gọn danh sách' : 'Xem danh sách hoàn thành';
+    }
+    if (body) {
+      body.style.display = ui.vocabProgressExpanded ? 'block' : 'none';
+    }
+
+    if (!activeTasks.some(function (t) { return t.assignment_id === ui.selectedVocabAsgFilter; })) {
+      ui.selectedVocabAsgFilter = activeTasks[0].assignment_id;
+    }
+
+    if (assignFilter) {
+      assignFilter.innerHTML = activeTasks.map(function (t) {
+        const clsLabel = t.class_name === 'all' ? 'Tất cả lớp' : t.class_name;
+        const sel = t.assignment_id === ui.selectedVocabAsgFilter ? ' selected' : '';
+        return '<option value="' + escapeHtml(t.assignment_id) + '"' + sel + '>[' + escapeHtml(clsLabel) + '] ' + escapeHtml(t.title) + '</option>';
       }).join('');
     }
 
-    const vocabTotalBadge = document.getElementById('vocab-total-badge');
-    const totalCount = (window.StudySnapVocabList && window.StudySnapVocabList.length) || (state.vocabulary ? state.vocabulary.length : 272);
-    if (vocabTotalBadge) {
-      vocabTotalBadge.textContent = totalCount + ' từ vựng';
+    const activeTask = activeTasks.find(function (t) { return t.assignment_id === ui.selectedVocabAsgFilter; }) || activeTasks[0];
+    const targetStudents = (state.students || []).filter(function (st) {
+      const tCls = String(activeTask.class_name || '').trim();
+      if (!tCls || tCls === 'all') return true;
+      return String(st.class_name || '').trim().toLowerCase() === tCls.toLowerCase();
+    });
+
+    let completedCount = 0;
+    const rowsData = targetStudents.map(function (st) {
+      const sub = findSubmission(activeTask.assignment_id, st.student_id);
+      const isDone = Boolean(sub);
+      if (isDone) completedCount++;
+      return { student: st, submission: sub, isDone: isDone };
+    });
+
+    if (summaryBadge) {
+      summaryBadge.textContent =
+        activeTasks.length + ' bài đang giao • ' + completedCount + '/' + targetStudents.length + ' HS đã xong (' + escapeHtml(activeTask.lesson_tag || 'Từ vựng') + ')';
     }
 
-    if (window.StudySnapVocabSuite && typeof window.StudySnapVocabSuite.render === 'function') {
-      window.StudySnapVocabSuite.render();
+    if (metaEl) {
+      const clsText = activeTask.class_name === 'all' ? 'Tất cả các lớp' : activeTask.class_name;
+      metaEl.innerHTML =
+        'Lớp nhận bài: <strong>' + escapeHtml(clsText) + '</strong> · Hạn: <strong class="tabular-nums">' +
+        escapeHtml(activeTask.due_date || 'Không giới hạn') + '</strong> · Đã hoàn thành: <strong>' +
+        completedCount + '/' + targetStudents.length + '</strong> học sinh';
     }
+
+    if (!tbody) return;
+    const filterVal = statusFilter ? statusFilter.value : 'all';
+    const visibleRows = rowsData.filter(function (r) {
+      if (filterVal === 'completed') return r.isDone;
+      if (filterVal === 'missing') return !r.isDone;
+      return true;
+    });
+
+    if (visibleRows.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--color-muted-foreground);">Không có học sinh nào trong bộ lọc này.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = visibleRows.map(function (r) {
+      const st = r.student;
+      const sub = r.submission;
+      const statusHtml = r.isDone
+        ? '<span class="status-badge status-graded">Đã hoàn thành</span>'
+        : '<span class="status-badge status-missing">Chưa làm</span>';
+      let resultText = '—';
+      if (sub) {
+        const parts = [];
+        if (sub.score !== undefined && sub.score !== '') parts.push('Điểm: ' + sub.score + '%');
+        if (sub.media_duration) parts.push('(' + sub.media_duration + ')');
+        if (sub.student_note) parts.push(sub.student_note);
+        resultText = parts.join(' ') || 'Đã xác nhận ôn từ';
+      }
+      return (
+        '<tr>' +
+          '<td><strong>' + escapeHtml(st.full_name) + '</strong> <span style="font-size:0.75rem;color:var(--color-muted-foreground);">(' + escapeHtml(st.student_id) + ')</span></td>' +
+          '<td>' + escapeHtml(st.class_name || '') + '</td>' +
+          '<td>' + statusHtml + '</td>' +
+          '<td style="font-size:0.8125rem;">' + escapeHtml(resultText) + '</td>' +
+          '<td class="tabular-nums" style="font-size:0.8125rem;color:var(--color-muted-foreground);">' + escapeHtml(sub && sub.submitted_at ? sub.submitted_at : '—') + '</td>' +
+        '</tr>'
+      );
+    }).join('');
+  }
+
+  function ensureVocabSuiteConfigured() {
+    if (!window.StudySnapVocabSuite || typeof window.StudySnapVocabSuite.configure !== 'function') return;
+    if (ui.vocabSuiteConfigured) return;
+    ui.vocabSuiteConfigured = true;
+    window.StudySnapVocabSuite.configure({
+      isTeacher: true,
+      getLessons: getLessons,
+      getVocabularyItems: function () { return state.vocabulary || []; },
+      onDeleteVocab: async function (vocabId, triggerBtn) {
+        const target = (state.vocabulary || []).find(function (v) { return String(v.vocab_id) === String(vocabId); });
+        if (!target) return;
+        await runWithLoading(triggerBtn, 'Đang xóa...', async function () {
+          await window.StudySnapStore.deleteVocabulary(state, { vocab_id: vocabId });
+        });
+        renderAll();
+        showToast('Đã xóa từ "' + target.word + '" khỏi ' + (target.lesson_title || target.lesson_id) + '.');
+      },
+      onSourceChange: function (snap) {
+        if (snap && snap.sourceKey) ui.selectedLesson = snap.sourceKey;
+        renderVocabDeliveryBar();
+      },
+      onRequestAddVocab: function (sourceKey) {
+        const box = document.getElementById('teacher-manual-vocab-box');
+        const sel = document.getElementById('new-vocab-lesson');
+        if (sel && sourceKey && sourceKey !== 'all-lessons' && sourceKey !== 'hsk-272') {
+          sel.value = sourceKey;
+          const wrap = document.getElementById('new-vocab-custom-lesson-wrap');
+          if (wrap) wrap.style.display = 'none';
+        }
+        if (box) {
+          box.style.display = 'block';
+          const wordInp = document.getElementById('new-vocab-word');
+          if (wordInp) wordInp.focus();
+        }
+      }
+    });
+  }
+
+  function populateLessonDropdown(selectEl, currentValue) {
+    if (!selectEl) return;
+    const lessons = getLessons();
+    const html = lessons.map(function (ls) {
+      const sel = ls.lesson_id === currentValue ? ' selected' : '';
+      return '<option value="' + escapeHtml(ls.lesson_id) + '"' + sel + '>' + escapeHtml(ls.title) + '</option>';
+    }).join('') + '<option value="__new__">+ Tạo bài học mới...</option>';
+    selectEl.innerHTML = html;
+  }
+
+  function renderContentAndExitLogsTab() {
+    const newVocabLessonSelect = document.getElementById('new-vocab-lesson');
+    if (newVocabLessonSelect) {
+      const prevVal = newVocabLessonSelect.value && newVocabLessonSelect.value !== '__new__'
+        ? newVocabLessonSelect.value
+        : ((ui.selectedLesson && ui.selectedLesson !== 'all-lessons' && ui.selectedLesson !== 'hsk-272') ? ui.selectedLesson : 'bai-1');
+      populateLessonDropdown(newVocabLessonSelect, prevVal);
+    }
+
+    ensureVocabSuiteConfigured();
+    if (window.StudySnapVocabSuite && typeof window.StudySnapVocabSuite.render === 'function') {
+      window.StudySnapVocabSuite.render(false);
+    }
+    renderVocabDeliveryBar();
+    renderTeacherVocabProgress();
   }
 
   function exportMatrixToCsv() {
+    const exportAsgs = (state.assignments || []).filter(isNonVocabAssignment);
     const headers = ['Mã HS', 'Họ và tên', 'Tài khoản'];
-    state.assignments.forEach(function (asg) {
+    exportAsgs.forEach(function (asg) {
       headers.push(asg.lesson_tag + ' - Trạng thái');
       headers.push(asg.lesson_tag + ' - Điểm');
       headers.push(asg.lesson_tag + ' - Nhận xét của GV');
@@ -1030,7 +1420,7 @@
     const rows = [headers];
     state.students.forEach(function (st) {
       const row = [st.student_id, st.full_name, st.username || st.student_id.toLowerCase()];
-      state.assignments.forEach(function (asg) {
+      exportAsgs.forEach(function (asg) {
         const sub = findSubmission(asg.assignment_id, st.student_id);
         const stText = sub
           ? (sub.status === 'graded' ? 'Đã chữa' : 'Đã nộp - Chờ chữa')
@@ -5235,12 +5625,23 @@
       });
     }
 
+    const newVocabLessonSelectEl = document.getElementById('new-vocab-lesson');
+    const newVocabCustomWrap = document.getElementById('new-vocab-custom-lesson-wrap');
+    const newVocabCustomTitleInp = document.getElementById('new-vocab-custom-lesson-title');
+    if (newVocabLessonSelectEl && newVocabCustomWrap) {
+      newVocabLessonSelectEl.addEventListener('change', function () {
+        const isCustom = newVocabLessonSelectEl.value === '__new__';
+        newVocabCustomWrap.style.display = isCustom ? 'block' : 'none';
+        if (isCustom && newVocabCustomTitleInp) newVocabCustomTitleInp.focus();
+      });
+    }
+
     // Thêm từ vựng mới
     const addVocabForm = document.getElementById('add-vocab-form');
     if (addVocabForm) {
       addVocabForm.addEventListener('submit', async function (ev) {
         ev.preventDefault();
-        const lessonSelectVal = document.getElementById('new-vocab-lesson').value;
+        let lessonSelectVal = document.getElementById('new-vocab-lesson').value;
         const wordVal = document.getElementById('new-vocab-word').value.trim();
         const ipaVal = document.getElementById('new-vocab-ipa').value.trim() || 'pinyin';
         const posVal = document.getElementById('new-vocab-pos').value.trim() || 'Danh từ';
@@ -5249,9 +5650,23 @@
 
         if (!wordVal || !meaningVal) return;
 
+        let lessonTitle = '';
+        if (lessonSelectVal === '__new__') {
+          const customTitle = newVocabCustomTitleInp ? newVocabCustomTitleInp.value.trim() : '';
+          if (!customTitle) {
+            showToast('Vui lòng nhập tên bài học mới!');
+            if (newVocabCustomTitleInp) newVocabCustomTitleInp.focus();
+            return;
+          }
+          const created = resolveOrCreateCustomLesson(customTitle);
+          lessonSelectVal = created.lesson_id;
+          lessonTitle = created.title;
+        } else {
+          const lessonObj = getLessons().find(function (l) { return l.lesson_id === lessonSelectVal; });
+          lessonTitle = lessonObj ? lessonObj.title : (lessonSelectVal || 'Bài mới');
+        }
+
         const submitBtn = addVocabForm.querySelector('button[type="submit"]');
-        const lessonObj = (state.lessons || []).find(function (l) { return l.lesson_id === lessonSelectVal; });
-        const lessonTitle = lessonObj ? lessonObj.title : (lessonSelectVal || 'Bài mới');
         const newVocab = {
           vocab_id: 'V_' + Date.now(),
           lesson_id: lessonSelectVal,
@@ -5264,12 +5679,14 @@
           example_vi: meaningVal
         };
 
+        if (!Array.isArray(state.vocabulary)) state.vocabulary = [];
         state.vocabulary.push(newVocab);
         window.StudySnapStore.saveState(state);
 
         await runWithLoading(submitBtn, 'Đang lưu từ vựng...', async function () {
           await window.StudySnapStore.syncPostToGas(state, {
             action: 'addVocabulary',
+            vocab_id: newVocab.vocab_id,
             lesson_id: newVocab.lesson_id,
             lesson_title: newVocab.lesson_title,
             word: newVocab.word,
@@ -5282,15 +5699,170 @@
         });
 
         addVocabForm.reset();
-        if (Array.isArray(window.StudySnapVocabList)) {
-          window.StudySnapVocabList.unshift([wordVal, ipaVal, meaningVal]);
-        }
+        if (newVocabCustomWrap) newVocabCustomWrap.style.display = 'none';
         if (manualVocabBox) manualVocabBox.style.display = 'none';
-        if (window.StudySnapVocabSuite && typeof window.StudySnapVocabSuite.render === 'function') {
-          window.StudySnapVocabSuite.render();
-        }
+        ui.selectedLesson = newVocab.lesson_id;
         renderAll();
+        if (window.StudySnapVocabSuite && typeof window.StudySnapVocabSuite.selectSource === 'function') {
+          window.StudySnapVocabSuite.selectSource(newVocab.lesson_id, { subTab: 'list' });
+        }
         showToast('Đã thêm từ vựng "' + wordVal + '" vào ' + newVocab.lesson_title + '!');
+      });
+    }
+
+    // Giao bài ôn từ vựng cho lớp & Theo dõi tiến độ ôn từ
+    const btnOpenAssignVocabModal = document.getElementById('btn-open-assign-vocab-modal');
+    const modalAssignVocab = document.getElementById('modal-assign-vocab');
+    const btnCloseAssignVocab = document.getElementById('btn-close-assign-vocab-modal');
+    const btnCancelAssignVocab = document.getElementById('btn-cancel-assign-vocab-modal');
+    const assignVocabLessonSel = document.getElementById('assign-vocab-lesson');
+    const assignVocabTitleInp = document.getElementById('assign-vocab-title');
+    const formAssignVocab = document.getElementById('form-assign-vocab-to-class');
+    const vocabDeliveryBar = document.getElementById('teacher-vocab-delivery-bar');
+    const btnToggleVocabProgress = document.getElementById('btn-toggle-vocab-progress');
+    const vocabAssignFilter = document.getElementById('teacher-vocab-assign-filter');
+    const vocabStatusFilter = document.getElementById('teacher-vocab-status-filter');
+    const btnRevokeSelectedVocab = document.getElementById('btn-revoke-selected-vocab-task');
+
+    function closeAssignVocabModal() {
+      if (modalAssignVocab) modalAssignVocab.classList.remove('is-open', 'is-visible');
+    }
+
+    if (btnOpenAssignVocabModal) {
+      btnOpenAssignVocabModal.addEventListener('click', function () {
+        const snap = window.StudySnapVocabSuite && window.StudySnapVocabSuite.getState
+          ? window.StudySnapVocabSuite.getState()
+          : { sourceKey: 'bai-1' };
+        openAssignVocabModal(snap.sourceKey);
+      });
+    }
+    if (btnCloseAssignVocab) btnCloseAssignVocab.addEventListener('click', closeAssignVocabModal);
+    if (btnCancelAssignVocab) btnCancelAssignVocab.addEventListener('click', closeAssignVocabModal);
+
+    if (assignVocabLessonSel) {
+      assignVocabLessonSel.addEventListener('change', function () {
+        const chosen = getVocabSourceOptions().find(function (o) { return o.key === assignVocabLessonSel.value; });
+        if (assignVocabTitleInp && chosen) {
+          assignVocabTitleInp.value = 'Ôn từ vựng — ' + chosen.title;
+        }
+        renderAssignVocabActiveDeliveries(assignVocabLessonSel.value);
+      });
+    }
+
+    if (formAssignVocab) {
+      formAssignVocab.addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        const lessonKey = assignVocabLessonSel ? assignVocabLessonSel.value : 'bai-1';
+        const chosenOpt = getVocabSourceOptions().find(function (o) { return o.key === lessonKey; });
+        const titleVal = (assignVocabTitleInp && assignVocabTitleInp.value.trim()) || ('Ôn từ vựng — ' + (chosenOpt ? chosenOpt.title : lessonKey));
+        const classVal = document.getElementById('assign-vocab-class').value || 'all';
+        const dueVal = document.getElementById('assign-vocab-due').value.trim() || '20/11/2026';
+        const noteVal = document.getElementById('assign-vocab-note').value.trim();
+        const submitBtn = formAssignVocab.querySelector('button[type="submit"]');
+
+        const existingAsg = (state.assignments || []).find(function (a) {
+          return (
+            isVocabAssignment(a) &&
+            String(a.lesson_id || '') === lessonKey &&
+            String(a.class_name || '') === classVal
+          );
+        });
+
+        if (existingAsg) {
+          existingAsg.title = titleVal;
+          existingAsg.due_date = dueVal;
+          existingAsg.description = noteVal;
+          window.StudySnapStore.saveState(state);
+          await runWithLoading(submitBtn, 'Đang cập nhật giao bài...', async function () {
+            await window.StudySnapStore.syncPostToGas(state, {
+              action: 'addAssignment',
+              assignment_id: existingAsg.assignment_id,
+              title: existingAsg.title,
+              lesson_tag: existingAsg.lesson_tag,
+              due_date: existingAsg.due_date,
+              description: existingAsg.description,
+              require_media: 'vocab',
+              session_tag: 'Ôn từ vựng',
+              class_name: existingAsg.class_name,
+              lesson_id: lessonKey
+            });
+          });
+        } else {
+          const newAsg = {
+            assignment_id: 'ASG_VOCAB_' + Date.now(),
+            title: titleVal,
+            lesson_tag: (chosenOpt && chosenOpt.shortTag) || extractShortLessonTag(lessonKey, titleVal),
+            due_date: dueVal,
+            description: noteVal,
+            require_media: 'vocab',
+            session_tag: 'Ôn từ vựng',
+            class_name: classVal,
+            exercise_id: '',
+            lesson_id: lessonKey
+          };
+          if (!Array.isArray(state.assignments)) state.assignments = [];
+          state.assignments.push(newAsg);
+          ui.selectedVocabAsgFilter = newAsg.assignment_id;
+          window.StudySnapStore.saveState(state);
+          await runWithLoading(submitBtn, 'Đang giao bài ôn từ...', async function () {
+            await window.StudySnapStore.syncPostToGas(state, {
+              action: 'addAssignment',
+              assignment_id: newAsg.assignment_id,
+              title: newAsg.title,
+              lesson_tag: newAsg.lesson_tag,
+              due_date: newAsg.due_date,
+              description: newAsg.description,
+              require_media: 'vocab',
+              session_tag: 'Ôn từ vựng',
+              class_name: newAsg.class_name,
+              lesson_id: lessonKey
+            });
+          });
+        }
+
+        ui.vocabProgressExpanded = true;
+        closeAssignVocabModal();
+        renderAll();
+        showToast('Đã giao bài ôn từ "' + titleVal + '" cho ' + (classVal === 'all' ? 'Tất cả các lớp' : classVal) + '!');
+      });
+    }
+
+    if (vocabDeliveryBar) {
+      vocabDeliveryBar.addEventListener('click', function (ev) {
+        const unassignBtn = ev.target.closest('[data-unassign-vocab-delivery]');
+        if (unassignBtn) {
+          revokeVocabDelivery(unassignBtn.getAttribute('data-unassign-vocab-delivery'), unassignBtn);
+          return;
+        }
+        const assignBtn = ev.target.closest('[data-vocab-assign-key]');
+        if (assignBtn) {
+          openAssignVocabModal(assignBtn.getAttribute('data-vocab-assign-key'));
+        }
+      });
+    }
+
+    if (btnToggleVocabProgress) {
+      btnToggleVocabProgress.addEventListener('click', function () {
+        ui.vocabProgressExpanded = !ui.vocabProgressExpanded;
+        renderTeacherVocabProgress();
+      });
+    }
+    if (vocabAssignFilter) {
+      vocabAssignFilter.addEventListener('change', function () {
+        ui.selectedVocabAsgFilter = vocabAssignFilter.value;
+        renderTeacherVocabProgress();
+      });
+    }
+    if (vocabStatusFilter) {
+      vocabStatusFilter.addEventListener('change', function () {
+        renderTeacherVocabProgress();
+      });
+    }
+    if (btnRevokeSelectedVocab) {
+      btnRevokeSelectedVocab.addEventListener('click', function () {
+        if (ui.selectedVocabAsgFilter) {
+          revokeVocabDelivery(ui.selectedVocabAsgFilter, btnRevokeSelectedVocab);
+        }
       });
     }
 
@@ -5509,15 +6081,25 @@
       }).join('');
     }
 
+    const importVocabCustomWrap = document.getElementById('import-vocab-custom-lesson-wrap');
+    const importVocabCustomTitleInp = document.getElementById('import-vocab-custom-lesson-title');
+    if (importVocabLessonSelect && importVocabCustomWrap) {
+      importVocabLessonSelect.addEventListener('change', function () {
+        const isCustom = importVocabLessonSelect.value === '__new__';
+        importVocabCustomWrap.style.display = isCustom ? 'block' : 'none';
+        if (isCustom && importVocabCustomTitleInp) importVocabCustomTitleInp.focus();
+      });
+    }
+
     if (btnOpenVocabModal) {
       btnOpenVocabModal.addEventListener('click', function () {
         if (modalVocabExcel) {
           if (importVocabLessonSelect) {
-            const lessons = getLessons();
-            importVocabLessonSelect.innerHTML = lessons.map(function (ls) {
-              const sel = (ls.lesson_id === ui.selectedLesson && ls.lesson_id !== 'all') ? ' selected' : '';
-              return '<option value="' + escapeHtml(ls.lesson_id) + '"' + sel + '>' + escapeHtml(ls.title) + '</option>';
-            }).join('');
+            const preferred = (ui.selectedLesson && ui.selectedLesson !== 'all' && ui.selectedLesson !== 'all-lessons' && ui.selectedLesson !== 'hsk-272')
+              ? ui.selectedLesson
+              : 'bai-1';
+            populateLessonDropdown(importVocabLessonSelect, preferred);
+            if (importVocabCustomWrap) importVocabCustomWrap.style.display = 'none';
           }
           modalVocabExcel.classList.add('is-open', 'is-visible');
         }
@@ -5606,9 +6188,22 @@
     if (btnConfirmVocabImport) {
       btnConfirmVocabImport.addEventListener('click', async function () {
         if (!parsedImportRows || parsedImportRows.length === 0) return;
-        const targetLessonId = (importVocabLessonSelect && importVocabLessonSelect.value) || 'bai-1';
-        const targetLessonObj = (state.lessons || []).find(function (l) { return l.lesson_id === targetLessonId; });
-        const targetLessonTitle = targetLessonObj ? targetLessonObj.title : ('Bài ' + targetLessonId);
+        let targetLessonId = (importVocabLessonSelect && importVocabLessonSelect.value) || 'bai-1';
+        let targetLessonTitle = '';
+        if (targetLessonId === '__new__') {
+          const customTitle = importVocabCustomTitleInp ? importVocabCustomTitleInp.value.trim() : '';
+          if (!customTitle) {
+            showToast('Vui lòng nhập tên bài học mới để nhập từ vựng!');
+            if (importVocabCustomTitleInp) importVocabCustomTitleInp.focus();
+            return;
+          }
+          const created = resolveOrCreateCustomLesson(customTitle);
+          targetLessonId = created.lesson_id;
+          targetLessonTitle = created.title;
+        } else {
+          const targetLessonObj = getLessons().find(function (l) { return l.lesson_id === targetLessonId; });
+          targetLessonTitle = targetLessonObj ? targetLessonObj.title : ('Bài ' + targetLessonId);
+        }
 
         const newVocabs = parsedImportRows.map(function (r, idx) {
           return {
@@ -5637,22 +6232,19 @@
               }
             : null
         );
-        if (Array.isArray(window.StudySnapVocabList)) {
-          newVocabs.forEach(function (nv) {
-            window.StudySnapVocabList.push([nv.word, nv.ipa, nv.meaning_vi]);
-          });
-        }
-        if (window.StudySnapVocabSuite && typeof window.StudySnapVocabSuite.render === 'function') {
-          window.StudySnapVocabSuite.render();
-        }
         showToast('Đã nạp thành công ' + newVocabs.length + ' từ vựng vào ' + targetLessonTitle + '!');
 
         if (modalVocabExcel) modalVocabExcel.classList.remove('is-open', 'is-visible');
         if (excelPasteText) excelPasteText.value = '';
         if (importVocabFileInput) importVocabFileInput.value = '';
+        if (importVocabCustomTitleInp) importVocabCustomTitleInp.value = '';
+        if (importVocabCustomWrap) importVocabCustomWrap.style.display = 'none';
         updateImportPreview([]);
         ui.selectedLesson = targetLessonId;
         renderAll();
+        if (window.StudySnapVocabSuite && typeof window.StudySnapVocabSuite.selectSource === 'function') {
+          window.StudySnapVocabSuite.selectSource(targetLessonId, { subTab: 'list' });
+        }
       });
     }
 

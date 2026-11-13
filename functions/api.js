@@ -1010,15 +1010,30 @@ export async function handleApiRequest(request, env, ctx) {
         const nextNote = payload.student_note !== undefined ? String(payload.student_note) : (existing.student_note || '');
         const nextType = payload.media_type || existing.media_type || 'audio';
         const nextDur = payload.media_duration || existing.media_duration || '01:00';
-        const nextStatus = existing.status === 'graded' ? 'graded' : 'submitted';
+        const isVocabSub = nextType === 'vocab';
+        const nextStatus = isVocabSub
+          ? String(payload.status || 'graded')
+          : (existing.status === 'graded' ? 'graded' : 'submitted');
+        const nextScore =
+          payload.score !== undefined && payload.score !== null
+            ? String(payload.score)
+            : (existing.score || '');
 
         await db
-          .prepare('UPDATE submissions SET submitted_at = ?, student_note = ?, media_type = ?, media_url = ?, media_duration = ?, status = ? WHERE submission_id = ?')
-          .bind(nowStr, nextNote, nextType, nextMediaUrl, nextDur, nextStatus, existing.submission_id)
+          .prepare('UPDATE submissions SET submitted_at = ?, student_note = ?, media_type = ?, media_url = ?, media_duration = ?, status = ?, score = ? WHERE submission_id = ?')
+          .bind(nowStr, nextNote, nextType, nextMediaUrl, nextDur, nextStatus, nextScore, existing.submission_id)
           .run();
 
         return await buildMutationResponse(db, payload, preVer, {
-          submission: { submission_id: existing.submission_id, media_url: nextMediaUrl, status: nextStatus },
+          submission: {
+            submission_id: existing.submission_id,
+            media_url: nextMediaUrl,
+            status: nextStatus,
+            score: nextScore,
+            student_note: nextNote,
+            media_duration: nextDur,
+            submitted_at: nowStr
+          },
           deletedMediaUrls: replacedUrls
         });
       } else {
@@ -1026,12 +1041,24 @@ export async function handleApiRequest(request, env, ctx) {
         const nextNote = String(payload.student_note || '');
         const nextType = String(payload.media_type || 'audio');
         const nextDur = String(payload.media_duration || '01:00');
+        const isVocabSub = nextType === 'vocab';
+        const nextStatus = isVocabSub ? String(payload.status || 'graded') : 'submitted';
+        const nextScore =
+          payload.score !== undefined && payload.score !== null ? String(payload.score) : '';
         await db
           .prepare('INSERT INTO submissions (submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .bind(newId, assignmentId, studentId, nowStr, nextNote, nextType, incomingUrl, nextDur, 'submitted', '', '', '', '', '')
+          .bind(newId, assignmentId, studentId, nowStr, nextNote, nextType, incomingUrl, nextDur, nextStatus, nextScore, '', '', '', '')
           .run();
         return await buildMutationResponse(db, payload, preVer, {
-          submission: { submission_id: newId, media_url: incomingUrl, status: 'submitted' }
+          submission: {
+            submission_id: newId,
+            media_url: incomingUrl,
+            status: nextStatus,
+            score: nextScore,
+            student_note: nextNote,
+            media_duration: nextDur,
+            submitted_at: nowStr
+          }
         });
       }
     }
@@ -1112,9 +1139,9 @@ export async function handleApiRequest(request, env, ctx) {
     }
 
     if (action === 'addVocabulary') {
-      const vocabId = makeShortId('V');
+      const vocabId = String(payload.vocab_id || '').trim() || makeShortId('V');
       await db
-        .prepare('INSERT INTO vocabulary (vocab_id, lesson_id, lesson_title, word, ipa, part_of_speech, meaning_vi, example_en, example_vi) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .prepare('INSERT OR REPLACE INTO vocabulary (vocab_id, lesson_id, lesson_title, word, ipa, part_of_speech, meaning_vi, example_en, example_vi) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(
           vocabId,
           String(payload.lesson_id || 'bai-1'),
@@ -1158,6 +1185,28 @@ export async function handleApiRequest(request, env, ctx) {
       await runBatchedStatements(db, stmts, 80);
       return await buildMutationResponse(db, payload, preVer, {
         importedVocab: { importedCount: list.length, lessonIds: Array.from(lessonIdSet) }
+      });
+    }
+
+    if (action === 'deleteVocabulary') {
+      const vocabId = String(payload.vocab_id || '').trim();
+      const lessonId = String(payload.lesson_id || '').trim();
+      let deletedCount = 0;
+      if (vocabId) {
+        const delRes = await db
+          .prepare('DELETE FROM vocabulary WHERE TRIM(vocab_id) = ?')
+          .bind(vocabId)
+          .run();
+        deletedCount = delRes && delRes.meta ? Number(delRes.meta.changes || 0) : 0;
+      } else if (lessonId) {
+        const delRes = await db
+          .prepare('DELETE FROM vocabulary WHERE TRIM(lesson_id) = ?')
+          .bind(lessonId)
+          .run();
+        deletedCount = delRes && delRes.meta ? Number(delRes.meta.changes || 0) : 0;
+      }
+      return await buildMutationResponse(db, payload, preVer, {
+        deletedVocab: { vocab_id: vocabId, lesson_id: lessonId, deleted_count: deletedCount }
       });
     }
 

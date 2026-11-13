@@ -1221,6 +1221,7 @@ window.StudySnapLoading = (function () {
     deleteStudentAccount: 'Đang xóa tài khoản học sinh...',
     addVocabulary: 'Đang thêm từ vựng mới...',
     batchAddVocabulary: 'Đang nhập danh sách từ vựng...',
+    deleteVocabulary: 'Đang xóa từ vựng...',
     uploadMedia: 'Đang tải tệp âm thanh/video lên Google Drive...',
     importFromBootstrapData: 'Đang chuyển dữ liệu sang Cloudflare D1...',
     getMedia: 'Đang tải tệp âm thanh...'
@@ -1318,6 +1319,10 @@ window.StudySnapLoading = (function () {
     batchAddVocabulary: {
       title: 'Đang nhập danh sách từ vựng...',
       desc: 'Hệ thống đang đồng bộ hàng loạt từ vựng lên máy chủ. Vui lòng chờ.'
+    },
+    deleteVocabulary: {
+      title: 'Đang xóa từ vựng...',
+      desc: 'Vui lòng đợi hệ thống cập nhật lại kho từ vựng.'
     }
   };
 
@@ -1897,18 +1902,32 @@ window.StudySnapStore = (function () {
       });
       if (found) {
         if (json.submission.submission_id) found.submission_id = json.submission.submission_id;
-        if (json.submission.media_url) found.media_url = json.submission.media_url;
+        if (json.submission.media_url !== undefined && json.submission.media_url !== '') {
+          found.media_url = json.submission.media_url;
+        }
         if (json.submission.status) found.status = json.submission.status;
+        if (json.submission.score !== undefined) found.score = String(json.submission.score);
+        else if (payload.score !== undefined) found.score = String(payload.score);
+        if (json.submission.student_note !== undefined) found.student_note = String(json.submission.student_note);
+        else if (payload.student_note !== undefined) found.student_note = String(payload.student_note);
+        if (json.submission.media_duration) found.media_duration = String(json.submission.media_duration);
+        else if (payload.media_duration) found.media_duration = String(payload.media_duration);
+        if (payload.media_type) found.media_type = String(payload.media_type);
+        if (json.submission.submitted_at) found.submitted_at = String(json.submission.submitted_at);
       } else if (targetAsgId && targetStuId) {
         subList.push({
           submission_id: json.submission.submission_id || ('SUB_' + Date.now()),
           assignment_id: targetAsgId,
           student_id: targetStuId,
-          student_note: String(payload.student_note || ''),
+          submitted_at: json.submission.submitted_at || new Date().toLocaleString('vi-VN'),
+          student_note: String(
+            json.submission.student_note !== undefined ? json.submission.student_note : (payload.student_note || '')
+          ),
           media_type: String(payload.media_type || 'audio'),
           media_url: json.submission.media_url || String(payload.media_url || ''),
-          media_duration: String(payload.media_duration || '01:00'),
-          status: json.submission.status || 'submitted'
+          media_duration: String(json.submission.media_duration || payload.media_duration || '01:00'),
+          status: json.submission.status || (payload.status || 'submitted'),
+          score: json.submission.score !== undefined ? String(json.submission.score) : (payload.score !== undefined ? String(payload.score) : '')
         });
       }
     } else if (action === 'saveTeacherFeedback' && json.submission) {
@@ -3041,6 +3060,85 @@ window.StudySnapStore = (function () {
     }
   }
 
+  async function deleteVocabulary(stateObj, target) {
+    if (!stateObj) return { ok: false, skipped: true };
+    const vocabId = typeof target === 'string'
+      ? String(target).trim()
+      : String((target && target.vocab_id) || '').trim();
+    const lessonId = typeof target === 'object' && target
+      ? String(target.lesson_id || '').trim()
+      : '';
+    if (!vocabId && !lessonId) {
+      return { ok: false, error: 'Thiếu mã từ vựng hoặc mã bài học.' };
+    }
+    if (!Array.isArray(stateObj.vocabulary)) stateObj.vocabulary = [];
+    stateObj.vocabulary = stateObj.vocabulary.filter(function (v) {
+      if (vocabId) return String(v.vocab_id || '').trim() !== vocabId;
+      return String(v.lesson_id || '').trim() !== lessonId;
+    });
+    saveState(stateObj);
+    return await syncPostToGas(stateObj, {
+      action: 'deleteVocabulary',
+      vocab_id: vocabId,
+      lesson_id: lessonId
+    });
+  }
+
+  async function submitVocabCompletion(stateObj, payload) {
+    if (!stateObj || !payload || !payload.assignment_id || !payload.student_id) {
+      return { ok: false, error: 'Thiếu thông tin bài ôn từ hoặc học sinh.' };
+    }
+    if (!Array.isArray(stateObj.submissions)) stateObj.submissions = [];
+    const targetAsgId = String(payload.assignment_id).trim();
+    const targetStuId = String(payload.student_id).trim();
+    const nowStr = new Date().toLocaleString('vi-VN');
+    const nextScore = payload.score !== undefined && payload.score !== null ? String(payload.score) : '';
+    const nextNote = String(payload.student_note || 'Đã hoàn thành ôn tập từ vựng');
+    const nextDur = String(payload.media_duration || '');
+    const nextStatus = String(payload.status || 'graded');
+
+    const existing = stateObj.submissions.find(function (s) {
+      return String(s.assignment_id || '').trim() === targetAsgId && String(s.student_id || '').trim() === targetStuId;
+    });
+    if (existing) {
+      existing.submitted_at = nowStr;
+      existing.student_note = nextNote;
+      existing.media_type = 'vocab';
+      existing.media_url = '';
+      existing.media_duration = nextDur;
+      existing.status = nextStatus;
+      existing.score = nextScore;
+    } else {
+      stateObj.submissions.push({
+        submission_id: 'SUB_' + Date.now(),
+        assignment_id: targetAsgId,
+        student_id: targetStuId,
+        submitted_at: nowStr,
+        student_note: nextNote,
+        media_type: 'vocab',
+        media_url: '',
+        media_duration: nextDur,
+        status: nextStatus,
+        score: nextScore,
+        teacher_comment: '',
+        teacher_voice_url: '',
+        teacher_voice_duration: ''
+      });
+    }
+    saveState(stateObj);
+    return await syncPostToGas(stateObj, {
+      action: 'submitHomework',
+      assignment_id: targetAsgId,
+      student_id: targetStuId,
+      student_note: nextNote,
+      media_type: 'vocab',
+      media_url: '',
+      media_duration: nextDur,
+      status: nextStatus,
+      score: nextScore
+    });
+  }
+
   function getInitials(fullName) {
     const parts = String(fullName || '').trim().split(/\s+/);
     if (!parts.length || !parts[0]) return 'HS';
@@ -3069,6 +3167,8 @@ window.StudySnapStore = (function () {
     assignExercisesToClass: assignExercisesToClass,
     unassignExercises: unassignExercises,
     batchAddVocabulary: batchAddVocabulary,
+    deleteVocabulary: deleteVocabulary,
+    submitVocabCompletion: submitVocabCompletion,
     gradeManualTranslation: gradeManualTranslation,
     getInitials: getInitials,
     loading: typeof window !== 'undefined' ? window.StudySnapLoading : null

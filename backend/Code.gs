@@ -511,6 +511,11 @@ function doPost(e) {
       return buildMutationResponse_(ss, payload, preVer, { importedVocab: result });
     }
 
+    if (action === 'deleteVocabulary') {
+      const result = handleDeleteVocabulary_(ss, payload);
+      return buildMutationResponse_(ss, payload, preVer, { deletedVocab: result });
+    }
+
     if (action === 'addAssignment') {
       const result = handleAddAssignment_(ss, payload);
       return buildMutationResponse_(ss, payload, preVer, { assignment: result });
@@ -1105,44 +1110,78 @@ function handleSubmitHomework_(ss, payload) {
 
   if (foundRowIndex > 0) {
     const existing = values[foundRowIndex - 1];
+    const nextType = payload.media_type || existing[5] || 'audio';
+    const isVocabSub = nextType === 'vocab';
+    const nextStatus = isVocabSub
+      ? String(payload.status || 'graded')
+      : (existing[8] === 'graded' ? 'graded' : 'submitted');
+    const nextScore =
+      payload.score !== undefined && payload.score !== null ? String(payload.score) : existing[9];
+    const nextNote =
+      payload.student_note !== undefined && payload.student_note !== null
+        ? String(payload.student_note)
+        : existing[4];
     const updatedRow = [
       existing[0],
       assignmentId,
       studentId,
       nowStr,
-      payload.student_note || existing[4],
-      payload.media_type || existing[5] || 'audio',
+      nextNote,
+      nextType,
       mediaUrl || existing[6],
       payload.media_duration || existing[7] || '01:00',
-      existing[8] === 'graded' ? 'graded' : 'submitted',
-      existing[9],
+      nextStatus,
+      nextScore,
       existing[10],
       existing[11],
       existing[12],
       existing[13]
     ];
     sheet.getRange(foundRowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
-    return { submission_id: existing[0], media_url: updatedRow[6], status: updatedRow[8] };
+    return {
+      submission_id: existing[0],
+      media_url: updatedRow[6],
+      status: updatedRow[8],
+      score: updatedRow[9],
+      student_note: updatedRow[4],
+      media_duration: updatedRow[7],
+      submitted_at: nowStr
+    };
   } else {
     const newId = 'SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase();
+    const nextType = String(payload.media_type || 'audio');
+    const isVocabSub = nextType === 'vocab';
+    const nextStatus = isVocabSub ? String(payload.status || 'graded') : 'submitted';
+    const nextScore =
+      payload.score !== undefined && payload.score !== null ? String(payload.score) : '';
+    const nextNote = String(payload.student_note || '');
+    const nextDur = String(payload.media_duration || '01:00');
     const newRow = [
       newId,
       assignmentId,
       studentId,
       nowStr,
-      payload.student_note || '',
-      payload.media_type || 'audio',
+      nextNote,
+      nextType,
       mediaUrl,
-      payload.media_duration || '01:00',
-      'submitted',
-      '',
+      nextDur,
+      nextStatus,
+      nextScore,
       '',
       '',
       '',
       ''
     ];
     sheet.appendRow(newRow);
-    return { submission_id: newId, media_url: mediaUrl, status: 'submitted' };
+    return {
+      submission_id: newId,
+      media_url: mediaUrl,
+      status: nextStatus,
+      score: nextScore,
+      student_note: nextNote,
+      media_duration: nextDur,
+      submitted_at: nowStr
+    };
   }
 }
 
@@ -1232,7 +1271,7 @@ function handleSubmitExitTicket_(ss, payload) {
 
 function handleAddVocabulary_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.VOCABULARY);
-  const vocabId = 'V_' + Utilities.getUuid().slice(0, 6).toUpperCase();
+  const vocabId = String(payload.vocab_id || '').trim() || ('V_' + Utilities.getUuid().slice(0, 6).toUpperCase());
   sheet.appendRow([
     vocabId,
     payload.lesson_id || 'bai-1',
@@ -1245,6 +1284,29 @@ function handleAddVocabulary_(ss, payload) {
     payload.example_vi || ''
   ]);
   return { vocab_id: vocabId };
+}
+
+function handleDeleteVocabulary_(ss, payload) {
+  const sheet = ss.getSheetByName(SHEET_NAMES.VOCABULARY);
+  if (!sheet) return { deleted_count: 0 };
+  const targetVocabId = String(payload.vocab_id || '').trim();
+  const targetLessonId = String(payload.lesson_id || '').trim();
+  if (!targetVocabId && !targetLessonId) return { deleted_count: 0 };
+
+  const values = sheet.getDataRange().getValues();
+  let deletedCount = 0;
+  for (let i = values.length - 1; i >= 1; i--) {
+    const rowVocabId = String(values[i][0] || '').trim();
+    const rowLessonId = String(values[i][1] || '').trim();
+    const matched = targetVocabId
+      ? rowVocabId === targetVocabId
+      : rowLessonId === targetLessonId;
+    if (matched) {
+      sheet.deleteRow(i + 1);
+      deletedCount++;
+    }
+  }
+  return { vocab_id: targetVocabId, lesson_id: targetLessonId, deleted_count: deletedCount };
 }
 
 function handleBatchAddVocabulary_(ss, payload) {

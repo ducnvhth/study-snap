@@ -3949,3 +3949,405 @@ body.ss-sync-locked .ss-api-status-chip {
     text-overflow: ellipsis;
   }
 }
+
+/* ====================================================================
+   LESSON VOCABULARY SELECTOR, ASSIGNED TASKS & TRACKING PANEL
+   ==================================================================== */
+.vocab-source-strip {
+  background: var(--white);
+  border: 1.5px solid var(--pink-md);
+  border-radius: var(--radius-xl);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.vocab-source-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.vocab-strip-caption {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-muted-foreground);
+}
+
+.vocab-active-source-name {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.vocab-lesson-pills-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.lesson-pill.is-hsk-bank {
+  background-color: var(--yellow-md);
+  border-color: var(--yellow);
+  color: var(--ink);
+}
+
+.lesson-pill.is-hsk-bank.is-active {
+  background-color: var(--yellow);
+  background-image: var(--grad-peach-yellow);
+  border-color: var(--peach);
+  color: var(--ink);
+}
+
+.vocab-mastery-filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--pink-md);
+}
+
+.vocab-filter-chip {
+  appearance: none;
+  background: var(--pink-lt);
+  border: 1px solid var(--pink-md);
+  color: var(--ink);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.vocab-filter-chip:hover {
+  background: #FFE0EC;
+}
+
+.vocab-filter-chip.is-active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--white);
+}
+
+.vocab-progress-panel {
+  background: var(--white);
+  border: 1.5px solid var(--pink-md);
+  border-radius: var(--radius-xl);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.vocab-progress-bar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.vocab-progress-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+
+.vocab-progress-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.student-vocab-assigned-strip {
+  background: var(--white);
+  border: 1.5px solid var(--pink-md);
+  border-radius: var(--radius-xl);
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.vocab-assigned-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.vocab-assigned-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+
+.vocab-assigned-hint {
+  font-size: 0.8125rem;
+  color: var(--color-muted-foreground);
+}
+
+.vocab-assigned-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 12px;
+}
+
+.vocab-assigned-card {
+  background: var(--pink-lt);
+  border: 1.5px solid var(--pink-md);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vocab-assigned-card.is-done {
+  background: var(--mint-lt);
+  border-color: var(--mint-md);
+}
+
+.vocab-assigned-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vocab-assigned-due {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-muted-foreground);
+}
+
+.vocab-assigned-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
+.vocab-assigned-desc {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-muted-foreground);
+  line-height: 1.5;
+}
+
+.vocab-assigned-result {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-success-text);
+  background: var(--color-success-bg);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+}
+
+.vocab-assigned-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.vocab-nav-pending-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--pink);
+  color: var(--white);
+  font-size: 0.75rem;
+  font-weight: 800;
+  margin-left: 6px;
+}
+
+.btn-mint-active {
+  background-color: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
+  font-weight: 700;
+}
+
+.btn-mint-active:hover {
+  background-color: var(--mint-md);
+}
+
+.fc-back-extra-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  max-width: 92%;
+  text-align: center;
+}
+
+.fc-pos-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--pink-lt);
+  border: 1px solid var(--pink-md);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.fc-example-line {
+  font-size: 0.875rem;
+  color: var(--color-muted-foreground);
+  line-height: 1.4;
+}
+
+.stroke-word-chars-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.stroke-chars-caption {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-muted-foreground);
+}
+
+.stroke-char-tab {
+  appearance: none;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--pink-md);
+  background: var(--white);
+  color: var(--ink);
+  font-family: var(--font-sans-sc, "Noto Sans SC", sans-serif);
+  font-size: 1.125rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.stroke-char-tab.is-active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--white);
+}
+
+.vlist-meta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.vlist-lesson-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--pink-lt);
+  border: 1px solid var(--pink-md);
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.vlist-pos-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border-neutral);
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.vocab-row-delete-btn:hover {
+  background-color: var(--color-destructive-bg);
+  border-color: var(--color-destructive);
+  color: var(--color-destructive-text);
+}
+
+.quiz-option-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--pink-md);
+  background: var(--white);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.quiz-option-btn:hover:not(:disabled) {
+  border-color: var(--pink);
+  background: var(--pink-lt);
+  transform: translateY(-1px);
+}
+
+.quiz-option-btn.is-correct {
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.quiz-option-btn.is-wrong {
+  border-color: var(--color-destructive);
+  background: var(--color-destructive-bg);
+  color: var(--color-destructive-text);
+}
+
+.quiz-option-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--pink-lt);
+  border: 1px solid var(--pink-md);
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+
+@media (max-width: 640px) {
+  .vocab-assigned-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #quiz-options-container {
+    grid-template-columns: 1fr !important;
+  }
+}
