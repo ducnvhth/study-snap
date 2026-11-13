@@ -893,6 +893,18 @@ select.form-control {
   border: 1.5px solid var(--color-border-soft);
 }
 
+.voice-speed-btn {
+  height: 32px;
+  padding: 0 9px;
+  background-color: var(--ylt);
+  color: var(--ink);
+  border: 1.5px solid var(--yellow-md);
+}
+
+.voice-speed-btn:hover {
+  border-color: var(--ink);
+}
+
 .voice-rewind-btn:hover {
   border-color: var(--ink);
   color: var(--ink);
@@ -2245,15 +2257,43 @@ select.form-control {
 
 /* GOOGLE-FORM STYLE QUIZ BUILDER */
 .gform-quick-add-bar {
-  padding: 18px 20px;
-  background-color: var(--pink-lt);
-  background-image: var(--grad-hero-bg);
-  border: 1.5px dashed var(--pink-md);
+  position: -webkit-sticky;
+  position: sticky;
+  top: 10px;
+  z-index: 35;
+  padding: 14px 18px;
+  background: rgba(255, 245, 250, 0.94);
+  background-image: linear-gradient(135deg, rgba(255, 240, 247, 0.95) 0%, rgba(255, 248, 240, 0.95) 55%, rgba(240, 244, 255, 0.95) 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1.5px solid var(--pink-md);
   border-radius: var(--radius-xl);
   margin: 20px 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  box-shadow: 0 10px 28px rgba(45, 27, 78, 0.08);
+  transition: box-shadow 180ms var(--ease-out), border-color 180ms var(--ease-out);
+}
+
+.gform-quick-add-bar:hover {
+  border-color: var(--pink);
+  box-shadow: 0 12px 32px rgba(255, 107, 157, 0.14);
+}
+
+.gform-quick-add-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.gform-quick-add-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .gform-quick-add-title {
@@ -2268,15 +2308,15 @@ select.form-control {
 .gform-type-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .gform-type-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 8px 16px;
+  gap: 6px;
+  min-height: 38px;
+  padding: 7px 14px;
   border-radius: var(--radius-pill);
   font-family: var(--font-body);
   font-size: 0.875rem;
@@ -2311,6 +2351,11 @@ select.form-control {
 .gform-type-btn[data-quick-add-type="translation"] {
   background-color: var(--sky-lt);
   border-color: var(--sky-md);
+}
+
+.gform-type-btn[data-quick-add-type="listening_mc"] {
+  background-color: var(--ylt);
+  border-color: var(--yellow-md);
 }
 
 .gform-type-btn:hover {
@@ -2369,6 +2414,12 @@ select.form-control {
   background-color: var(--sky-lt);
   background-image: var(--grad-sky);
   border-bottom-color: var(--sky-md);
+}
+
+.gform-section-card[data-sec-type="listening_mc"] .gform-section-card-header {
+  background-color: var(--ylt);
+  background-image: linear-gradient(135deg, #FFF8E1 0%, #FFE8D6 100%);
+  border-bottom-color: var(--yellow-md);
 }
 
 .gform-section-card-body {
@@ -3176,4 +3227,233 @@ select.form-control {
   margin-bottom: 20px;
   box-shadow: 0 4px 18px rgba(45, 27, 78, 0.04);
   flex-wrap: wrap;
+}
+
+/* =============================================================================
+   🎧 DẠNG BÀI NGHE HIỂU (LISTENING_MC) — PHỐI MÀU PASTEL ĐÀO & KEM ẤM
+   ============================================================================= */
+.listening-context-banner {
+  background-color: var(--peach-lt);
+  background-image: linear-gradient(135deg, #FFF8E1 0%, #FFF0E8 55%, #FFE4EC 100%);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.listening-context-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.listening-label-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background-color: var(--white);
+  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+
+.listening-audio-strip {
+  background-color: rgba(255, 255, 255, 0.86);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.listening-builder-media-box {
+  background-color: var(--bg);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.listening-transcript-box {
+  margin-top: 10px;
+  padding: 12px 14px;
+  background-color: var(--ylt);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+  .gform-quick-add-bar {
+    top: 6px;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .gform-type-btn {
+    min-height: 34px;
+    padding: 5px 11px;
+    font-size: 0.8125rem;
+  }
+  .modal-dialog,
+  .modal-dialog-xl {
+    padding: 18px;
+  }
+}
+
+/* ====================================================================
+   PRACTICE EXCEL IMPORT & TEMPLATE VIEWER
+   ==================================================================== */
+.modal-dialog-xl {
+  max-width: 980px;
+  width: 96%;
+}
+
+.practice-import-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 1.5px solid var(--soft);
+}
+
+.practice-import-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.practice-import-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.practice-import-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.practice-import-warnings {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-destructive-bg);
+  border: 1.5px solid var(--color-destructive-border);
+  color: var(--color-destructive);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.template-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.template-sheet-scroll {
+  max-height: 340px;
+  overflow: auto;
+  border: 1.5px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  background-color: var(--white);
+}
+
+.template-sheet-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.template-sheet-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: var(--color-surface-soft);
+  color: var(--ink);
+  font-weight: 800;
+  text-align: left;
+  padding: 9px 10px;
+  border-bottom: 1.5px solid var(--color-border-soft);
+  border-right: 1px solid var(--soft);
+  white-space: nowrap;
+}
+
+.template-sheet-table th.col-idx-head {
+  width: 42px;
+  text-align: center;
+  background-color: var(--soft);
+  left: 0;
+  z-index: 3;
+}
+
+.template-sheet-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--soft);
+  border-right: 1px solid var(--soft);
+  vertical-align: top;
+  color: var(--ink);
+  line-height: 1.45;
+  max-width: 240px;
+}
+
+.template-sheet-table td.col-idx-cell {
+  position: sticky;
+  left: 0;
+  background-color: var(--color-surface-subtle);
+  text-align: center;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  border-right: 1.5px solid var(--color-border-soft);
+  z-index: 1;
+}
+
+.template-sheet-table tr:hover td:not(.col-idx-cell) {
+  background-color: var(--color-surface-subtle);
+}
+
+.template-col-letter {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background-color: var(--white);
+  border: 1px solid var(--color-border-soft);
+  margin-right: 4px;
+  color: var(--muted);
+}
+
+.template-guide-strip {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background-color: var(--bg);
+  border: 1px solid var(--color-border-soft);
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.65;
 }

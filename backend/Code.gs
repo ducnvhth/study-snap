@@ -19,6 +19,71 @@ const SHEET_NAMES = {
 
 const DRIVE_FOLDER_NAME = 'StudySnap_Media_Uploads';
 
+/**
+ * ============================================================================
+ * LỐI TẮT QUẢN TRỊ NHANH TRONG GOOGLE SHEETS & APPS SCRIPT
+ * - Trong Google Sheets: Mở menu "StudySnap Quản trị" trên thanh công cụ.
+ * - Trong Apps Script Editor: Chọn hàm "xoaToanBoDuLieu" hoặc "xoaTrangHoanToan" rồi bấm Run.
+ * ============================================================================
+ */
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi()
+      .createMenu('StudySnap Quản trị')
+      .addItem('Xóa toàn bộ dữ liệu test (Giữ GV)', 'menuClearTestData_')
+      .addItem('Xóa TRẮNG toàn bộ 100% (Kể cả GV)', 'menuClearAllCompletely_')
+      .addSeparator()
+      .addItem('Khởi tạo tài khoản GV mặc định (Setup)', 'menuSetupDatabase_')
+      .addToUi();
+  } catch (e) {
+    // Bỏ qua khi gọi ngoài ngữ cảnh UI bảng tính
+  }
+}
+
+function xoaToanBoDuLieu() {
+  return clearAllData();
+}
+
+function xoaTrangHoanToan() {
+  return clearAllDataCompletely();
+}
+
+function menuClearTestData_() {
+  const ui = SpreadsheetApp.getUi();
+  const res = ui.alert(
+    'Xóa toàn bộ dữ liệu test?',
+    'Thao tác này sẽ xóa sạch Học sinh, BVN, Bài nộp, Từ vựng, Luyện tập cuối buổi, Kết quả và File ghi âm/video trên Drive.\nTài khoản Giáo viên vẫn được giữ lại để đăng nhập.',
+    ui.ButtonSet.YES_NO
+  );
+  if (res !== ui.Button.YES) return;
+  const result = clearAllData();
+  ui.alert(result.message);
+}
+
+function menuClearAllCompletely_() {
+  const ui = SpreadsheetApp.getUi();
+  const res = ui.alert(
+    'CẢNH BÁO: Xóa TRẮNG 100% dữ liệu?',
+    'Thao tác này sẽ xóa SẠCH toàn bộ tất cả 8 sheet (bao gồm cả danh sách Giáo viên) và toàn bộ file trong StudySnap_Media_Uploads.\nBạn chắc chắn muốn thực hiện?',
+    ui.ButtonSet.YES_NO
+  );
+  if (res !== ui.Button.YES) return;
+  const result = clearAllDataCompletely();
+  ui.alert(result.message);
+}
+
+function menuSetupDatabase_() {
+  const ui = SpreadsheetApp.getUi();
+  const res = ui.alert(
+    'Khởi tạo hệ thống với tài khoản Giáo viên mặc định?',
+    'Hệ thống sẽ kiểm tra cấu trúc bảng và chỉ tạo duy nhất 1 tài khoản Giáo viên: Hồ Châu Uyển Nhi (tên đăng nhập: gv_uyennhi).',
+    ui.ButtonSet.YES_NO
+  );
+  if (res !== ui.Button.YES) return;
+  const result = setupDatabase();
+  ui.alert(result.message || 'Đã khởi tạo tài khoản Giáo viên Hồ Châu Uyển Nhi thành công.');
+}
+
 function doGet(e) {
   try {
     const action = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'bootstrap';
@@ -60,7 +125,7 @@ function doGet(e) {
   } catch (err) {
     return jsonResponse({
       ok: false,
-      error: String(err && err.message ? err.message : err)
+      error: 'Không thể tải dữ liệu lúc này. Vui lòng thử lại sau.'
     });
   }
 }
@@ -76,19 +141,31 @@ function doPost(e) {
     ensureSheetsExist_(ss);
 
     if (action === 'setupDatabase') {
-      setupDatabase();
+      const setupRes = setupDatabase();
       return jsonResponse({
         ok: true,
-        message: 'Đã khởi tạo cấu trúc 6 bảng (gồm Teachers & Students có tài khoản đăng nhập) trên Google Sheets.',
+        message: setupRes.message,
         data: getBootstrapData_(ss)
       });
     }
 
     if (action === 'clearAllData') {
-      const clearResult = clearAllData();
+      const includeTeachers = Boolean(payload && (payload.include_teachers === true || payload.includeTeachers === true));
+      const clearResult = includeTeachers ? clearAllDataCompletely() : clearAllData();
       return jsonResponse({
         ok: true,
         message: clearResult.message,
+        isProduction: clearResult.isProduction,
+        data: getBootstrapData_(ss)
+      });
+    }
+
+    if (action === 'clearAllDataCompletely') {
+      const clearResult = clearAllDataCompletely();
+      return jsonResponse({
+        ok: true,
+        message: clearResult.message,
+        isProduction: clearResult.isProduction,
         data: getBootstrapData_(ss)
       });
     }
@@ -206,12 +283,12 @@ function doPost(e) {
 
     return jsonResponse({
       ok: false,
-      error: 'Action không hợp lệ: ' + action
+      error: 'Yêu cầu không hợp lệ.'
     });
   } catch (err) {
     return jsonResponse({
       ok: false,
-      error: String(err && err.message ? err.message : err)
+      error: 'Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.'
     });
   } finally {
     lock.releaseLock();
@@ -219,7 +296,7 @@ function doPost(e) {
 }
 
 /**
- * Khởi tạo 6 Sheet chuẩn và điền dữ liệu mẫu (kèm tài khoản Giáo viên & Học sinh)
+ * Khởi tạo cấu trúc 8 Sheet chuẩn và tạo duy nhất 1 tài khoản Giáo viên (Hồ Châu Uyển Nhi)
  */
 function setupDatabase() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -227,160 +304,22 @@ function setupDatabase() {
 
   const teachersSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
   if (teachersSheet.getLastRow() <= 1) {
-    const sampleTeachers = [
-      ['GV01', 'Cô Nguyễn Thu Minh', 'gv_minh', '123456', 'Tiếng Trung Giao Tiếp & HSK']
+    const defaultTeachers = [
+      ['GV01', 'Hồ Châu Uyển Nhi', 'gv_uyennhi', '123456', 'Tiếng Trung Giao Tiếp & HSK']
     ];
-    teachersSheet.getRange(2, 1, sampleTeachers.length, sampleTeachers[0].length).setValues(sampleTeachers);
+    teachersSheet.getRange(2, 1, defaultTeachers.length, defaultTeachers[0].length).setValues(defaultTeachers);
   }
 
-  const studentsSheet = ss.getSheetByName(SHEET_NAMES.STUDENTS);
-  if (studentsSheet.getLastRow() <= 1) {
-    const sampleStudents = [
-      ['HS01', 'Nguyễn Minh Anh', 'Lớp Tiếng Trung HSK 2', 'MA', 'hs01', '123456', '2026-11-01'],
-      ['HS02', 'Trần Quốc Bảo', 'Lớp Tiếng Trung HSK 2', 'QB', 'hs02', '123456', '2026-11-01'],
-      ['HS03', 'Lê Hoàng Châu', 'Lớp Tiếng Trung HSK 2', 'HC', 'hs03', '123456', '2026-11-01'],
-      ['HS04', 'Phạm Gia Huy', 'Lớp Tiếng Trung HSK 2', 'GH', 'hs04', '123456', '2026-11-01'],
-      ['HS05', 'Võ Khánh Linh', 'Lớp Tiếng Trung HSK 2', 'KL', 'hs05', '123456', '2026-11-01'],
-      ['HS06', 'Đặng Tuấn Kiệt', 'Lớp Tiếng Trung HSK 2', 'TK', 'hs06', '123456', '2026-11-01']
-    ];
-    studentsSheet.getRange(2, 1, sampleStudents.length, sampleStudents[0].length).setValues(sampleStudents);
-  }
+  PropertiesService.getScriptProperties().setProperty('STUDYSNAP_IS_PRODUCTION', 'true');
 
-  const assignmentsSheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS);
-  if (assignmentsSheet.getLastRow() <= 1) {
-    const sampleAssignments = [
-      [
-        'BVN01',
-        'Bài 1: Thu âm giới thiệu bản thân bằng tiếng Trung & luyện 4 thanh điệu',
-        'Bài 1',
-        '12/11/2026',
-        'Thu âm (60–90 giây) hoặc tải video giới thiệu họ tên, quốc tịch, nghề nghiệp bằng tiếng Trung. Chú ý quy tắc biến điệu thanh 3 (nǐ hǎo) và các âm bật hơi (p, t, k, q, ch).',
-        'audio_or_video'
-      ],
-      [
-        'BVN02',
-        'Bài 2: Đọc đoạn hội thoại học tiếng Hán & phân biệt âm uốn lưỡi zh, ch, sh',
-        'Bài 2',
-        '14/11/2026',
-        'Thu âm đoạn hội thoại Bài 2 và đặt 3 câu hỏi với 吗 (ma) hoặc 呢 (ne). Chú ý biến điệu của chữ 不 (bù → bú khi đi trước thanh 4).',
-        'audio_or_video'
-      ],
-      [
-        'BVN03',
-        'Bài 3: Quay video hỏi giá mua sắm & nói lịch trình một ngày bằng tiếng Trung',
-        'Bài 3',
-        '16/11/2026',
-        'Quay video hoặc thu âm kể về lịch trình buổi sáng và hội thoại mua hàng hỏi giá (多少钱), sử dụng ít nhất 4 từ vựng của Bài 3.',
-        'audio_or_video'
-      ]
-    ];
-    assignmentsSheet.getRange(2, 1, sampleAssignments.length, sampleAssignments[0].length).setValues(sampleAssignments);
-  }
-
-  const submissionsSheet = ss.getSheetByName(SHEET_NAMES.SUBMISSIONS);
-  if (submissionsSheet.getLastRow() <= 1) {
-    const sampleSubmissions = [
-      [
-        'SUB01',
-        'BVN01',
-        'HS01',
-        '10/11/2026 14:20',
-        'Em đã thu âm 2 lần để sửa biến điệu thanh 3 và âm mặt lưỡi j, q, x ạ.',
-        'audio',
-        'demo:audio-hs01-bvn01',
-        '01:18',
-        'graded',
-        9.5,
-        'Phát âm thanh 1 và thanh 4 rất sáng, dứt khoát! Biến điệu "你好 (nǐ hǎo)" chuẩn. Chú ý bật hơi mạnh hơn một chút ở từ "留学生 (liúxuéshēng)" nhé.',
-        'demo:voice-gv-sub01',
-        '00:42',
-        '10/11/2026 19:05'
-      ],
-      [
-        'SUB02',
-        'BVN01',
-        'HS02',
-        '10/11/2026 16:45',
-        'Em quay video tự giới thiệu bằng tiếng Trung không nhìn phiên âm Pinyin ạ.',
-        'video',
-        'demo:video-hs02-bvn01',
-        '01:35',
-        'submitted',
-        '',
-        '',
-        '',
-        '',
-        ''
-      ],
-      [
-        'SUB03',
-        'BVN01',
-        'HS03',
-        '10/11/2026 17:10',
-        'Em nộp bản thu âm Bài 1 chào hỏi và giới thiệu bản thân ạ.',
-        'audio',
-        'demo:audio-hs03-bvn01',
-        '01:05',
-        'graded',
-        8.5,
-        'Ngữ điệu tự nhiên, trôi chảy. Em cần giữ độ cao của thanh 1 ở từ "高兴 (gāoxìng)" và đọc nhẹ thanh nhẹ ở từ "认识 (rènshi)" nhé.',
-        'demo:voice-gv-sub03',
-        '00:35',
-        '10/11/2026 20:15'
-      ],
-      [
-        'SUB04',
-        'BVN02',
-        'HS01',
-        '11/11/2026 08:30',
-        'Em gửi bài đọc hội thoại Bài 2 và 3 câu hỏi mở rộng bằng tiếng Trung ạ.',
-        'audio',
-        'demo:audio-hs01-bvn02',
-        '01:24',
-        'graded',
-        9.0,
-        'Biến điệu chữ "不" trong câu "汉语发音不太难 (Hànyǔ fāyīn bú tài nán)" rất chuẩn xác!',
-        'demo:voice-gv-sub04',
-        '00:28',
-        '11/11/2026 09:30'
-      ]
-    ];
-    submissionsSheet.getRange(2, 1, sampleSubmissions.length, sampleSubmissions[0].length).setValues(sampleSubmissions);
-  }
-
-  const vocabSheet = ss.getSheetByName(SHEET_NAMES.VOCABULARY);
-  if (vocabSheet.getLastRow() <= 1) {
-    const sampleVocab = [
-      ['V01', 'bai-1', 'Bài 1: Chào hỏi & Làm quen', '你好', 'nǐ hǎo', 'Lời chào', 'Xin chào (biến điệu đọc là ní hǎo)', '你好，我是越南人。(Nǐ hǎo, wǒ shì Yuènán rén.)', 'Xin chào, tôi là người Việt Nam.'],
-      ['V02', 'bai-1', 'Bài 1: Chào hỏi & Làm quen', '高兴', 'gāo xìng', 'Tính từ', 'Vui vẻ, phấn khởi', '认识你我很高兴。(Rènshi nǐ wǒ hěn gāoxìng.)', 'Rất vui được làm quen với bạn.'],
-      ['V03', 'bai-1', 'Bài 1: Chào hỏi & Làm quen', '认识', 'rèn shi', 'Động từ', 'Quen biết, làm quen', '很高兴认识大家。(Hěn gāoxìng rènshi dàjiā.)', 'Rất vui được làm quen với mọi người.'],
-      ['V04', 'bai-1', 'Bài 1: Chào hỏi & Làm quen', '留学生', 'liú xué shēng', 'Danh từ', 'Du học sinh', '她是汉语留学生。(Tā shì Hànyǔ liúxuéshēng.)', 'Cô ấy là du học sinh ngành tiếng Trung.'],
-      ['V05', 'bai-2', 'Bài 2: Học tập & Ngôn ngữ', '汉语', 'Hàn yǔ', 'Danh từ', 'Tiếng Trung (Tiếng Hán)', '汉语发音不太难。(Hànyǔ fāyīn bú tài nán.)', 'Phát âm tiếng Trung không khó lắm.'],
-      ['V06', 'bai-2', 'Bài 2: Học tập & Ngôn ngữ', '汉字', 'Hàn zì', 'Danh từ', 'Chữ Hán', '我每天都练习写汉字。(Wǒ měitiān dōu liànxí xiě Hànzì.)', 'Mỗi ngày tôi đều luyện viết chữ Hán.'],
-      ['V07', 'bai-2', 'Bài 2: Học tập & Ngôn ngữ', '发音', 'fā yīn', 'Danh từ / Động từ', 'Phát âm, ngữ âm', '老师的发音非常标准。(Lǎoshī de fāyīn fēicháng biāozhǔn.)', 'Phát âm của cô giáo vô cùng chuẩn.'],
-      ['V08', 'bai-2', 'Bài 2: Học tập & Ngôn ngữ', '努力', 'nǔ lì', 'Tính từ', 'Chăm chỉ, nỗ lực', '他学习汉语很努力。(Tā xuéxí Hànyǔ hěn nǔlì.)', 'Cậu ấy học tiếng Trung rất chăm chỉ.'],
-      ['V09', 'bai-3', 'Bài 3: Mua sắm & Đời sống', '多少钱', 'duō shao qián', 'Đại từ nghi vấn', 'Bao nhiêu tiền?', '请问，这本书多少钱？(Qǐngwèn, zhè běn shū duōshao qián?)', 'Xin hỏi, quyển sách này bao nhiêu tiền?'],
-      ['V10', 'bai-3', 'Bài 3: Mua sắm & Đời sống', '便宜', 'pián yi', 'Tính từ', 'Rẻ, giá hợp lý', '这件衣服很便宜。(Zhè jiàn yīfu hěn piányi.)', 'Bộ quần áo này rất rẻ.'],
-      ['V11', 'bai-3', 'Bài 3: Mua sắm & Đời sống', '准备', 'zhǔn bèi', 'Động từ', 'Chuẩn bị, sẵn sàng', '我已经做好准备了。(Wǒ yǐjīng zuò hǎo zhǔnbèi le.)', 'Tôi đã chuẩn bị sẵn sàng rồi.'],
-      ['V12', 'bai-3', 'Bài 3: Mua sắm & Đời sống', '坚持', 'jiān chí', 'Động từ', 'Kiên trì, bền bỉ', '坚持每天听汉语录音。(Jiānchí měitiān tīng Hànyǔ lùyīn.)', 'Kiên trì nghe băng ghi âm tiếng Trung mỗi ngày.']
-    ];
-    vocabSheet.getRange(2, 1, sampleVocab.length, sampleVocab[0].length).setValues(vocabSheet.getLastRow() <= 1 ? sampleVocab : sampleVocab);
-  }
-
-  PropertiesService.getScriptProperties().deleteProperty('STUDYSNAP_IS_PRODUCTION');
+  return {
+    ok: true,
+    message: 'Đã khởi tạo cấu trúc hệ thống với duy nhất 1 tài khoản Giáo viên: Hồ Châu Uyển Nhi (tên đăng nhập: gv_uyennhi).'
+  };
 }
 
 /**
- * XÓA TOÀN BỘ DỮ LIỆU TEST / DỮ LIỆU MẪU ĐỂ BẮT ĐẦU SỬ DỤNG DỮ LIỆU THẬT
- * Cách dùng:
- * - Cách 1: Mở Google Apps Script -> Chọn hàm `clearAllData` trên thanh công cụ -> Bấm "Chạy (Run)".
- * - Cách 2: Bấm nút "Xóa dữ liệu test" ngay trên trang Quản lý của Giáo viên (`teacher.html`).
- *
- * Hàm này sẽ:
- * 1. Xóa sạch toàn bộ dữ liệu test từ dòng thứ 2 trở đi ở các bảng:
- *    `Students`, `Assignments`, `Submissions`, `ExitTickets`, `Vocabulary` (giữ nguyên dòng tiêu đề cột số 1).
- * 2. Giữ lại tài khoản Giáo viên trong bảng `Teachers` để giáo viên đăng nhập và bắt đầu tạo lớp thật.
- * 3. Chuyển toàn bộ các file ghi âm/video test trong thư mục Google Drive `StudySnap_Media_Uploads` vào thùng rác.
+ * XÓA TOÀN BỘ DỮ LIỆU THỬ NGHIỆM ĐỂ SỬ DỤNG DỮ LIỆU THẬT
  */
 function clearAllData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -397,41 +336,106 @@ function clearAllData() {
   ];
 
   sheetsToClear.forEach(function (sheetName) {
-    const sheet = ss.getSheetByName(sheetName);
-    if (sheet && sheet.getLastRow() > 1) {
-      sheet.deleteRows(2, sheet.getLastRow() - 1);
-    }
+    clearSheetRowsSafely_(ss.getSheetByName(sheetName));
   });
 
   // Đảm bảo bảng Teachers vẫn có ít nhất 1 tài khoản Giáo viên để đăng nhập
   const teachersSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
   if (teachersSheet && teachersSheet.getLastRow() <= 1) {
     teachersSheet.getRange(2, 1, 1, 5).setValues([
-      ['GV01', 'Cô Nguyễn Thu Minh', 'gv_minh', '123456', 'Tiếng Trung Giao Tiếp & HSK']
+      ['GV01', 'Hồ Châu Uyển Nhi', 'gv_uyennhi', '123456', 'Tiếng Trung Giao Tiếp & HSK']
     ]);
   }
 
-  // Dọn sạch các file ghi âm / video test trong thư mục Google Drive StudySnap_Media_Uploads
-  try {
-    const folders = DriveApp.getFoldersByName(DRIVE_FOLDER_NAME);
-    while (folders.hasNext()) {
-      const folder = folders.next();
-      const files = folder.getFiles();
-      while (files.hasNext()) {
-        files.next().setTrashed(true);
-      }
-    }
-  } catch (e) {
-    // Bỏ qua nếu chưa phát sinh thư mục Drive
-  }
-
+  const trashedFiles = trashAllDriveUploadFiles_();
   PropertiesService.getScriptProperties().setProperty('STUDYSNAP_IS_PRODUCTION', 'true');
 
   return {
     ok: true,
     isProduction: true,
-    message: 'Đã xóa toàn bộ dữ liệu test (Học sinh, BVN, Bài nộp, Từ vựng, Lịch sử cuối giờ & File ghi âm test). Hệ thống đã sẵn sàng 100% cho dữ liệu thật!'
+    clearedSheets: sheetsToClear.length,
+    trashedFiles: trashedFiles,
+    message: 'Đã xóa toàn bộ dữ liệu thử nghiệm và giữ nguyên tài khoản Giáo viên.'
   };
+}
+
+function clearAllDataCompletely() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureSheetsExist_(ss);
+
+  const allSheets = [
+    SHEET_NAMES.TEACHERS,
+    SHEET_NAMES.STUDENTS,
+    SHEET_NAMES.ASSIGNMENTS,
+    SHEET_NAMES.SUBMISSIONS,
+    SHEET_NAMES.EXIT_TICKETS,
+    SHEET_NAMES.VOCABULARY,
+    SHEET_NAMES.PRACTICE_EXERCISES,
+    SHEET_NAMES.PRACTICE_SUBMISSIONS
+  ];
+
+  allSheets.forEach(function (sheetName) {
+    clearSheetRowsSafely_(ss.getSheetByName(sheetName));
+  });
+
+  const trashedFiles = trashAllDriveUploadFiles_();
+  PropertiesService.getScriptProperties().setProperty('STUDYSNAP_IS_PRODUCTION', 'true');
+
+  return {
+    ok: true,
+    isProduction: true,
+    clearedSheets: allSheets.length,
+    trashedFiles: trashedFiles,
+    message: 'Đã xóa trắng toàn bộ dữ liệu hệ thống.'
+  };
+}
+
+function clearSheetRowsSafely_(sheet) {
+  if (!sheet) return;
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return;
+
+  const numRows = lastRow - 1;
+  const numCols = Math.max(sheet.getLastColumn(), 1);
+  sheet.getRange(2, 1, numRows, numCols).clearContent();
+
+  // Giữ lại dòng 2 không đóng băng để tránh lỗi Google Apps Script khi xóa toàn bộ dòng không đóng băng
+  try {
+    if (sheet.getMaxRows() > 2 && lastRow > 2) {
+      sheet.deleteRows(3, lastRow - 2);
+    }
+  } catch (e) {
+    // Nội dung từ dòng 2 trở đi đã được clearContent sạch
+  }
+}
+
+function trashAllDriveUploadFiles_() {
+  let trashedCount = 0;
+  try {
+    const folders = DriveApp.getFoldersByName(DRIVE_FOLDER_NAME);
+    while (folders.hasNext()) {
+      trashedCount += trashFolderFilesRecursively_(folders.next());
+    }
+  } catch (e) {
+    // Bỏ qua nếu chưa phát sinh thư mục Drive hoặc chưa cấp quyền Drive
+  }
+  return trashedCount;
+}
+
+function trashFolderFilesRecursively_(folder) {
+  let trashedCount = 0;
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    files.next().setTrashed(true);
+    trashedCount++;
+  }
+  const subFolders = folder.getFolders();
+  while (subFolders.hasNext()) {
+    const sub = subFolders.next();
+    trashedCount += trashFolderFilesRecursively_(sub);
+    sub.setTrashed(true);
+  }
+  return trashedCount;
 }
 
 function ensureSheetsExist_(ss) {
@@ -534,11 +538,19 @@ function readSheetRows_(sheet) {
 function handleLogin_(ss, payload) {
   const username = String(payload.username || '').trim().toLowerCase();
   const password = String(payload.password || '').trim();
+  if (!username || !password) {
+    return {
+      ok: false,
+      error: 'Vui lòng nhập đầy đủ Tên đăng nhập và Mật khẩu.'
+    };
+  }
 
   const teachers = readSheetRows_(ss.getSheetByName(SHEET_NAMES.TEACHERS));
   for (let i = 0; i < teachers.length; i++) {
     const t = teachers[i];
-    if (String(t.username || '').toLowerCase() === username && String(t.password || '') === password) {
+    const tUser = String(t.username || '').trim().toLowerCase();
+    const tPwd = String(t.password === undefined || t.password === null ? '' : t.password).trim();
+    if (tUser && tUser === username && tPwd === password) {
       return {
         ok: true,
         user: {
@@ -555,8 +567,11 @@ function handleLogin_(ss, payload) {
   const students = readSheetRows_(ss.getSheetByName(SHEET_NAMES.STUDENTS));
   for (let j = 0; j < students.length; j++) {
     const s = students[j];
-    const matchUser = String(s.username || '').toLowerCase() === username || String(s.student_id || '').toLowerCase() === username;
-    if (matchUser && String(s.password || '') === password) {
+    const sUser = String(s.username || '').trim().toLowerCase();
+    const sId = String(s.student_id || '').trim().toLowerCase();
+    const sPwd = String(s.password === undefined || s.password === null ? '' : s.password).trim();
+    const matchUser = (sUser && sUser === username) || (sId && sId === username);
+    if (matchUser && sPwd === password) {
       return {
         ok: true,
         user: {
@@ -902,6 +917,22 @@ function handleSavePracticeExercise_(ss, payload) {
   const ex = payload.exercise || payload;
   const exId = String(ex.exercise_id || ('EX_' + Date.now()));
   const nowStr = new Date().toLocaleString('vi-VN');
+
+  // Nếu có đoạn audio nhúng Base64 (từ dạng bài Nghe hiểu), đẩy lên Drive để tránh vượt giới hạn 50k ký tự/ô của Google Sheets
+  if (Array.isArray(ex.sections)) {
+    for (let sIdx = 0; sIdx < ex.sections.length; sIdx++) {
+      const sec = ex.sections[sIdx];
+      if (sec && sec.data && typeof sec.data.audio_url === 'string' && sec.data.audio_url.indexOf('data:') === 0) {
+        const mimeMatch = sec.data.audio_url.match(/^data:([^;]+);base64,/i);
+        const mimeType = mimeMatch && mimeMatch[1] ? mimeMatch[1] : 'audio/webm';
+        const ext = mimeType.indexOf('mp3') >= 0 || mimeType.indexOf('mpeg') >= 0
+          ? '.mp3'
+          : (mimeType.indexOf('wav') >= 0 ? '.wav' : (mimeType.indexOf('mp4') >= 0 || mimeType.indexOf('m4a') >= 0 ? '.m4a' : '.webm'));
+        const fileName = exId + '_' + (sec.section_id || ('listen_' + (sIdx + 1))) + '_' + Date.now() + ext;
+        sec.data.audio_url = saveBase64MediaToDrive_(sec.data.audio_url, mimeType, fileName);
+      }
+    }
+  }
 
   const values = sheet.getDataRange().getValues();
   let foundRowIndex = -1;

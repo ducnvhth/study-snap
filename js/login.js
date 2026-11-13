@@ -70,12 +70,24 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('session') === 'expired') {
+      showToast('Phiên đăng nhập trước đã hết hiệu lực. Vui lòng đăng nhập lại.');
+    }
+
+    if (state && state.isClearedForProduction === true) {
+      window.StudySnapAuth.revalidateActiveSession(state);
+    }
     renderSessionBanner();
 
-    // Đồng bộ ngầm dữ liệu mới nhất từ hệ thống
+    // Đồng bộ ngầm dữ liệu mới nhất từ hệ thống và xác thực lại phiên đang lưu
     if (window.StudySnapStore.getGasUrl()) {
-      window.StudySnapStore.fetchBootstrapFromGas(state).then(function () {
+      window.StudySnapStore.fetchBootstrapFromGas(state).then(function (remoteRes) {
         state = window.StudySnapStore.loadState();
+        if (remoteRes && remoteRes.ok && remoteRes.data) {
+          window.StudySnapAuth.revalidateActiveSession(state);
+          renderSessionBanner();
+        }
       });
     }
 
@@ -113,29 +125,56 @@
         ev.preventDefault();
         const u = document.getElementById('login-username').value;
         const p = document.getElementById('login-password').value;
+        const submitBtn = loginForm.querySelector('button[type="submit"]');
+        if (submitBtn && submitBtn.disabled) return;
+        if (submitBtn) submitBtn.disabled = true;
 
-        let result = window.StudySnapAuth.authenticate(u, p);
+        let result = null;
 
-        if (!result.ok && window.StudySnapStore.getGasUrl()) {
-          if (submitText) submitText.textContent = 'Đang kiểm tra tài khoản...';
-          const remoteAuth = await window.StudySnapStore.syncPostToGas(state, {
-            action: 'login',
-            username: u,
-            password: p
-          });
-          if (remoteAuth && remoteAuth.ok && remoteAuth.user) {
-            window.StudySnapAuth.setCurrentUser(remoteAuth.user);
-            result = { ok: true, user: remoteAuth.user };
+        try {
+          // Khi có kết nối Google Apps Script, ưu tiên xác thực trực tiếp với Google Sheets làm nguồn chuẩn
+          if (window.StudySnapStore.getGasUrl()) {
+            if (submitText) submitText.textContent = 'Đang kiểm tra tài khoản...';
+            const remoteAuth = await window.StudySnapStore.syncPostToGas(state, {
+              action: 'login',
+              username: u,
+              password: p
+            });
+
+            if (remoteAuth && remoteAuth.ok && remoteAuth.user) {
+              window.StudySnapAuth.setCurrentUser(remoteAuth.user);
+              await window.StudySnapStore.fetchBootstrapFromGas(state);
+              state = window.StudySnapStore.loadState();
+              result = { ok: true, user: remoteAuth.user };
+            } else if (remoteAuth) {
+              // Máy chủ phản hồi từ chối rõ ràng -> đồng bộ lại state cục bộ, tuyệt đối không fallback tài khoản cũ/mẫu
+              await window.StudySnapStore.fetchBootstrapFromGas(state);
+              state = window.StudySnapStore.loadState();
+              renderSessionBanner();
+              const isNoAccounts =
+                (!state.teachers || state.teachers.length === 0) &&
+                (!state.students || state.students.length === 0);
+              result = {
+                ok: false,
+                error: isNoAccounts
+                  ? 'Hệ thống hiện chưa có tài khoản nào khả dụng. Vui lòng liên hệ quản trị viên để được cấp tài khoản.'
+                  : 'Tên đăng nhập hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.'
+              };
+            } else {
+              // Ngoại tuyến / mất mạng mới kiểm tra cục bộ
+              result = window.StudySnapAuth.authenticate(u, p);
+            }
+            setRoleTab(selectedRole);
           } else {
-            await window.StudySnapStore.fetchBootstrapFromGas(state);
             result = window.StudySnapAuth.authenticate(u, p);
           }
-          setRoleTab(selectedRole);
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
         }
 
-        if (!result.ok) {
+        if (!result || !result.ok) {
           if (errorBox) {
-            errorBox.textContent = result.error;
+            errorBox.textContent = (result && result.error) || 'Đăng nhập thất bại.';
             errorBox.classList.add('is-visible');
           }
           return;

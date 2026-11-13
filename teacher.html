@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/main.css">
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -71,7 +72,7 @@
       </nav>
 
       <div class="utility-group">
-        <span class="user-profile-pill" id="teacher-profile-pill">Cô Nguyễn Thu Minh</span>
+        <span class="user-profile-pill" id="teacher-profile-pill">Giáo viên</span>
         <button type="button" class="btn btn-outline btn-sm" id="btn-teacher-logout">Đăng xuất</button>
       </div>
     </header>
@@ -89,6 +90,10 @@
             <select id="teacher-practice-select" class="form-control" style="min-width: 260px; width: auto; font-weight: 600;"></select>
             <button type="button" class="btn btn-primary btn-sm" id="btn-create-practice-ex">
               <span>+ Tạo bài tập mới</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-open-import-practice-modal" title="Nhập đề luyện tập hàng loạt từ file Excel / CSV hoặc xem file template">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13h8"></path><path d="M8 17h8"></path><path d="M10 9h4"></path></svg>
+              <span>Nhập từ Excel</span>
             </button>
           </div>
 
@@ -142,11 +147,24 @@
               <input type="hidden" id="ex-meta-thresh-verygood" value="31">
             </div>
 
-            <!-- Thanh Chèn Nhanh Dạng Câu Hỏi (Quick Add Bar - Google Forms) -->
+            <!-- Thanh Chèn Nhanh Dạng Câu Hỏi (Trượt theo khi cuộn chuột để dễ thêm nhiều phần) -->
             <div class="gform-quick-add-bar" style="margin-bottom: 20px;">
-              <div class="gform-quick-add-title">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                <span>Bấm chọn dạng bài để chèn ngay mẫu câu hỏi vào đề:</span>
+              <div class="gform-quick-add-head-row">
+                <div class="gform-quick-add-title">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                  <span>Thêm nhanh dạng bài vào đề</span>
+                </div>
+                <div class="gform-quick-add-actions">
+                  <span class="status-badge status-yellow tabular-nums" id="gform-sticky-summary">0 phần • 0 điểm</span>
+                  <button type="button" class="btn btn-outline btn-sm" id="btn-open-import-practice-sticky" title="Nhập nhanh nhiều câu hỏi từ Excel hoặc xem file template">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13h8"></path><path d="M8 17h8"></path></svg>
+                    <span>Nhập Excel</span>
+                  </button>
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-save-sticky-bar">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    <span>Lưu đề nhanh</span>
+                  </button>
+                </div>
               </div>
               <div class="gform-type-buttons">
                 <button type="button" class="gform-type-btn" data-quick-add-type="matching">
@@ -163,6 +181,10 @@
                 </button>
                 <button type="button" class="gform-type-btn" data-quick-add-type="translation">
                   <span>+ 5. Dịch câu</span>
+                </button>
+                <button type="button" class="gform-type-btn" data-quick-add-type="listening_mc">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
+                  <span>+ 6. Nghe hiểu</span>
                 </button>
               </div>
             </div>
@@ -198,7 +220,7 @@
           </div>
 
           <p style="color:var(--color-muted-foreground);font-size:0.875rem;">
-            Hệ thống tự động chấm điểm Phần 1–4. Giáo viên có thể bấm "Chấm câu Dịch" để cho điểm và gửi lời nhận xét cho học sinh.
+            Hệ thống tự động chấm điểm các dạng Nối từ, Trắc nghiệm, Điền từ, Sửa câu sai, Nghe hiểu (và Dịch câu nếu bật chấm tự động). Với câu Dịch cần chấm tay, giáo viên bấm "Chấm câu Dịch" để cho điểm và gửi lời nhận xét.
           </p>
 
           <div style="overflow-x:auto;">
@@ -1004,6 +1026,32 @@
             <div id="student-accounts-list" class="quick-account-list"></div>
           </div>
         </div>
+
+        <div class="surface-panel" style="margin-top: 24px;">
+          <div class="panel-head">
+            <div>
+              <h2>Quản Trị &amp; Làm Sạch Dữ Liệu Hệ Thống</h2>
+              <p class="text-muted">Dọn sạch toàn bộ dữ liệu thử nghiệm trước khi đưa lớp học thật vào vận hành.</p>
+            </div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;">
+            <div style="flex:1;min-width:260px;">
+              <p style="margin:0 0 6px;font-size:0.9375rem;font-weight:700;color:var(--ink);">Xóa toàn bộ dữ liệu test để bắt đầu dùng thật</p>
+              <p class="text-muted" style="margin:0;font-size:0.875rem;line-height:1.55;">
+                Xóa sạch toàn bộ dữ liệu Học sinh, Lớp học, Bài tập về nhà, Bài nộp, Từ vựng, Bài luyện tập cuối buổi, Kết quả và tệp ghi âm/video thử nghiệm (giữ lại tài khoản Giáo viên hiện tại để tiếp tục quản lý lớp).
+              </p>
+            </div>
+            <button type="button" class="btn btn-danger-outline" id="btn-clear-all-test-data">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                <line x1="10" y1="11" x2="10" y2="17"></line>
+                <line x1="14" y1="11" x2="14" y2="17"></line>
+              </svg>
+              <span>Xóa toàn bộ dữ liệu test</span>
+            </button>
+          </div>
+        </div>
       </section>
 
     </main>
@@ -1144,7 +1192,7 @@
 
       <div class="form-group">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-          <label class="form-label" for="excel-paste-text" style="margin: 0; font-weight: 700;">Hoặc dán trực tiếp dòng sao chép từ Excel / Google Sheets:</label>
+          <label class="form-label" for="excel-paste-text" style="margin: 0; font-weight: 700;">Hoặc dán trực tiếp dòng sao chép từ Excel / bảng tính:</label>
           <button type="button" class="btn btn-outline btn-sm" id="btn-paste-sample-vocab" style="font-size: 0.75rem; padding: 2px 8px;">Dán mẫu dữ liệu</button>
         </div>
         <textarea id="excel-paste-text" class="excel-paste-textarea" placeholder="Dán các hàng từ Excel vào đây (cách nhau bởi Tab hoặc dấu phẩy)..."></textarea>
@@ -1177,6 +1225,164 @@
         <button type="button" class="btn btn-outline" id="btn-cancel-vocab-import">Hủy bỏ</button>
         <button type="button" class="btn btn-primary" id="btn-confirm-vocab-import" disabled style="font-weight: 700;">
           <span>Lưu vào kho từ vựng</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: NHẬP ĐỀ LUYỆN TẬP CUỐI BUỔI TỪ EXCEL / CSV & XEM FILE TEMPLATE -->
+  <div class="modal-backdrop" id="modal-import-practice-excel" role="dialog" aria-modal="true" aria-labelledby="modal-practice-import-title">
+    <div class="modal-dialog modal-dialog-xl">
+      <div class="panel-header" style="margin-bottom: 14px;">
+        <div class="panel-title-row">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--color-primary-deep);">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="8" y1="13" x2="16" y2="13"></line>
+            <line x1="8" y1="17" x2="16" y2="17"></line>
+          </svg>
+          <h2 id="modal-practice-import-title">Nhập Đề Luyện Tập Cuối Buổi Từ Excel</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-practice-import" aria-label="Đóng hộp thoại">✕</button>
+      </div>
+
+      <!-- Chuyển tab Nhập file / Xem file Template + Tải Template -->
+      <div class="practice-import-topbar">
+        <div class="filter-pill-group" role="tablist" aria-label="Chế độ nhập đề từ Excel">
+          <button type="button" class="filter-pill is-active" id="tab-btn-practice-upload" data-practice-import-tab="upload">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <span>Nhập từ File / Dán Excel</span>
+          </button>
+          <button type="button" class="filter-pill" id="tab-btn-practice-template" data-practice-import-tab="template">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18"></path><path d="M9 21V9"></path></svg>
+            <span>Xem file Template mẫu</span>
+          </button>
+        </div>
+
+        <div class="practice-import-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-download-practice-template">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Tải file Template (.xlsx)</span>
+          </button>
+          <button type="button" class="btn btn-outline btn-sm" id="btn-fill-practice-sample">
+            <span>Dùng thử dữ liệu mẫu</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- VIEW A: NHẬP FILE EXCEL / DÁN DỮ LIỆU -->
+      <div id="practice-import-view-upload">
+        <div class="form-row-2" style="margin-bottom: 12px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="import-practice-mode" style="font-weight: 700;">Cách đưa vào đề:</label>
+            <select id="import-practice-mode" class="form-control">
+              <option value="append">Thêm các phần mới vào bài tập đang mở</option>
+              <option value="replace">Thay thế toàn bộ câu hỏi của bài đang mở</option>
+              <option value="new">Tạo thành một bài tập mới hoàn toàn</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="import-practice-file-input" style="font-weight: 700;">Chọn tệp Excel / CSV (.xlsx, .xls, .csv):</label>
+            <input type="file" id="import-practice-file-input" accept=".xlsx, .xls, .csv, .tsv, .txt" class="form-control" style="padding: 6px;">
+          </div>
+        </div>
+
+        <div id="import-practice-new-meta" class="form-row-2" style="display: none; margin-bottom: 12px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="import-practice-new-title" style="font-weight: 700;">Tiêu đề bài tập mới:</label>
+            <input type="text" id="import-practice-new-title" class="form-control" placeholder="Ví dụ: Bài luyện tập cuối buổi — HSK 1: Bài 2">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="import-practice-new-tag" style="font-weight: 700;">Thuộc bài số:</label>
+            <input type="text" id="import-practice-new-tag" class="form-control" placeholder="Ví dụ: Bài 2" value="Bài mới">
+          </div>
+        </div>
+
+        <div class="excel-drop-zone" id="practice-excel-drop-zone" role="button" tabindex="0" aria-label="Chọn hoặc kéo thả file Excel đề luyện tập">
+          <div style="font-weight: 700; color: var(--color-primary-deep); margin-bottom: 4px;">
+            Kéo thả tệp Excel (.xlsx / .xls / .csv) vào đây hoặc bấm để chọn tệp
+          </div>
+          <div style="font-size: 0.8125rem; color: var(--color-muted-foreground);">
+            Hỗ trợ cả 6 dạng bài: <strong>Nối từ</strong>, <strong>Trắc nghiệm</strong>, <strong>Điền từ</strong>, <strong>Sửa câu sai</strong>, <strong>Dịch câu</strong>, <strong>Nghe hiểu</strong>. Chưa rõ cấu trúc cột? Bấm tab <strong>Xem file Template mẫu</strong> ở trên.
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 8px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+            <label class="form-label" for="practice-excel-paste" style="margin: 0; font-weight: 700;">Hoặc copy vùng bảng từ Excel / bảng tính rồi dán trực tiếp vào đây:</label>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-jump-to-template-view" style="font-size: 0.75rem; padding: 3px 10px;">Xem cấu trúc cột mẫu</button>
+          </div>
+          <textarea id="practice-excel-paste" class="excel-paste-textarea" placeholder="Dán các dòng từ file Excel mẫu (cột A đến K: Dạng bài | Tên phần | Câu hỏi / Đề bài | Pinyin / Ngữ cảnh / Gợi ý | Đáp án A..D | Đáp án đúng | Giải thích / Lời thoại | Link Audio)..."></textarea>
+        </div>
+
+        <!-- Xem trước đề đã phân tích -->
+        <div id="practice-excel-preview" style="display: none; margin-top: 14px;">
+          <div class="practice-import-summary">
+            <div class="practice-import-badges">
+              <strong style="font-size: 0.875rem; color: var(--color-primary-deep);">Xem trước đề được tạo:</strong>
+              <span class="status-badge status-mint tabular-nums" id="practice-import-sec-count">0 phần</span>
+              <span class="status-badge status-sky tabular-nums" id="practice-import-q-count">0 câu hỏi</span>
+              <span class="status-badge status-yellow tabular-nums" id="practice-import-score-count">0 điểm</span>
+            </div>
+            <span class="status-badge status-graded">Sẵn sàng nhập</span>
+          </div>
+
+          <div class="excel-preview-wrapper" style="max-height: 240px;">
+            <table class="excel-preview-table">
+              <thead>
+                <tr>
+                  <th>Phần</th>
+                  <th>Dạng bài</th>
+                  <th>Tên phần</th>
+                  <th>Số câu</th>
+                  <th>Điểm</th>
+                  <th>Nội dung tóm tắt</th>
+                </tr>
+              </thead>
+              <tbody id="practice-excel-preview-tbody"></tbody>
+            </table>
+          </div>
+
+          <div id="practice-import-warnings" class="practice-import-warnings" style="display: none;"></div>
+        </div>
+      </div>
+
+      <!-- VIEW B: XEM FILE TEMPLATE MẪU -->
+      <div id="practice-import-view-template" style="display: none;">
+        <div class="template-filter-bar">
+          <div class="filter-pill-group" role="tablist" aria-label="Lọc dòng mẫu theo dạng bài">
+            <button type="button" class="filter-pill is-active" data-template-type-filter="all">Tất cả 6 dạng</button>
+            <button type="button" class="filter-pill" data-template-type-filter="matching">1. Nối từ</button>
+            <button type="button" class="filter-pill" data-template-type-filter="multiple_choice">2. Trắc nghiệm</button>
+            <button type="button" class="filter-pill" data-template-type-filter="fill_blank_wordbank">3. Điền từ</button>
+            <button type="button" class="filter-pill" data-template-type-filter="error_correction">4. Sửa câu sai</button>
+            <button type="button" class="filter-pill" data-template-type-filter="translation">5. Dịch câu</button>
+            <button type="button" class="filter-pill" data-template-type-filter="listening_mc">6. Nghe hiểu</button>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-use-template-in-import">
+            <span>Nạp mẫu này vào khung Nhập</span>
+          </button>
+        </div>
+
+        <div class="template-sheet-scroll">
+          <table class="template-sheet-table" id="practice-template-sheet-table">
+            <thead id="practice-template-sheet-thead"></thead>
+            <tbody id="practice-template-sheet-tbody"></tbody>
+          </table>
+        </div>
+
+        <div class="template-guide-strip">
+          <strong>Quy tắc điền nhanh trong Excel:</strong>
+          Cột <strong>A (Dạng bài)</strong> nhập tên tiếng Việt (<code>Nối từ</code>, <code>Trắc nghiệm</code>, <code>Điền từ</code>, <code>Sửa câu sai</code>, <code>Dịch câu</code>, <code>Nghe hiểu</code>); nếu các dòng dưới thuộc cùng dạng/phần có thể để trống cột A hệ thống tự nối tiếp.
+          Cột <strong>I (Đáp án đúng)</strong> luôn chứa đáp án (Nghĩa TV với <em>Nối từ</em>; <code>A/B/C/D</code> với <em>Trắc nghiệm &amp; Nghe hiểu</em>; Từ điền với <em>Điền từ</em>; Câu sửa chuẩn ngăn cách <code>/</code> với <em>Sửa câu sai &amp; Dịch câu</em>; để trống hoặc ghi <code>thu_cong</code> nếu muốn chấm tay câu Dịch).
+          Với <strong>Nghe hiểu</strong>, cột <strong>D</strong> là ngữ cảnh bài nghe, cột <strong>J</strong> là kịch bản hội thoại để hiện sau khi nộp hoặc đọc TTS, cột <strong>K</strong> là đường dẫn audio (URL) (tùy chọn, có thể tải file hoặc thu âm sau khi nhập).
+        </div>
+      </div>
+
+      <div class="banner-actions" style="margin-top: 18px; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-outline" id="btn-cancel-practice-import">Hủy bỏ</button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-practice-import" disabled style="font-weight: 700;">
+          <span>Xác nhận nhập vào đề</span>
         </button>
       </div>
     </div>

@@ -883,16 +883,8 @@
   // =========================================================================
   function getActivePracticeExercise() {
     if (!Array.isArray(state.practiceExercises) || state.practiceExercises.length === 0) {
-      const titleInp = document.getElementById('ex-meta-title');
-      const tagInp = document.getElementById('ex-meta-tag');
-      const title = (titleInp && titleInp.value.trim()) || 'Bài tập luyện tập cuối bài — HSK 1: Bài 1';
-      const tag = (tagInp && tagInp.value.trim()) || 'Bài 1';
-
-      const initialEx = createTemplateExercise(title, tag);
-      state.practiceExercises = [initialEx];
-      ui.selectedPracticeExId = initialEx.exercise_id;
-      window.StudySnapStore.savePracticeExercise(state, initialEx);
-      return initialEx;
+      ui.selectedPracticeExId = null;
+      return null;
     }
 
     const found = state.practiceExercises.find(function (e) {
@@ -902,6 +894,33 @@
 
     ui.selectedPracticeExId = state.practiceExercises[0].exercise_id;
     return state.practiceExercises[0];
+  }
+
+  function createFreshPracticeExercise(title, tag, withTemplate) {
+    const titleInp = document.getElementById('ex-meta-title');
+    const tagInp = document.getElementById('ex-meta-tag');
+    const resolvedTitle =
+      (title && String(title).trim()) ||
+      (titleInp && titleInp.value.trim()) ||
+      (withTemplate ? 'Bài tập luyện tập cuối bài — HSK 1: Bài 1' : 'Bài luyện tập cuối buổi — Bài 1');
+    const resolvedTag =
+      (tag && String(tag).trim()) || (tagInp && tagInp.value.trim()) || 'Bài 1';
+
+    const newEx = withTemplate
+      ? createTemplateExercise(resolvedTitle, resolvedTag)
+      : {
+          exercise_id: 'EX_' + Date.now(),
+          title: resolvedTitle,
+          lesson_tag: resolvedTag,
+          total_score: 0,
+          thresholds: { good: 1, very_good: 1 },
+          sections: []
+        };
+
+    if (!Array.isArray(state.practiceExercises)) state.practiceExercises = [];
+    state.practiceExercises.push(newEx);
+    ui.selectedPracticeExId = newEx.exercise_id;
+    return newEx;
   }
 
   function switchPracticeSubView(view) {
@@ -1017,6 +1036,40 @@
               prompt: '',
               accepted: [],
               grading_note: '',
+              explanation: ''
+            }
+          ]
+        }
+      };
+    } else if (type === 'listening_mc') {
+      return {
+        section_id: 'sec_listen_' + timeId,
+        section_num: sectionNum,
+        type: 'listening_mc',
+        title: 'Phần ' + sectionNum + ': Nghe hiểu',
+        description: 'Nghe đoạn hội thoại và chọn đáp án chính xác nhất cho từng câu hỏi.',
+        max_score: 2,
+        data: {
+          context_label: 'Bài nghe',
+          context_title: '',
+          context_subtitle: 'Nghe đoạn hội thoại 2 lần và chọn đáp án đúng.',
+          audio_label: 'Audio ' + sectionNum,
+          audio_url: '',
+          audio_duration: '00:45',
+          audio_transcript: '',
+          items: [
+            {
+              id: 'LS_' + timeId + '_1',
+              prompt: '',
+              options: ['', '', '', ''],
+              correctIndex: 0,
+              explanation: ''
+            },
+            {
+              id: 'LS_' + timeId + '_2',
+              prompt: '',
+              options: ['', '', '', ''],
+              correctIndex: 0,
               explanation: ''
             }
           ]
@@ -1322,6 +1375,55 @@
           });
         });
         sec.data = { items: items };
+      } else if (sec.type === 'listening_mc') {
+        const ctxLabel = (card.querySelector('[data-ls-label]') || {}).value || '';
+        const ctxTitle = (card.querySelector('[data-ls-title]') || {}).value || '';
+        const ctxSub = (card.querySelector('[data-ls-subtitle]') || {}).value || '';
+        const audioLabel = (card.querySelector('[data-ls-audio-label]') || {}).value || '';
+        const audioUrl = (card.querySelector('[data-ls-audio-url]') || {}).value || '';
+        const transcript = (card.querySelector('[data-ls-transcript]') || {}).value || '';
+        const prevDur = (sec.data && sec.data.audio_duration) || '00:45';
+
+        const items = [];
+        card.querySelectorAll('[data-ls-qcard]').forEach(function (qCard, qIdx) {
+          const itemId = qCard.getAttribute('data-ls-qcard') || ('LS_' + (qIdx + 1));
+          const prompt = (qCard.querySelector('[data-ls-prompt]') || {}).value || '';
+          const exp = (qCard.querySelector('[data-ls-exp]') || {}).value || '';
+
+          const options = [];
+          qCard.querySelectorAll('[data-ls-opt]').forEach(function (optInp) {
+            options.push(optInp.value.trim());
+          });
+
+          let correctIdx = 0;
+          const checkedRadio = qCard.querySelector('input[type="radio"]:checked');
+          if (checkedRadio) {
+            correctIdx = parseInt(checkedRadio.value, 10) || 0;
+          }
+          if (options[correctIdx] === '' && options.some(function (o) { return o !== ''; })) {
+            const firstNonEmpty = options.findIndex(function (o) { return o !== ''; });
+            if (firstNonEmpty >= 0) correctIdx = firstNonEmpty;
+          }
+
+          items.push({
+            id: itemId,
+            prompt: prompt.trim(),
+            options: options.length > 0 ? options : ['', '', '', ''],
+            correctIndex: correctIdx,
+            explanation: exp.trim()
+          });
+        });
+
+        sec.data = {
+          context_label: ctxLabel.trim(),
+          context_title: ctxTitle.trim(),
+          context_subtitle: ctxSub.trim(),
+          audio_label: audioLabel.trim(),
+          audio_url: audioUrl.trim(),
+          audio_duration: prevDur,
+          audio_transcript: transcript.trim(),
+          items: items
+        };
       }
     });
 
@@ -1334,9 +1436,87 @@
 
   function renderTeacherPracticeTab() {
     const ex = getActivePracticeExercise();
-    if (!ex) return;
-
     const selectEl = document.getElementById('teacher-practice-select');
+    const titleInput = document.getElementById('ex-meta-title');
+    const tagInput = document.getElementById('ex-meta-tag');
+    const threshGoodInput = document.getElementById('ex-meta-thresh-good');
+    const threshVeryGoodInput = document.getElementById('ex-meta-thresh-verygood');
+    const maxScoreBadge = document.getElementById('teacher-practice-maxscore-badge');
+    const stickySummaryBadge = document.getElementById('gform-sticky-summary');
+    const subCountPill = document.getElementById('teacher-practice-sub-count-pill');
+
+    if (!ex) {
+      if (selectEl) {
+        selectEl.innerHTML = '<option value="">Chưa có bài luyện tập nào</option>';
+      }
+      if (titleInput && document.activeElement !== titleInput) titleInput.value = '';
+      if (tagInput && document.activeElement !== tagInput) tagInput.value = 'Bài 1';
+      if (threshGoodInput) threshGoodInput.value = 25;
+      if (threshVeryGoodInput) threshVeryGoodInput.value = 31;
+      if (maxScoreBadge) maxScoreBadge.textContent = 'Tổng 0 điểm';
+      if (stickySummaryBadge) stickySummaryBadge.textContent = '0 phần • Tổng 0 điểm';
+      if (subCountPill) subCountPill.textContent = '0';
+
+      const listEl = document.getElementById('teacher-builder-sections-list');
+      if (listEl) {
+        listEl.innerHTML =
+          '<div style="padding:36px 24px;text-align:center;background:var(--white);border:1.5px dashed var(--pink-md);border-radius:var(--radius-xl);margin:16px 0;">' +
+          '<div style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:16px;background:var(--pink-lt);color:var(--ink);margin-bottom:12px;">' +
+          '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>' +
+          '</div>' +
+          '<p style="margin:0 0 8px;font-size:1rem;font-weight:700;color:var(--ink);">Chưa có bài luyện tập cuối buổi nào</p>' +
+          '<p style="margin:0 0 18px;font-size:0.875rem;color:var(--color-muted-foreground);">Bạn có thể tạo bài tập mới từ đầu, nhập nhanh từ file Excel, hoặc nạp bộ câu hỏi mẫu chuẩn HSK.</p>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">' +
+          '<button type="button" class="btn btn-primary" id="btn-empty-new-practice">+ Tạo bài tập mới</button>' +
+          '<button type="button" class="btn btn-outline-primary" id="btn-empty-import-practice">Nhập từ Excel</button>' +
+          '<button type="button" class="btn btn-ghost" id="btn-empty-fill-template">Nạp bộ câu hỏi mẫu HSK</button>' +
+          '</div></div>';
+
+        const btnEmptyNew = document.getElementById('btn-empty-new-practice');
+        if (btnEmptyNew) {
+          btnEmptyNew.addEventListener('click', function () {
+            const newEx = createFreshPracticeExercise(null, null, false);
+            window.StudySnapStore.savePracticeExercise(state, newEx);
+            switchPracticeSubView('builder');
+            renderTeacherPracticeTab();
+            showToast('Đã tạo bài luyện tập cuối buổi mới!');
+          });
+        }
+        const btnEmptyImport = document.getElementById('btn-empty-import-practice');
+        if (btnEmptyImport) {
+          btnEmptyImport.addEventListener('click', function () {
+            const openModalBtn = document.getElementById('btn-open-import-practice-modal');
+            if (openModalBtn) openModalBtn.click();
+          });
+        }
+        const btnEmptyTpl = document.getElementById('btn-empty-fill-template');
+        if (btnEmptyTpl) {
+          btnEmptyTpl.addEventListener('click', function () {
+            const tpl = createFreshPracticeExercise(
+              'Bài tập luyện tập cuối bài — HSK 1: Bài 1',
+              'Bài 1',
+              true
+            );
+            window.StudySnapStore.savePracticeExercise(state, tpl);
+            switchPracticeSubView('builder');
+            renderTeacherPracticeTab();
+            showToast('Đã nạp bộ câu hỏi mẫu chuẩn HSK!');
+          });
+        }
+      }
+
+      const tbody = document.getElementById('teacher-practice-submissions-tbody');
+      if (tbody) {
+        tbody.innerHTML =
+          '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--color-muted-foreground);">Chưa có bài tập hoặc bài nộp nào.</td></tr>';
+      }
+      const subCountBadge = document.getElementById('teacher-practice-sub-count');
+      if (subCountBadge) subCountBadge.textContent = '0 bài nộp';
+
+      switchPracticeSubView(ui.practiceCurrentView || 'builder');
+      return;
+    }
+
     if (selectEl) {
       selectEl.innerHTML = (state.practiceExercises || [])
         .map(function (e) {
@@ -1359,12 +1539,6 @@
     }
 
     // Populate Exercise Meta Form
-    const titleInput = document.getElementById('ex-meta-title');
-    const tagInput = document.getElementById('ex-meta-tag');
-    const threshGoodInput = document.getElementById('ex-meta-thresh-good');
-    const threshVeryGoodInput = document.getElementById('ex-meta-thresh-verygood');
-    const maxScoreBadge = document.getElementById('teacher-practice-maxscore-badge');
-
     if (titleInput && document.activeElement !== titleInput) {
       titleInput.value = ex.title || '';
     }
@@ -1374,12 +1548,15 @@
     if (threshGoodInput) threshGoodInput.value = (ex.thresholds && ex.thresholds.good) || 25;
     if (threshVeryGoodInput) threshVeryGoodInput.value = (ex.thresholds && ex.thresholds.very_good) || 31;
     if (maxScoreBadge) maxScoreBadge.textContent = 'Tổng ' + (ex.total_score || 0) + ' điểm';
+    if (stickySummaryBadge) {
+      stickySummaryBadge.textContent =
+        (ex.sections || []).length + ' phần • Tổng ' + (ex.total_score || 0) + ' điểm';
+    }
 
     // Update submissions pill count
     const subs = (state.practiceSubmissions || []).filter(function (s) {
       return s.exercise_id === ex.exercise_id;
     });
-    const subCountPill = document.getElementById('teacher-practice-sub-count-pill');
     if (subCountPill) subCountPill.textContent = String(subs.length);
 
     // Render Google Form interactive builder
@@ -1430,7 +1607,8 @@
       multiple_choice: 'Trắc nghiệm',
       fill_blank_wordbank: 'Điền từ',
       error_correction: 'Sửa câu sai',
-      translation: 'Dịch câu'
+      translation: 'Dịch câu',
+      listening_mc: 'Nghe hiểu'
     };
 
     listEl.innerHTML = ex.sections
@@ -1953,11 +2131,222 @@
         '</button>' +
         '</div>'
       );
+    } else if (sec.type === 'listening_mc') {
+      const data = sec.data || {};
+      const items = data.items || [];
+      const optLetters = ['A', 'B', 'C', 'D'];
+      const audioUrl = (data.audio_url || '').trim();
+      const transcript = (data.audio_transcript || '').trim();
+      const hasPreviewAudio = Boolean(audioUrl || transcript);
+      const previewPlayerHtml = hasPreviewAudio && window.StudySnapAudio
+        ? '<div class="listening-audio-strip">' +
+            window.StudySnapAudio.renderVoicePlayer({
+              id: 'ls-builder-' + sec.section_id,
+              url: audioUrl || 'demo:listening',
+              duration: data.audio_duration || '00:45',
+              label: (data.audio_label || 'Nghe thử') + (audioUrl ? '' : ' (Đọc theo kịch bản)'),
+              fallbackText: transcript || '你好，老师！',
+              lang: 'zh-CN',
+              variant: 'teacher',
+              showSpeedToggle: true
+            }) +
+          '</div>'
+        : '<div style="font-size:0.8125rem;color:var(--muted);">Chưa có file âm thanh hoặc kịch bản — hãy tải file MP3, ghi âm trực tiếp hoặc nhập kịch bản tiếng Trung bên dưới.</div>';
+
+      const questionsHtml = items
+        .map(function (item, idx) {
+          const opts = item.options || ['', '', '', ''];
+          const optionsHtml = optLetters
+            .map(function (letter, optIdx) {
+              const val = opts[optIdx] || '';
+              const isChecked = Number(item.correctIndex) === optIdx;
+              const ph = optIdx === 3
+                ? 'Nhập đáp án D (bỏ trống nếu chỉ dùng 3 đáp án A, B, C)...'
+                : 'Nhập đáp án ' + letter + '...';
+              return (
+                '<div class="gform-option-row">' +
+                '<label class="gform-option-radio-wrap" title="Tích chọn để đặt làm đáp án đúng">' +
+                '<input type="radio" name="ls_correct_' +
+                sec.section_id +
+                '_' +
+                item.id +
+                '" value="' +
+                optIdx +
+                '"' +
+                (isChecked ? ' checked' : '') +
+                ' data-ls-radio="' +
+                sec.section_id +
+                ':' +
+                item.id +
+                ':' +
+                optIdx +
+                '">' +
+                '<span class="gform-opt-label">' +
+                '<strong class="gform-opt-letter">' +
+                letter +
+                '</strong>' +
+                '<span class="gform-opt-badge">(Đáp án đúng)</span>' +
+                '</span>' +
+                '</label>' +
+                '<input type="text" class="form-control" data-ls-opt="' +
+                sec.section_id +
+                ':' +
+                item.id +
+                ':' +
+                optIdx +
+                '" value="' +
+                escapeHtml(val) +
+                '" placeholder="' +
+                ph +
+                '">' +
+                '</div>'
+              );
+            })
+            .join('');
+
+          return (
+            '<div class="gform-question-card" data-ls-qcard="' +
+            escapeHtml(item.id) +
+            '">' +
+            '<div class="gform-question-header">' +
+            '<strong style="color:var(--ink);">Câu hỏi nghe ' +
+            (idx + 1) +
+            '</strong>' +
+            '<button type="button" class="btn-danger-outline" data-delete-ls-q="' +
+            escapeHtml(sec.section_id + ':' + item.id) +
+            '">✕ Xóa câu này</button>' +
+            '</div>' +
+            '<div>' +
+            '<label class="form-label" style="font-size:0.8125rem;">Câu hỏi (ví dụ: 李文回北京的路上花了多长时间？):</label>' +
+            '<input type="text" class="form-control" data-ls-prompt="' +
+            escapeHtml(sec.section_id + ':' + item.id) +
+            '" value="' +
+            escapeHtml(item.prompt || '') +
+            '" placeholder="Nhập câu hỏi theo nội dung đoạn nghe...">' +
+            '</div>' +
+            '<div style="display:flex;flex-direction:column;gap:8px;">' +
+            '<label class="form-label" style="font-size:0.8125rem;margin-bottom:0;">Lựa chọn đáp án (Tích tròn đáp án đúng; có thể bỏ trống D nếu chỉ dùng A, B, C):</label>' +
+            optionsHtml +
+            '</div>' +
+            '<div>' +
+            '<label class="form-label" style="font-size:0.8125rem;">Giải thích đáp án (Hiện sau khi học sinh nộp bài):</label>' +
+            '<input type="text" class="form-control" data-ls-exp="' +
+            escapeHtml(sec.section_id + ':' + item.id) +
+            '" value="' +
+            escapeHtml(item.explanation || '') +
+            '" placeholder="Ví dụ: Trong bài nghe có câu...">' +
+            '</div>' +
+            '</div>'
+          );
+        })
+        .join('');
+
+      return (
+        '<div>' +
+        '<div class="listening-builder-media-box">' +
+        '<div class="form-row-2">' +
+        '<div>' +
+        '<label class="form-label" style="font-size:0.8125rem;">Nhãn bài nghe (ví dụ: 课文 4 / Bài nghe 1):</label>' +
+        '<input type="text" class="form-control" data-ls-label value="' +
+        escapeHtml(data.context_label || '') +
+        '" placeholder="Ví dụ: 课文 4">' +
+        '</div>' +
+        '<div>' +
+        '<label class="form-label" style="font-size:0.8125rem;">Mã file nghe hiển thị cạnh loa (ví dụ: 1-7):</label>' +
+        '<input type="text" class="form-control" data-ls-audio-label value="' +
+        escapeHtml(data.audio_label || '') +
+        '" placeholder="Ví dụ: 1-7 hoặc Hội thoại 1">' +
+        '</div>' +
+        '</div>' +
+        '<div class="form-row-2">' +
+        '<div>' +
+        '<label class="form-label" style="font-size:0.8125rem;">Ngữ cảnh / Tiêu đề đoạn nghe:</label>' +
+        '<input type="text" class="form-control" data-ls-title value="' +
+        escapeHtml(data.context_title || '') +
+        '" placeholder="Ví dụ: 在宾馆房间，李文在写日记。">' +
+        '</div>' +
+        '<div>' +
+        '<label class="form-label" style="font-size:0.8125rem;">Hướng dẫn làm bài:</label>' +
+        '<input type="text" class="form-control" data-ls-subtitle value="' +
+        escapeHtml(data.context_subtitle || '') +
+        '" placeholder="Ví dụ: Nghe đoạn hội thoại 2 lần và chọn đáp án đúng.">' +
+        '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:4px;">' +
+        '<label class="btn btn-outline btn-sm" style="cursor:pointer;">' +
+        '<input type="file" accept="audio/*" class="file-input-hidden" data-ls-upload="' +
+        escapeHtml(sec.section_id) +
+        '">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>' +
+        '<span>Tải file Audio (.mp3/.wav)</span>' +
+        '</label>' +
+        '<button type="button" class="btn btn-secondary btn-sm" data-ls-rec-btn="' +
+        escapeHtml(sec.section_id) +
+        '">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line></svg>' +
+        '<span>Ghi âm trực tiếp</span>' +
+        '</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm" data-ls-preview-tts="' +
+        escapeHtml(sec.section_id) +
+        '">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>' +
+        '<span>Nghe thử kịch bản</span>' +
+        '</button>' +
+        (audioUrl
+          ? '<button type="button" class="btn-danger-outline" data-ls-clear-audio="' +
+            escapeHtml(sec.section_id) +
+            '">Xóa file audio</button>'
+          : '') +
+        '</div>' +
+        '<div>' +
+        '<label class="form-label" style="font-size:0.8125rem;">Link file Audio (hoặc tự động điền khi tải file/ghi âm):</label>' +
+        '<input type="text" class="form-control" data-ls-audio-url="' +
+        escapeHtml(sec.section_id) +
+        '" value="' +
+        escapeHtml(audioUrl) +
+        '" placeholder="Dán đường dẫn file audio hoặc bấm Tải file / Ghi âm ở trên">' +
+        '</div>' +
+        '<div>' +
+        '<label class="form-label" style="font-size:0.8125rem;">Kịch bản đoạn nghe (Tự đọc giọng tiếng Trung nếu không gắn file MP3 &amp; hiện cho HS đối chiếu sau khi nộp):</label>' +
+        '<textarea class="form-control" rows="2" data-ls-transcript="' +
+        escapeHtml(sec.section_id) +
+        '" placeholder="Ví dụ: 女：李文，你从家回北京的路上花了多长时间？ 男：坐火车花了十几个小时...">' +
+        escapeHtml(transcript) +
+        '</textarea>' +
+        '</div>' +
+        previewPlayerHtml +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:12px;">' +
+        questionsHtml +
+        '</div>' +
+        '<button type="button" class="btn btn-outline btn-sm" data-add-ls-q="' +
+        escapeHtml(sec.section_id) +
+        '">' +
+        '<span>+ Thêm câu hỏi nghe mới</span>' +
+        '</button>' +
+        '</div>'
+      );
     }
     return '';
   }
 
   function bindBuilderInteractiveEvents(ex) {
+    // Live Total Score Summary Sync on Section Score Change
+    document.querySelectorAll('[data-sec-score]').forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        let sum = 0;
+        document.querySelectorAll('[data-sec-score]').forEach(function (el) {
+          sum += parseInt(el.value, 10) || 0;
+        });
+        const maxScoreBadge = document.getElementById('teacher-practice-maxscore-badge');
+        const stickySummary = document.getElementById('gform-sticky-summary');
+        if (maxScoreBadge) maxScoreBadge.textContent = 'Tổng ' + sum + ' điểm';
+        if (stickySummary) {
+          stickySummary.textContent = (ex.sections || []).length + ' phần • Tổng ' + sum + ' điểm';
+        }
+      });
+    });
+
     // 1. Move Up / Down / Delete Section
     document.querySelectorAll('[data-sec-move-up]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -2280,6 +2669,158 @@
 
         window.StudySnapStore.savePracticeExercise(state, ex);
         renderTeacherPracticeTab();
+      });
+    });
+
+    // 7. Listening MC: Add / Delete Question, Upload Audio, Record Mic, Preview TTS, Clear Audio
+    document.querySelectorAll('[data-add-ls-q]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        collectExerciseFromDom();
+        const secId = btn.getAttribute('data-add-ls-q');
+        const sec = (ex.sections || []).find(function (s) {
+          return s.section_id === secId;
+        });
+        if (!sec || !sec.data) return;
+        if (!Array.isArray(sec.data.items)) sec.data.items = [];
+
+        sec.data.items.push({
+          id: 'LS_' + Date.now(),
+          prompt: '',
+          options: ['', '', '', ''],
+          correctIndex: 0,
+          explanation: ''
+        });
+        sec.max_score = sec.data.items.length;
+
+        window.StudySnapStore.savePracticeExercise(state, ex);
+        renderTeacherPracticeTab();
+      });
+    });
+
+    document.querySelectorAll('[data-delete-ls-q]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        collectExerciseFromDom();
+        const parts = btn.getAttribute('data-delete-ls-q').split(':');
+        const secId = parts[0];
+        const itemId = parts[1];
+
+        const sec = (ex.sections || []).find(function (s) {
+          return s.section_id === secId;
+        });
+        if (!sec || !sec.data || !Array.isArray(sec.data.items)) return;
+
+        sec.data.items = sec.data.items.filter(function (it) {
+          return it.id !== itemId;
+        });
+        sec.max_score = Math.max(1, sec.data.items.length);
+
+        window.StudySnapStore.savePracticeExercise(state, ex);
+        renderTeacherPracticeTab();
+      });
+    });
+
+    document.querySelectorAll('[data-ls-radio]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        collectExerciseFromDom();
+        window.StudySnapStore.savePracticeExercise(state, ex);
+      });
+    });
+
+    document.querySelectorAll('[data-ls-upload]').forEach(function (inp) {
+      inp.addEventListener('change', function () {
+        const file = inp.files && inp.files[0];
+        if (!file || !window.StudySnapAudio) return;
+        const secId = inp.getAttribute('data-ls-upload');
+        collectExerciseFromDom();
+        const sec = (ex.sections || []).find(function (s) {
+          return s.section_id === secId;
+        });
+        if (!sec || !sec.data) return;
+
+        window.StudySnapAudio.readUploadedMediaFile(file, function (mediaInfo) {
+          const gasUrl = window.StudySnapStore.getGasUrl && window.StudySnapStore.getGasUrl();
+          if (!gasUrl && mediaInfo.sizeKB > 1800) {
+            showToast('File âm thanh hơi lớn (' + mediaInfo.sizeKB + 'KB) so với bộ nhớ cục bộ. Nên dùng file <= 1.5MB hoặc dán đường dẫn audio!');
+          }
+          sec.data.audio_url = mediaInfo.dataUrl;
+          sec.data.audio_duration = mediaInfo.duration || '00:45';
+          if (!sec.data.audio_label) {
+            sec.data.audio_label = file.name.replace(/\.[^/.]+$/, '');
+          }
+          window.StudySnapStore.savePracticeExercise(state, ex);
+          renderTeacherPracticeTab();
+          showToast('Đã gắn file nghe: ' + file.name);
+        });
+      });
+    });
+
+    document.querySelectorAll('[data-ls-rec-btn]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!window.StudySnapAudio) return;
+        const secId = btn.getAttribute('data-ls-rec-btn');
+        if (btn.getAttribute('data-recording') === '1') {
+          window.StudySnapAudio.stopRecording();
+          btn.setAttribute('data-recording', '0');
+          return;
+        }
+
+        collectExerciseFromDom();
+        const sec = (ex.sections || []).find(function (s) {
+          return s.section_id === secId;
+        });
+        if (!sec || !sec.data) return;
+
+        btn.setAttribute('data-recording', '1');
+        const labelSpan = btn.querySelector('span');
+        window.StudySnapAudio.startRecording(
+          function (timeStr) {
+            if (labelSpan) labelSpan.textContent = 'Đang thu ' + timeStr + ' (Bấm dừng)';
+          },
+          function (recInfo) {
+            btn.setAttribute('data-recording', '0');
+            if (labelSpan) labelSpan.textContent = 'Ghi âm trực tiếp';
+            sec.data.audio_url = recInfo.dataUrl;
+            sec.data.audio_duration = recInfo.duration || '00:30';
+            window.StudySnapStore.savePracticeExercise(state, ex);
+            renderTeacherPracticeTab();
+            showToast('Đã ghi âm đoạn nghe (' + recInfo.duration + ')!');
+          },
+          function (errMsg) {
+            btn.setAttribute('data-recording', '0');
+            if (labelSpan) labelSpan.textContent = 'Ghi âm trực tiếp';
+            showToast(errMsg || 'Không thể mở micro để ghi âm.');
+          }
+        );
+      });
+    });
+
+    document.querySelectorAll('[data-ls-preview-tts]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!window.StudySnapAudio) return;
+        const secId = btn.getAttribute('data-ls-preview-tts');
+        const card = document.querySelector('[data-sec-card="' + secId + '"]');
+        const trInput = card && card.querySelector('[data-ls-transcript="' + secId + '"]');
+        const text = trInput ? trInput.value.trim() : '';
+        if (!text) {
+          showToast('Hãy nhập kịch bản tiếng Trung trước để nghe thử giọng đọc!');
+          return;
+        }
+        window.StudySnapAudio.speakText(text, 'zh-CN');
+      });
+    });
+
+    document.querySelectorAll('[data-ls-clear-audio]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        collectExerciseFromDom();
+        const secId = btn.getAttribute('data-ls-clear-audio');
+        const sec = (ex.sections || []).find(function (s) {
+          return s.section_id === secId;
+        });
+        if (!sec || !sec.data) return;
+        sec.data.audio_url = '';
+        window.StudySnapStore.savePracticeExercise(state, ex);
+        renderTeacherPracticeTab();
+        showToast('Đã gỡ file âm thanh.');
       });
     });
   }
@@ -2908,25 +3449,32 @@
       metaTagInput.addEventListener('input', syncMetaInputsToActiveEx);
     }
 
-    // Top Bar Save Button Trigger
+    // Top Bar & Sticky Bar Save Button Triggers
+    function triggerPracticeExerciseFormSubmit() {
+      const form = document.getElementById('teacher-exercise-meta-form');
+      if (form) {
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit();
+        } else {
+          form.dispatchEvent(new Event('submit', { cancelable: true }));
+        }
+      }
+    }
+
     const btnSaveTop = document.getElementById('btn-save-top-bar');
     if (btnSaveTop) {
-      btnSaveTop.addEventListener('click', function () {
-        const form = document.getElementById('teacher-exercise-meta-form');
-        if (form) {
-          if (typeof form.requestSubmit === 'function') {
-            form.requestSubmit();
-          } else {
-            form.dispatchEvent(new Event('submit', { cancelable: true }));
-          }
-        }
-      });
+      btnSaveTop.addEventListener('click', triggerPracticeExerciseFormSubmit);
+    }
+
+    const btnSaveSticky = document.getElementById('btn-save-sticky-bar');
+    if (btnSaveSticky) {
+      btnSaveSticky.addEventListener('click', triggerPracticeExerciseFormSubmit);
     }
 
     // 4. Quick Add Section Buttons (matching, multiple_choice, fill_blank_wordbank, error_correction, translation)
     document.querySelectorAll('[data-quick-add-type]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        const ex = getActivePracticeExercise();
+        const ex = getActivePracticeExercise() || createFreshPracticeExercise(null, null, false);
         collectExerciseFromDom();
         const type = btn.getAttribute('data-quick-add-type');
         const nextNum = (ex.sections || []).length + 1;
@@ -2958,7 +3506,7 @@
     if (metaForm) {
       metaForm.addEventListener('submit', function (e) {
         e.preventDefault();
-        const ex = getActivePracticeExercise();
+        const ex = getActivePracticeExercise() || createFreshPracticeExercise(null, null, false);
 
         collectExerciseFromDom();
 
@@ -3244,17 +3792,21 @@
     if (clearAllBtn) {
       clearAllBtn.addEventListener('click', async function () {
         const confirmed = window.confirm(
-          'XÁC NHẬN XÓA TOÀN BỘ DỮ LIỆU TEST?\n\n' +
-          'Hành động này sẽ xóa sạch toàn bộ Học sinh mẫu, BVN mẫu, Bài nộp mẫu, Từ vựng mẫu và Lịch sử bài cuối giờ (chỉ giữ lại tài khoản Giáo viên) để bạn bắt đầu sử dụng dữ liệu thật 100%.\n\n' +
+          'XÁC NHẬN XÓA TOÀN BỘ DỮ LIỆU THỬ NGHIỆM?\n\n' +
+          'Thao tác này sẽ xóa sạch toàn bộ dữ liệu Học sinh, Lớp học, Bài tập về nhà, Bài nộp, Từ vựng, Bài luyện tập và Lịch sử kết quả (chỉ giữ lại tài khoản Giáo viên).\n\n' +
           'Bạn có chắc chắn muốn tiếp tục?'
         );
         if (!confirmed) return;
 
         window.StudySnapAudio.pauseAll();
         ui.teacherDraftVoice = null;
+        ui.selectedPracticeExId = null;
+        ui.activeGradingSubId = null;
+        ui.gradingStudentId = '';
+        ui.gradingAssignmentId = '';
         await window.StudySnapStore.clearAllTestData(state);
         renderAll();
-        showToast('Đã xóa toàn bộ dữ liệu test! Hệ thống hiện chỉ lưu trữ dữ liệu thật của bạn.');
+        showToast('Đã xóa toàn bộ dữ liệu thử nghiệm! Hệ thống đã sẵn sàng cho dữ liệu lớp học thật.');
       });
     }
 
@@ -3914,6 +4466,115 @@
     }
 
     // =========================================================================
+    // HELPER CHUNG ĐỌC FILE EXCEL (.xlsx, .xls, .csv, .tsv) & TÁCH DÒNG
+    // =========================================================================
+    function splitDelimitedLine(line, delimiter) {
+      if (delimiter === '\t') {
+        return String(line || '').split('\t').map(function (c) {
+          return c.trim();
+        });
+      }
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      const src = String(line || '');
+      for (let i = 0; i < src.length; i++) {
+        const ch = src[i];
+        if (ch === '"') {
+          if (inQuotes && src[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === delimiter && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+      result.push(current.trim());
+      return result.map(function (c) {
+        return c.replace(/^["']|["']$/g, '').trim();
+      });
+    }
+
+    function detectTextDelimiter(rawText) {
+      const sampleLines = String(rawText || '').split(/\r?\n/).slice(0, 8);
+      let tabCount = 0;
+      let semiCount = 0;
+      let commaCount = 0;
+      sampleLines.forEach(function (l) {
+        tabCount += (l.match(/\t/g) || []).length;
+        semiCount += (l.match(/;/g) || []).length;
+        commaCount += (l.match(/,/g) || []).length;
+      });
+      if (tabCount > 0) return '\t';
+      if (semiCount > commaCount) return ';';
+      if (commaCount > 0) return ',';
+      return '\t';
+    }
+
+    function parseRawTextToMatrix(rawText) {
+      const clean = String(rawText || '').replace(/^\uFEFF/, '');
+      if (!clean.trim()) return [];
+      const delimiter = detectTextDelimiter(clean);
+      return clean
+        .split(/\r?\n/)
+        .filter(function (l) { return l.trim().length > 0; })
+        .map(function (line) {
+          return splitDelimitedLine(line, delimiter);
+        });
+    }
+
+    function readSpreadsheetFileAsMatrix(file, onSuccess, onError) {
+      if (!file) return;
+      const isBinaryExcel = /\.(xlsx|xls)$/i.test(file.name || '');
+      if (isBinaryExcel) {
+        if (typeof window.XLSX === 'undefined' || !window.XLSX || typeof window.XLSX.read !== 'function') {
+          const msg = 'Không tải được thư viện đọc file .xlsx trực tuyến. Cô hãy lưu file sang .csv hoặc copy bảng từ Excel rồi dán trực tiếp nhé.';
+          if (typeof onError === 'function') onError(msg);
+          else showToast(msg);
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function (evt) {
+          try {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = window.XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames && workbook.SheetNames[0];
+            if (!firstSheetName) {
+              if (typeof onError === 'function') onError('File Excel không có trang tính (sheet) nào.');
+              return;
+            }
+            const sheet = workbook.Sheets[firstSheetName];
+            const matrix = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+            onSuccess(
+              (matrix || []).map(function (row) {
+                return (row || []).map(function (cell) {
+                  return cell === null || cell === undefined ? '' : String(cell).trim();
+                });
+              })
+            );
+          } catch (err) {
+            const msg = 'Không đọc được file Excel: ' + (err && err.message ? err.message : 'Định dạng không hợp lệ');
+            if (typeof onError === 'function') onError(msg);
+            else showToast(msg);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+        return;
+      }
+
+      const textReader = new FileReader();
+      textReader.onload = function (evt) {
+        onSuccess(parseRawTextToMatrix(evt.target.result));
+      };
+      textReader.readAsText(file, 'utf-8');
+    }
+
+    // =========================================================================
     // XỬ LÝ NHẬP TỪ VỰNG TỪ EXCEL / CSV / COPY-PASTE BẢNG
     // =========================================================================
     const modalVocabExcel = document.getElementById('modal-import-vocab-excel');
@@ -3933,30 +4594,17 @@
     let parsedImportRows = [];
 
     function parseVocabRows(rawText) {
-      if (!rawText || !rawText.trim()) return [];
-      const lines = rawText.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+      const matrix = parseRawTextToMatrix(rawText);
       const rows = [];
-      lines.forEach(function (line, idx) {
-        let delimiter = '\t';
-        if (line.indexOf('\t') >= 0) {
-          delimiter = '\t';
-        } else if (line.indexOf(';') >= 0) {
-          delimiter = ';';
-        } else if (line.indexOf(',') >= 0) {
-          delimiter = ',';
-        }
-        const cols = line.split(delimiter).map(function (c) {
-          return c.trim().replace(/^["']|["']$/g, '');
-        });
-
+      matrix.forEach(function (cols, idx) {
+        const joinedLower = cols.join(' ').toLowerCase();
         // Bỏ qua dòng tiêu đề nếu có
         if (idx === 0) {
-          const lower = line.toLowerCase();
           if (
-            lower.indexOf('chữ hán') >= 0 ||
-            lower.indexOf('pinyin') >= 0 ||
-            lower.indexOf('phiên âm') >= 0 ||
-            (lower.indexOf('word') >= 0 && lower.indexOf('meaning') >= 0)
+            joinedLower.indexOf('chữ hán') >= 0 ||
+            joinedLower.indexOf('pinyin') >= 0 ||
+            joinedLower.indexOf('phiên âm') >= 0 ||
+            (joinedLower.indexOf('word') >= 0 && joinedLower.indexOf('meaning') >= 0)
           ) {
             return;
           }
@@ -4082,18 +4730,29 @@
       });
     }
 
+    function handleVocabExcelFile(file) {
+      readSpreadsheetFileAsMatrix(
+        file,
+        function (matrix) {
+          const tsvText = matrix
+            .map(function (row) {
+              return row.map(function (c) { return String(c || '').replace(/[\r\n\t]+/g, ' '); }).join('\t');
+            })
+            .join('\n');
+          if (excelPasteText) excelPasteText.value = tsvText;
+          updateImportPreview(parseVocabRows(tsvText));
+        },
+        function (errMsg) {
+          showToast(errMsg);
+        }
+      );
+    }
+
     if (importVocabFileInput) {
       importVocabFileInput.addEventListener('change', function (ev) {
         const file = ev.target.files && ev.target.files[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function (e) {
-          const content = e.target.result;
-          if (excelPasteText) excelPasteText.value = content;
-          const rows = parseVocabRows(content);
-          updateImportPreview(rows);
-        };
-        reader.readAsText(file, 'utf-8');
+        handleVocabExcelFile(file);
       });
     }
 
@@ -4110,14 +4769,7 @@
         excelDropZone.classList.remove('is-dragover');
         const file = e.dataTransfer.files && e.dataTransfer.files[0];
         if (file) {
-          const reader = new FileReader();
-          reader.onload = function (evt) {
-            const content = evt.target.result;
-            if (excelPasteText) excelPasteText.value = content;
-            const rows = parseVocabRows(content);
-            updateImportPreview(rows);
-          };
-          reader.readAsText(file, 'utf-8');
+          handleVocabExcelFile(file);
         }
       });
     }
@@ -4160,6 +4812,828 @@
         updateImportPreview([]);
         ui.selectedLesson = targetLessonId;
         renderAll();
+      });
+    }
+
+    // =========================================================================
+    // XỬ LÝ NHẬP ĐỀ LUYỆN TẬP CUỐI BUỔI TỪ EXCEL & XEM FILE TEMPLATE (TAB 1)
+    // =========================================================================
+    const modalPracticeExcel = document.getElementById('modal-import-practice-excel');
+    const btnOpenPracticeImport = document.getElementById('btn-open-import-practice-modal');
+    const btnOpenPracticeImportSticky = document.getElementById('btn-open-import-practice-sticky');
+    const btnClosePracticeImport = document.getElementById('btn-close-practice-import');
+    const btnCancelPracticeImport = document.getElementById('btn-cancel-practice-import');
+    const practiceImportModeSel = document.getElementById('import-practice-mode');
+    const practiceNewMetaBox = document.getElementById('import-practice-new-meta');
+    const practiceNewTitleInput = document.getElementById('import-practice-new-title');
+    const practiceNewTagInput = document.getElementById('import-practice-new-tag');
+    const practiceFileInput = document.getElementById('import-practice-file-input');
+    const practiceDropZone = document.getElementById('practice-excel-drop-zone');
+    const practicePasteTextarea = document.getElementById('practice-excel-paste');
+    const practicePreviewBox = document.getElementById('practice-excel-preview');
+    const practicePreviewTbody = document.getElementById('practice-excel-preview-tbody');
+    const practiceSecCountEl = document.getElementById('practice-import-sec-count');
+    const practiceQCountEl = document.getElementById('practice-import-q-count');
+    const practiceScoreCountEl = document.getElementById('practice-import-score-count');
+    const practiceWarningsBox = document.getElementById('practice-import-warnings');
+    const btnConfirmPracticeImport = document.getElementById('btn-confirm-practice-import');
+    const btnDownloadPracticeTpl = document.getElementById('btn-download-practice-template');
+    const btnFillPracticeSample = document.getElementById('btn-fill-practice-sample');
+    const btnJumpTemplateView = document.getElementById('btn-jump-to-template-view');
+    const btnUseTemplateInImport = document.getElementById('btn-use-template-in-import');
+    const tplSheetThead = document.getElementById('practice-template-sheet-thead');
+    const tplSheetTbody = document.getElementById('practice-template-sheet-tbody');
+
+    const PRACTICE_TEMPLATE_HEADERS = [
+      'Dạng bài',
+      'Tên phần',
+      'Câu hỏi / Đề bài',
+      'Pinyin / Ngữ cảnh / Gợi ý',
+      'Đáp án A',
+      'Đáp án B',
+      'Đáp án C',
+      'Đáp án D',
+      'Đáp án đúng',
+      'Giải thích / Ghi chú',
+      'Link Audio (Nghe)'
+    ];
+
+    const PRACTICE_TEMPLATE_ROWS = [
+      ['Nối từ', 'Phần 1: Nối từ', '你好', 'nǐ hǎo', '', '', '', '', 'Xin chào', '', ''],
+      ['Nối từ', 'Phần 1: Nối từ', '谢谢', 'xièxie', '', '', '', '', 'Cảm ơn', '', ''],
+      ['Nối từ', 'Phần 1: Nối từ', '再见', 'zàijiàn', '', '', '', '', 'Tạm biệt', '', ''],
+      ['Trắc nghiệm', 'Phần 2: Trắc nghiệm', 'Khi gặp cô giáo, câu chào nào trang trọng nhất?', '您', '老师，您好！', '老师，早！', '再见！', '没关系！', 'A', 'Dùng kính ngữ 您 (nín) với thầy cô và người lớn tuổi.', ''],
+      ['Trắc nghiệm', 'Phần 2: Trắc nghiệm', 'Khi bạn nói "谢谢", câu đáp lại lịch sự là gì?', '不客气', '对不起', '没关系', '不客气', '谢谢你', 'C', '"不客气" (bú kèqi) nghĩa là "Đừng khách sáo".', ''],
+      ['Điền từ', 'Phần 3: Điền từ có ngân hàng từ', '李老师，____好！', 'Chào cô Lý ạ (kính trọng)', '', '', '', '', '您', '吗, 呢', ''],
+      ['Điền từ', 'Phần 3: Điền từ có ngân hàng từ', 'A: 对不起！ B: ____。', 'Không sao đâu', '', '', '', '', '没关系', '', ''],
+      ['Sửa câu sai', 'Phần 4: Sửa câu sai', '大家们好！', 'Chào mọi người trong lớp', '', '', '', '', '大家好！ / 大家好', 'Chữ 大家 đã mang nghĩa số nhiều, không thêm 们.', ''],
+      ['Sửa câu sai', 'Phần 4: Sửa câu sai', '我很很高兴。', 'Diễn đạt rất vui mừng', '', '', '', '', '我很高兴。 / 我很高兴', 'Phó từ 很 không lặp lại thành 很很.', ''],
+      ['Dịch câu', 'Phần 5: Dịch câu', 'Xin chào các bạn!', 'vi->zh', '', '', '', '', '你们好！ / 大家好！', '"Các bạn" dùng 你们 hoặc 大家.', ''],
+      ['Dịch câu', 'Phần 5: Dịch câu', '认识你，我也很高兴。', 'zh->vi', '', '', '', '', 'thu_cong', 'Gợi ý chấm: Làm quen với bạn, tôi cũng rất vui.', ''],
+      ['Nghe hiểu', 'Text 4: Nghe hiểu', '李文回北京的路上花了多长时间？', '在宾馆房间，李文在写日记。', '几个小时', '十几个小时', '几十个小时', '', 'B', '女：李文，你从家回北京的路上花了多长时间？ 男：坐火车花了十几个小时，有点儿累。', ''],
+      ['Nghe hiểu', 'Text 4: Nghe hiểu', '李文觉得王老师的姐姐看起来怎么样？', '在宾馆房间，李文在写日记。', '很累', '很年轻', '很像王老师', '', 'B', '女：昨天我见到王老师的姐姐了，她看起来很年轻！ 男：是啊。', '']
+    ];
+
+    const SECTION_BADGE_MAP = {
+      matching: { label: 'Nối từ', cls: 'status-pink' },
+      multiple_choice: { label: 'Trắc nghiệm', cls: 'status-mint' },
+      fill_blank_wordbank: { label: 'Điền từ', cls: 'status-purple' },
+      error_correction: { label: 'Sửa câu sai', cls: 'status-peach' },
+      translation: { label: 'Dịch câu', cls: 'status-sky' },
+      listening_mc: { label: 'Nghe hiểu', cls: 'status-yellow' }
+    };
+
+    let parsedPracticeResult = { sections: [], warnings: [], totalItems: 0, totalScore: 0 };
+    let activeTemplateFilter = 'all';
+
+    function normalizePlainKey(str) {
+      return String(str || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function resolveImportedSectionType(rawType) {
+      const k = normalizePlainKey(rawType);
+      if (!k) return '';
+      if (k === '1' || k.indexOf('noi tu') >= 0 || k.indexOf('matching') >= 0 || k.indexOf('ghep') >= 0) return 'matching';
+      if (k === '2' || k.indexOf('trac nghiem') >= 0 || k.indexOf('multiple') >= 0 || k === 'mc' || k === 'mcq') return 'multiple_choice';
+      if (k === '3' || k.indexOf('dien tu') >= 0 || k.indexOf('fill') >= 0 || k.indexOf('wordbank') >= 0) return 'fill_blank_wordbank';
+      if (k === '4' || k.indexOf('sua cau') >= 0 || k.indexOf('sua sai') >= 0 || k.indexOf('error') >= 0 || k.indexOf('correction') >= 0) return 'error_correction';
+      if (k === '5' || k.indexOf('dich') >= 0 || k.indexOf('translat') >= 0) return 'translation';
+      if (k === '6' || k.indexOf('nghe') >= 0 || k.indexOf('listen') >= 0) return 'listening_mc';
+      return null;
+    }
+
+    function resolveMcCorrectIndex(rawAns, options) {
+      const cleaned = String(rawAns || '').trim();
+      const upper = cleaned.toUpperCase();
+      const letterIdx = { A: 0, B: 1, C: 2, D: 3, '1': 0, '2': 1, '3': 2, '4': 3 };
+      if (Object.prototype.hasOwnProperty.call(letterIdx, upper)) {
+        return { index: letterIdx[upper], matched: true };
+      }
+      if (cleaned && Array.isArray(options)) {
+        const target = normalizePlainKey(cleaned);
+        const found = options.findIndex(function (opt) {
+          return opt && normalizePlainKey(opt) === target;
+        });
+        if (found >= 0) return { index: found, matched: true };
+      }
+      return { index: 0, matched: cleaned === '' };
+    }
+
+    function parsePracticeMatrix(matrix) {
+      const buckets = [];
+      const warnings = [];
+      let lastType = '';
+      let lastSectionTitle = '';
+      const baseTs = Date.now();
+
+      function isHeaderRow(cols) {
+        const c0 = normalizePlainKey(cols[0]);
+        const c2 = normalizePlainKey(cols[2]);
+        return (
+          c0 === 'dang bai' ||
+          c0 === 'a: dang bai' ||
+          c0 === 'loai cau' ||
+          c0 === 'type' ||
+          c2.indexOf('cau hoi / de bai') >= 0
+        );
+      }
+
+      (matrix || []).forEach(function (rawCols, rowIdx) {
+        const cols = [];
+        for (let c = 0; c < 11; c++) {
+          cols.push(rawCols[c] !== undefined && rawCols[c] !== null ? String(rawCols[c]).trim() : '');
+        }
+        const hasAnyContent = cols.some(function (c) { return c !== ''; });
+        if (!hasAnyContent) return;
+        if (isHeaderRow(cols)) return;
+
+        const excelRowNum = rowIdx + 1;
+        let secType = resolveImportedSectionType(cols[0]);
+        if (secType === null) {
+          warnings.push('Dòng ' + excelRowNum + ': Không nhận diện được dạng bài "' + cols[0] + '".');
+          return;
+        }
+        if (secType === '') {
+          if (lastType && (cols[2] || cols[4] || cols[8])) {
+            secType = lastType;
+          } else {
+            warnings.push('Dòng ' + excelRowNum + ': Thiếu tên Dạng bài ở cột A.');
+            return;
+          }
+        }
+
+        const explicitTitle = cols[1];
+        const effectiveTitle = explicitTitle || (secType === lastType ? lastSectionTitle : '');
+        const currentBucket = buckets.length > 0 ? buckets[buckets.length - 1] : null;
+        let needNewBucket =
+          !currentBucket ||
+          currentBucket.type !== secType ||
+          (explicitTitle && normalizePlainKey(explicitTitle) !== normalizePlainKey(currentBucket.rawTitle));
+
+        if (!needNewBucket && secType === 'listening_mc' && !explicitTitle && cols[3] && currentBucket.contextTitle && cols[3] !== currentBucket.contextTitle) {
+          needNewBucket = true;
+        }
+
+        if (needNewBucket) {
+          buckets.push({
+            type: secType,
+            rawTitle: effectiveTitle,
+            contextTitle: secType === 'listening_mc' ? cols[3] : '',
+            rows: []
+          });
+        }
+
+        buckets[buckets.length - 1].rows.push({ cols: cols, rowNum: excelRowNum });
+        lastType = secType;
+        lastSectionTitle = effectiveTitle;
+      });
+
+      const sections = [];
+      let totalItems = 0;
+      let totalScore = 0;
+
+      buckets.forEach(function (bucket, bIdx) {
+        const secNum = bIdx + 1;
+        const t = bucket.type;
+        const badgeInfo = SECTION_BADGE_MAP[t] || { label: t };
+        const defaultTitle = 'Phần ' + secNum + ': ' + badgeInfo.label;
+        const finalTitle = bucket.rawTitle || defaultTitle;
+        const secId = 'sec_imp_' + t + '_' + baseTs + '_' + secNum;
+
+        if (t === 'matching') {
+          const left = [];
+          const right = [];
+          const answer = {};
+          bucket.rows.forEach(function (r) {
+            const hanzi = r.cols[2];
+            const pinyin = r.cols[3];
+            const meaning = r.cols[8] || r.cols[4];
+            if (!hanzi && !meaning) return;
+            const pairIdx = left.length;
+            const leftId = pairIdx + 1;
+            const rightId = pairIdx < 26 ? String.fromCharCode(65 + pairIdx) : ('R' + (pairIdx + 1));
+            left.push({ id: leftId, hanzi: hanzi, pinyin: pinyin });
+            right.push({ id: rightId, text: meaning });
+            answer[String(leftId)] = rightId;
+          });
+          if (left.length === 0) return;
+          totalItems += left.length;
+          totalScore += left.length;
+          sections.push({
+            section_id: secId,
+            section_num: secNum,
+            type: 'matching',
+            title: finalTitle,
+            description: 'Nối chữ Hán và phiên âm pinyin ở cột trái với nghĩa tiếng Việt tương ứng ở cột phải.',
+            max_score: left.length,
+            data: { left: left, right: right, answer: answer }
+          });
+        } else if (t === 'multiple_choice') {
+          const items = [];
+          bucket.rows.forEach(function (r) {
+            const prompt = r.cols[2];
+            const speakWord = r.cols[3];
+            const options = [r.cols[4], r.cols[5], r.cols[6], r.cols[7]];
+            if (!prompt && !options.some(Boolean)) return;
+            const ansRes = resolveMcCorrectIndex(r.cols[8], options);
+            if (!ansRes.matched) {
+              warnings.push('Dòng ' + r.rowNum + ': Đáp án đúng "' + r.cols[8] + '" chưa khớp A/B/C/D, tạm đặt về A.');
+            }
+            items.push({
+              id: 'MC_' + baseTs + '_' + secNum + '_' + (items.length + 1),
+              prompt: prompt,
+              speakWord: speakWord,
+              options: options,
+              correctIndex: ansRes.index,
+              explanation: r.cols[9] || ''
+            });
+          });
+          if (items.length === 0) return;
+          totalItems += items.length;
+          totalScore += items.length;
+          sections.push({
+            section_id: secId,
+            section_num: secNum,
+            type: 'multiple_choice',
+            title: finalTitle,
+            description: 'Chọn đáp án chính xác nhất cho từng câu hỏi.',
+            max_score: items.length,
+            data: { items: items }
+          });
+        } else if (t === 'fill_blank_wordbank') {
+          const items = [];
+          const wordSet = [];
+          const seenWords = {};
+          function addWordUnique(w) {
+            const val = String(w || '').trim();
+            if (!val || seenWords[val]) return;
+            seenWords[val] = true;
+            wordSet.push(val);
+          }
+
+          bucket.rows.forEach(function (r) {
+            const text = r.cols[2];
+            const hint = r.cols[3];
+            const answerWord = r.cols[8] || r.cols[4];
+            const extraBankRaw = r.cols[9];
+            if (!text && !answerWord) return;
+            addWordUnique(answerWord);
+            if (extraBankRaw) {
+              extraBankRaw.split(/[,;\n\/]/).forEach(addWordUnique);
+            }
+            items.push({
+              id: 'FB_' + baseTs + '_' + secNum + '_' + (items.length + 1),
+              text: text,
+              hint: hint,
+              answer: answerWord
+            });
+          });
+          if (items.length === 0) return;
+          // Đảo nhẹ thứ tự ngân hàng từ để tránh lộ thứ tự 1-2-3
+          const reorderedBank = wordSet.length > 2
+            ? wordSet.filter(function (_, idx) { return idx % 2 === 1; }).concat(wordSet.filter(function (_, idx) { return idx % 2 === 0; }))
+            : wordSet;
+          totalItems += items.length;
+          totalScore += items.length;
+          sections.push({
+            section_id: secId,
+            section_num: secNum,
+            type: 'fill_blank_wordbank',
+            title: finalTitle,
+            description: 'Chọn từ trong ngân hàng từ để điền vào chỗ trống "____".',
+            max_score: items.length,
+            data: { wordbank: reorderedBank, items: items }
+          });
+        } else if (t === 'error_correction') {
+          const items = [];
+          bucket.rows.forEach(function (r) {
+            const wrong = r.cols[2];
+            const situation = r.cols[3];
+            const accRaw = r.cols[8] || r.cols[4];
+            if (!wrong && !accRaw) return;
+            const accepted = accRaw
+              .split(/[\/;]/)
+              .map(function (s) { return s.trim(); })
+              .filter(Boolean);
+            items.push({
+              id: 'ERR_' + baseTs + '_' + secNum + '_' + (items.length + 1),
+              wrong: wrong,
+              situation: situation,
+              accepted: accepted,
+              explanation: r.cols[9] || ''
+            });
+          });
+          if (items.length === 0) return;
+          totalItems += items.length;
+          totalScore += items.length;
+          sections.push({
+            section_id: secId,
+            section_num: secNum,
+            type: 'error_correction',
+            title: finalTitle,
+            description: 'Mỗi câu có một lỗi sai ngữ pháp, viết lại câu đúng vào ô nhập.',
+            max_score: items.length,
+            data: { items: items }
+          });
+        } else if (t === 'translation') {
+          const items = [];
+          bucket.rows.forEach(function (r) {
+            const prompt = r.cols[2];
+            if (!prompt) return;
+            const dirNorm = normalizePlainKey(r.cols[3]);
+            const direction = (dirNorm.indexOf('zh->vi') >= 0 || dirNorm.indexOf('zh-vi') >= 0 || dirNorm.indexOf('trung->viet') >= 0 || dirNorm.indexOf('trung - viet') >= 0)
+              ? 'zh->vi'
+              : 'vi->zh';
+            const rawAns = r.cols[8] || r.cols[4];
+            const ansNorm = normalizePlainKey(rawAns);
+            const isManual = !rawAns || ansNorm === 'thu_cong' || ansNorm === 'thu cong' || ansNorm === 'manual' || ansNorm === 'cham tay';
+            const accepted = isManual
+              ? []
+              : rawAns.split(/[\/;]/).map(function (s) { return s.trim(); }).filter(Boolean);
+            items.push({
+              id: 'TR_' + baseTs + '_' + secNum + '_' + (items.length + 1),
+              direction: direction,
+              mode: isManual ? 'manual' : 'exact',
+              prompt: prompt,
+              accepted: accepted,
+              grading_note: isManual ? (r.cols[9] || '') : '',
+              explanation: isManual ? '' : (r.cols[9] || '')
+            });
+          });
+          if (items.length === 0) return;
+          totalItems += items.length;
+          totalScore += items.length;
+          sections.push({
+            section_id: secId,
+            section_num: secNum,
+            type: 'translation',
+            title: finalTitle,
+            description: 'Dịch câu theo đúng hướng yêu cầu (Việt → Trung hoặc Trung → Việt).',
+            max_score: items.length,
+            data: { items: items }
+          });
+        } else if (t === 'listening_mc') {
+          const firstRowCols = bucket.rows[0].cols;
+          const rawCtx = firstRowCols[3] || '';
+          const ctxParts = rawCtx.split('||');
+          const ctxTitle = (ctxParts[0] || '').trim();
+          const ctxSub = (ctxParts[1] || '').trim() || 'Nghe đoạn hội thoại 2 lần rồi chọn đáp án đúng.';
+          const labelCandidate = (bucket.rawTitle || '').split(':')[0].trim() || ('Bài nghe ' + secNum);
+          let audioUrl = '';
+          const transcriptLines = [];
+          const items = [];
+
+          bucket.rows.forEach(function (r) {
+            if (!audioUrl && r.cols[10]) audioUrl = r.cols[10];
+            if (r.cols[9] && transcriptLines.indexOf(r.cols[9]) < 0) {
+              transcriptLines.push(r.cols[9]);
+            }
+            const prompt = r.cols[2];
+            const options = [r.cols[4], r.cols[5], r.cols[6], r.cols[7]];
+            if (!prompt && !options.some(Boolean)) return;
+            const ansRes = resolveMcCorrectIndex(r.cols[8], options);
+            if (!ansRes.matched) {
+              warnings.push('Dòng ' + r.rowNum + ': Đáp án đúng "' + r.cols[8] + '" chưa khớp A/B/C/D, tạm đặt về A.');
+            }
+            items.push({
+              id: 'LS_' + baseTs + '_' + secNum + '_' + (items.length + 1),
+              prompt: prompt,
+              options: options,
+              correctIndex: ansRes.index,
+              explanation: ''
+            });
+          });
+          if (items.length === 0) return;
+          totalItems += items.length;
+          totalScore += items.length;
+          sections.push({
+            section_id: secId,
+            section_num: secNum,
+            type: 'listening_mc',
+            title: finalTitle,
+            description: 'Nghe đoạn hội thoại và chọn đáp án chính xác nhất cho từng câu hỏi.',
+            max_score: items.length,
+            data: {
+              context_label: labelCandidate,
+              context_title: ctxTitle,
+              context_subtitle: ctxSub,
+              audio_label: 'Audio ' + secNum,
+              audio_url: audioUrl,
+              audio_duration: '00:45',
+              audio_transcript: transcriptLines.join(' '),
+              items: items
+            }
+          });
+        }
+      });
+
+      return {
+        sections: sections,
+        warnings: warnings,
+        totalItems: totalItems,
+        totalScore: totalScore
+      };
+    }
+
+    function renderPracticeTemplateTable() {
+      if (!tplSheetThead || !tplSheetTbody) return;
+      const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
+      tplSheetThead.innerHTML =
+        '<tr>' +
+          '<th class="col-idx-head">#</th>' +
+          PRACTICE_TEMPLATE_HEADERS.map(function (h, i) {
+            return '<th><span class="template-col-letter">' + letters[i] + '</span>' + escapeHtml(h) + '</th>';
+          }).join('') +
+        '</tr>';
+
+      const filteredRows = PRACTICE_TEMPLATE_ROWS.filter(function (row) {
+        if (activeTemplateFilter === 'all') return true;
+        return resolveImportedSectionType(row[0]) === activeTemplateFilter;
+      });
+
+      tplSheetTbody.innerHTML = filteredRows.map(function (row, idx) {
+        const t = resolveImportedSectionType(row[0]);
+        const badge = SECTION_BADGE_MAP[t] || { label: row[0], cls: 'status-mint' };
+        return '<tr>' +
+          '<td class="col-idx-cell">' + (idx + 1) + '</td>' +
+          row.map(function (cell, cIdx) {
+            if (cIdx === 0) {
+              return '<td><span class="status-badge ' + badge.cls + '" style="font-size:0.75rem;">' + escapeHtml(cell) + '</span></td>';
+            }
+            if (!cell) {
+              return '<td style="color:var(--muted);opacity:0.45;">—</td>';
+            }
+            return '<td>' + escapeHtml(cell) + '</td>';
+          }).join('') +
+        '</tr>';
+      }).join('');
+    }
+
+    function summarizeImportedSection(sec) {
+      const d = sec.data || {};
+      if (sec.type === 'matching') {
+        const sample = (d.left || []).slice(0, 2).map(function (l, i) {
+          const rightObj = (d.right || [])[i];
+          return l.hanzi + (rightObj ? ' → ' + rightObj.text : '');
+        }).join(' • ');
+        return sample || ((d.left || []).length + ' cặp từ nối');
+      }
+      if (sec.type === 'multiple_choice') {
+        const first = (d.items || [])[0];
+        return first ? first.prompt : '';
+      }
+      if (sec.type === 'fill_blank_wordbank') {
+        const wb = (d.wordbank || []).slice(0, 5).join(', ');
+        return wb ? ('Ngân hàng từ: ' + wb) : '';
+      }
+      if (sec.type === 'error_correction') {
+        const first = (d.items || [])[0];
+        return first ? ('Câu sai: ' + first.wrong) : '';
+      }
+      if (sec.type === 'translation') {
+        const first = (d.items || [])[0];
+        return first ? (first.prompt + (first.mode === 'manual' ? ' (Chấm tay)' : ' (Tự động)')) : '';
+      }
+      if (sec.type === 'listening_mc') {
+        const first = (d.items || [])[0];
+        const ctx = d.context_title ? ('[' + d.context_title + '] ') : '';
+        return ctx + (first ? first.prompt : '');
+      }
+      return '';
+    }
+
+    function updatePracticeImportPreview(matrix) {
+      const res = parsePracticeMatrix(matrix);
+      parsedPracticeResult = res;
+
+      if (!practicePreviewBox || !practicePreviewTbody || !btnConfirmPracticeImport) return;
+      if (res.sections.length === 0) {
+        practicePreviewBox.style.display = res.warnings.length > 0 ? 'block' : 'none';
+        if (practicePreviewTbody) practicePreviewTbody.innerHTML = '';
+        if (practiceSecCountEl) practiceSecCountEl.textContent = '0 phần';
+        if (practiceQCountEl) practiceQCountEl.textContent = '0 câu hỏi';
+        if (practiceScoreCountEl) practiceScoreCountEl.textContent = '0 điểm';
+        btnConfirmPracticeImport.disabled = true;
+      } else {
+        practicePreviewBox.style.display = 'block';
+        if (practiceSecCountEl) practiceSecCountEl.textContent = res.sections.length + ' phần';
+        if (practiceQCountEl) practiceQCountEl.textContent = res.totalItems + ' câu hỏi';
+        if (practiceScoreCountEl) practiceScoreCountEl.textContent = res.totalScore + ' điểm';
+        btnConfirmPracticeImport.disabled = false;
+
+        practicePreviewTbody.innerHTML = res.sections.map(function (sec, idx) {
+          const badge = SECTION_BADGE_MAP[sec.type] || { label: sec.type, cls: 'status-mint' };
+          const itemCount = sec.type === 'matching'
+            ? ((sec.data && sec.data.left && sec.data.left.length) || 0)
+            : ((sec.data && sec.data.items && sec.data.items.length) || 0);
+          return (
+            '<tr>' +
+              '<td class="tabular-nums"><strong>' + (idx + 1) + '</strong></td>' +
+              '<td><span class="status-badge ' + badge.cls + '" style="font-size:0.75rem;">' + escapeHtml(badge.label) + '</span></td>' +
+              '<td><strong>' + escapeHtml(sec.title) + '</strong></td>' +
+              '<td class="tabular-nums">' + itemCount + ' câu</td>' +
+              '<td class="tabular-nums">' + sec.max_score + 'đ</td>' +
+              '<td style="font-size:0.75rem;color:var(--color-muted-foreground);">' + escapeHtml(summarizeImportedSection(sec)) + '</td>' +
+            '</tr>'
+          );
+        }).join('');
+      }
+
+      if (practiceWarningsBox) {
+        if (res.warnings.length > 0) {
+          practiceWarningsBox.style.display = 'block';
+          practiceWarningsBox.innerHTML =
+            '<strong>Lưu ý định dạng (' + res.warnings.length + '):</strong><br>' +
+            res.warnings.slice(0, 6).map(function (w) { return escapeHtml(w); }).join('<br>');
+        } else {
+          practiceWarningsBox.style.display = 'none';
+          practiceWarningsBox.innerHTML = '';
+        }
+      }
+    }
+
+    function switchPracticeImportTab(tabName) {
+      const uploadView = document.getElementById('practice-import-view-upload');
+      const tplView = document.getElementById('practice-import-view-template');
+      document.querySelectorAll('[data-practice-import-tab]').forEach(function (btn) {
+        btn.classList.toggle('is-active', btn.getAttribute('data-practice-import-tab') === tabName);
+      });
+      if (uploadView) uploadView.style.display = tabName === 'upload' ? 'block' : 'none';
+      if (tplView) tplView.style.display = tabName === 'template' ? 'block' : 'none';
+      if (tabName === 'template') renderPracticeTemplateTable();
+    }
+
+    function openPracticeExcelModal(defaultTab) {
+      if (!modalPracticeExcel) return;
+      renderPracticeTemplateTable();
+      switchPracticeImportTab(defaultTab || 'upload');
+      modalPracticeExcel.classList.add('is-open', 'is-visible');
+    }
+
+    function closePracticeExcelModal() {
+      if (modalPracticeExcel) modalPracticeExcel.classList.remove('is-open', 'is-visible');
+    }
+
+    function fillPracticeSampleIntoImport() {
+      const tsv = PRACTICE_TEMPLATE_ROWS.map(function (r) {
+        return r.join('\t');
+      }).join('\n');
+      if (practicePasteTextarea) {
+        practicePasteTextarea.value = tsv;
+      }
+      updatePracticeImportPreview(PRACTICE_TEMPLATE_ROWS);
+      switchPracticeImportTab('upload');
+      showToast('Đã nạp dữ liệu template mẫu (6 dạng bài) vào khung xem trước!');
+    }
+
+    function downloadPracticeTemplateExcel() {
+      const allRows = [PRACTICE_TEMPLATE_HEADERS].concat(PRACTICE_TEMPLATE_ROWS);
+      if (typeof window.XLSX !== 'undefined' && window.XLSX && window.XLSX.utils) {
+        const wb = window.XLSX.utils.book_new();
+        const ws1 = window.XLSX.utils.aoa_to_sheet(allRows);
+        ws1['!cols'] = [
+          { wch: 15 }, { wch: 24 }, { wch: 36 }, { wch: 28 },
+          { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
+          { wch: 22 }, { wch: 38 }, { wch: 24 }
+        ];
+        window.XLSX.utils.book_append_sheet(wb, ws1, 'De_Luyen_Tap');
+
+        const guideRows = [
+          ['Dạng bài (Cột A)', 'Cột C (Câu hỏi / Đề bài)', 'Cột D (Pinyin / Ngữ cảnh / Gợi ý)', 'Cột E–H (Đáp án A–D)', 'Cột I (Đáp án đúng)', 'Cột J (Giải thích / Ghi chú)', 'Cột K (Link Audio)'],
+          ['Nối từ', 'Chữ Hán', 'Phiên âm Pinyin', 'Bỏ trống', 'Nghĩa Tiếng Việt', 'Tùy chọn', 'Bỏ trống'],
+          ['Trắc nghiệm', 'Nội dung câu hỏi', 'Từ phát âm mẫu (tùy chọn)', '4 lựa chọn A, B, C, D', 'Ghi A, B, C hoặc D', 'Giải thích đáp án sau nộp', 'Bỏ trống'],
+          ['Điền từ', 'Câu có chỗ trống ____', 'Gợi ý nghĩa tiếng Việt', 'Bỏ trống', 'Từ cần điền (tự gom vào Ngân hàng từ)', 'Từ nhiễu thêm (ngăn cách dấu phẩy)', 'Bỏ trống'],
+          ['Sửa câu sai', 'Câu sai đề bài', 'Tình huống giao tiếp', 'Bỏ trống', 'Các câu đúng ngăn cách dấu /', 'Giải thích lỗi sai', 'Bỏ trống'],
+          ['Dịch câu', 'Câu cần dịch', 'vi->zh hoặc zh->vi', 'Bỏ trống', 'Đáp án mẫu (hoặc ghi thu_cong để chấm tay)', 'Gợi ý chấm / Giải thích', 'Bỏ trống'],
+          ['Nghe hiểu', 'Câu hỏi nghe (1), (2)...', 'Tiêu đề ngữ cảnh bài nghe', '3 đáp án A–C (hoặc thêm D)', 'Ghi A, B, C hoặc D', 'Kịch bản hội thoại (Transcript)', 'Đường dẫn file âm thanh (tùy chọn)']
+        ];
+        const ws2 = window.XLSX.utils.aoa_to_sheet(guideRows);
+        ws2['!cols'] = [
+          { wch: 18 }, { wch: 26 }, { wch: 28 }, { wch: 24 }, { wch: 34 }, { wch: 34 }, { wch: 26 }
+        ];
+        window.XLSX.utils.book_append_sheet(wb, ws2, 'Huong_Dan_Cot');
+        window.XLSX.writeFile(wb, 'StudySnap_Template_De_Luyen_Tap.xlsx');
+        showToast('Đã tải xuống file Excel mẫu StudySnap_Template_De_Luyen_Tap.xlsx!');
+        return;
+      }
+
+      // Fallback UTF-8 BOM CSV nếu đang ngoại tuyến
+      const csvLines = allRows.map(function (row) {
+        return row.map(function (cell) {
+          const v = String(cell || '').replace(/"/g, '""');
+          return /[",\n\r]/.test(v) ? '"' + v + '"' : v;
+        }).join(',');
+      }).join('\r\n');
+      const blob = new Blob(['\uFEFF' + csvLines], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'StudySnap_Template_De_Luyen_Tap.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Đã tải xuống file template CSV (mở trực tiếp bằng Excel)!');
+    }
+
+    function handlePracticeExcelFile(file) {
+      readSpreadsheetFileAsMatrix(
+        file,
+        function (matrix) {
+          const tsvText = matrix
+            .map(function (row) {
+              return row.map(function (c) { return String(c || '').replace(/[\r\n\t]+/g, ' '); }).join('\t');
+            })
+            .join('\n');
+          if (practicePasteTextarea) practicePasteTextarea.value = tsvText;
+          updatePracticeImportPreview(matrix);
+        },
+        function (errMsg) {
+          showToast(errMsg);
+        }
+      );
+    }
+
+    if (btnOpenPracticeImport) {
+      btnOpenPracticeImport.addEventListener('click', function () {
+        openPracticeExcelModal('upload');
+      });
+    }
+    if (btnOpenPracticeImportSticky) {
+      btnOpenPracticeImportSticky.addEventListener('click', function () {
+        openPracticeExcelModal('upload');
+      });
+    }
+    if (btnClosePracticeImport) btnClosePracticeImport.addEventListener('click', closePracticeExcelModal);
+    if (btnCancelPracticeImport) btnCancelPracticeImport.addEventListener('click', closePracticeExcelModal);
+    if (modalPracticeExcel) {
+      modalPracticeExcel.addEventListener('click', function (ev) {
+        if (ev.target === modalPracticeExcel) closePracticeExcelModal();
+      });
+    }
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && modalPracticeExcel && modalPracticeExcel.classList.contains('is-open')) {
+        closePracticeExcelModal();
+      }
+    });
+
+    document.querySelectorAll('[data-practice-import-tab]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        switchPracticeImportTab(btn.getAttribute('data-practice-import-tab'));
+      });
+    });
+
+    if (btnJumpTemplateView) {
+      btnJumpTemplateView.addEventListener('click', function () {
+        switchPracticeImportTab('template');
+      });
+    }
+
+    document.querySelectorAll('[data-template-type-filter]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        activeTemplateFilter = btn.getAttribute('data-template-type-filter') || 'all';
+        document.querySelectorAll('[data-template-type-filter]').forEach(function (b) {
+          b.classList.toggle('is-active', b === btn);
+        });
+        renderPracticeTemplateTable();
+      });
+    });
+
+    if (btnDownloadPracticeTpl) btnDownloadPracticeTpl.addEventListener('click', downloadPracticeTemplateExcel);
+    if (btnFillPracticeSample) btnFillPracticeSample.addEventListener('click', fillPracticeSampleIntoImport);
+    if (btnUseTemplateInImport) btnUseTemplateInImport.addEventListener('click', fillPracticeSampleIntoImport);
+
+    if (practiceImportModeSel) {
+      practiceImportModeSel.addEventListener('change', function () {
+        if (practiceNewMetaBox) {
+          practiceNewMetaBox.style.display = practiceImportModeSel.value === 'new' ? 'grid' : 'none';
+        }
+      });
+    }
+
+    if (practicePasteTextarea) {
+      practicePasteTextarea.addEventListener('input', function () {
+        updatePracticeImportPreview(parseRawTextToMatrix(practicePasteTextarea.value));
+      });
+    }
+
+    if (practiceFileInput) {
+      practiceFileInput.addEventListener('change', function (ev) {
+        const file = ev.target.files && ev.target.files[0];
+        if (!file) return;
+        handlePracticeExcelFile(file);
+      });
+    }
+
+    if (practiceDropZone) {
+      practiceDropZone.addEventListener('click', function () {
+        if (practiceFileInput) practiceFileInput.click();
+      });
+      practiceDropZone.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          if (practiceFileInput) practiceFileInput.click();
+        }
+      });
+      practiceDropZone.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        practiceDropZone.classList.add('is-dragover');
+      });
+      practiceDropZone.addEventListener('dragleave', function () {
+        practiceDropZone.classList.remove('is-dragover');
+      });
+      practiceDropZone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        practiceDropZone.classList.remove('is-dragover');
+        const file = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (file) {
+          handlePracticeExcelFile(file);
+        }
+      });
+    }
+
+    if (btnConfirmPracticeImport) {
+      btnConfirmPracticeImport.addEventListener('click', function () {
+        if (!parsedPracticeResult || !parsedPracticeResult.sections || parsedPracticeResult.sections.length === 0) return;
+
+        const mode = (practiceImportModeSel && practiceImportModeSel.value) || 'append';
+        const importedSections = JSON.parse(JSON.stringify(parsedPracticeResult.sections));
+        let targetEx = null;
+        const firstNewId = importedSections[0] ? importedSections[0].section_id : null;
+
+        if (mode === 'new' || !getActivePracticeExercise()) {
+          const nextNum = (state.practiceExercises || []).length + 1;
+          const title = (practiceNewTitleInput && practiceNewTitleInput.value.trim()) || ('Bài luyện tập nhập Excel #' + nextNum);
+          const tag = (practiceNewTagInput && practiceNewTagInput.value.trim()) || ('Bài ' + nextNum);
+          const totalScore = importedSections.reduce(function (sum, s) { return sum + Number(s.max_score || 0); }, 0);
+          targetEx = {
+            exercise_id: 'EX_' + Date.now(),
+            title: title,
+            lesson_tag: tag,
+            total_score: totalScore,
+            thresholds: {
+              good: Math.max(1, Math.round(totalScore * 0.7)),
+              very_good: Math.max(1, Math.round(totalScore * 0.85))
+            },
+            sections: importedSections
+          };
+          if (!Array.isArray(state.practiceExercises)) state.practiceExercises = [];
+          ui.selectedPracticeExId = targetEx.exercise_id;
+        } else {
+          collectExerciseFromDom();
+          targetEx = getActivePracticeExercise();
+          if (mode === 'replace') {
+            targetEx.sections = importedSections;
+          } else {
+            if (!Array.isArray(targetEx.sections)) targetEx.sections = [];
+            targetEx.sections = targetEx.sections.concat(importedSections);
+          }
+          targetEx.sections.forEach(function (sec, idx) {
+            sec.section_num = idx + 1;
+          });
+          targetEx.total_score = targetEx.sections.reduce(function (sum, s) {
+            return sum + Number(s.max_score || 0);
+          }, 0);
+          if (!targetEx.thresholds) targetEx.thresholds = { good: 1, very_good: 1 };
+          targetEx.thresholds.good = Math.max(1, Math.round(targetEx.total_score * 0.7));
+          targetEx.thresholds.very_good = Math.max(1, Math.round(targetEx.total_score * 0.85));
+        }
+
+        window.StudySnapStore.savePracticeExercise(state, targetEx);
+        switchPracticeSubView('builder');
+        renderTeacherPracticeTab();
+
+        closePracticeExcelModal();
+        if (practicePasteTextarea) practicePasteTextarea.value = '';
+        if (practiceFileInput) practiceFileInput.value = '';
+        if (practiceNewTitleInput) practiceNewTitleInput.value = '';
+        updatePracticeImportPreview([]);
+
+        showToast(
+          'Đã nhập thành công ' +
+            importedSections.length +
+            ' phần (' +
+            parsedPracticeResult.totalItems +
+            ' câu • ' +
+            parsedPracticeResult.totalScore +
+            ' điểm) từ Excel!'
+        );
+
+        if (firstNewId) {
+          setTimeout(function () {
+            const newCard = document.querySelector('[data-sec-card="' + firstNewId + '"]');
+            if (newCard) {
+              newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 100);
+        }
       });
     }
 
@@ -4420,7 +5894,13 @@
     bindEvents();
     renderAll();
     if (window.StudySnapStore.getGasUrl()) {
-      window.StudySnapStore.fetchBootstrapFromGas(state).then(function () {
+      window.StudySnapStore.fetchBootstrapFromGas(state).then(function (remoteRes) {
+        if (remoteRes && remoteRes.ok && remoteRes.data) {
+          if (!window.StudySnapAuth.revalidateActiveSession(state)) {
+            window.location.replace('index.html?session=expired');
+            return;
+          }
+        }
         renderAll();
       });
     }

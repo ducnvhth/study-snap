@@ -6,8 +6,8 @@ window.STUDYSNAP_INITIAL_DATA = {
   teachers: [
     {
       teacher_id: 'GV01',
-      full_name: 'Cô Nguyễn Thu Minh',
-      username: 'gv_minh',
+      full_name: 'Hồ Châu Uyển Nhi',
+      username: 'gv_uyennhi',
       password: '123456',
       subject: 'Tiếng Trung Giao Tiếp & HSK'
     }
@@ -1095,6 +1095,58 @@ window.STUDYSNAP_INITIAL_DATA = {
           }
         }
       ]
+    },
+    {
+      exercise_id: 'EX_HSK2_LISTEN_1',
+      title: 'Bài luyện tập Nghe hiểu — 课文 4 (Mẫu chuẩn HSK)',
+      lesson_tag: 'Bài 1',
+      total_score: 2,
+      thresholds: { very_good: 2, good: 1 },
+      sections: [
+        {
+          section_id: 'sec_listen_demo_1',
+          section_num: 1,
+          type: 'listening_mc',
+          title: 'Phần 1: Nghe hiểu',
+          description: 'Nghe đoạn hội thoại hai lần và chọn đáp án chính xác nhất cho mỗi câu hỏi.',
+          max_score: 2,
+          data: {
+            context_label: '课文 4',
+            context_title: '在宾馆房间，李文在写日记。',
+            context_subtitle: '听两遍对话，选择正确答案。(Nghe đoạn hội thoại 2 lần rồi chọn đáp án đúng.)',
+            audio_label: '1-7',
+            audio_url: 'demo:listening',
+            audio_duration: '00:28',
+            audio_transcript: '女：李文，你从家回北京的路上花了多长时间？ 男：坐火车花了十几个小时，有点儿累。 女：对了，昨天我见到王老师的姐姐了，她看起来很年轻！ 男：是啊，很多人也这么说。',
+            items: [
+              {
+                id: 'LS1',
+                prompt: '李文回北京的路上花了多长时间？',
+                options: [
+                  '几个小时',
+                  '十几个小时',
+                  '几十个小时',
+                  ''
+                ],
+                correctIndex: 1,
+                explanation: 'Trong đoạn hội thoại, Lý Văn nói đã đi tàu mất hơn mười tiếng đồng hồ (十几个小时).'
+              },
+              {
+                id: 'LS2',
+                prompt: '李文觉得王老师的姐姐看起来怎么样？',
+                options: [
+                  '很累',
+                  '很年轻',
+                  '很像王老师',
+                  ''
+                ],
+                correctIndex: 1,
+                explanation: 'Nhân vật nói chị gái thầy Vương trông rất trẻ (看起来很年轻).'
+              }
+            ]
+          }
+        }
+      ]
     }
   ],
 
@@ -1163,8 +1215,9 @@ window.StudySnapStore = (function () {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.students) && Array.isArray(parsed.teachers)) {
-          if (!Array.isArray(parsed.classes) || parsed.classes.length === 0) {
-            parsed.classes = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.classes || []));
+          const isProd = parsed.isClearedForProduction === true;
+          if (!Array.isArray(parsed.classes) || (!isProd && parsed.classes.length === 0)) {
+            parsed.classes = isProd ? [] : JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.classes || []));
           }
           (parsed.students || []).forEach(function (st) {
             const c = (st.class_name || '').trim();
@@ -1179,10 +1232,16 @@ window.StudySnapStore = (function () {
           if (!Array.isArray(parsed.lessons) || parsed.lessons.length < 8) {
             parsed.lessons = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.lessons || []));
           }
-          if (!Array.isArray(parsed.vocabulary) || parsed.vocabulary.length < 20) {
+          if (!Array.isArray(parsed.vocabulary)) {
+            parsed.vocabulary = isProd ? [] : JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.vocabulary || []));
+          } else if (!isProd && parsed.vocabulary.length < 20) {
             parsed.vocabulary = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.vocabulary || []));
           }
-          if (!Array.isArray(parsed.assignments) || parsed.assignments.length === 0 || !parsed.assignments.some(function (a) { return a.assignment_id === 'BVN01_1'; })) {
+          if (isProd) {
+            if (!Array.isArray(parsed.assignments)) parsed.assignments = [];
+            if (!Array.isArray(parsed.submissions)) parsed.submissions = [];
+          }
+          if (!isProd && (!Array.isArray(parsed.assignments) || parsed.assignments.length === 0 || !parsed.assignments.some(function (a) { return a.assignment_id === 'BVN01_1'; }))) {
             parsed.assignments = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.assignments || []));
             parsed.submissions = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.submissions || []));
           } else {
@@ -1196,10 +1255,10 @@ window.StudySnapStore = (function () {
             });
           }
           if (!Array.isArray(parsed.practiceExercises)) {
-            parsed.practiceExercises = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.practiceExercises || []));
+            parsed.practiceExercises = isProd ? [] : JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.practiceExercises || []));
           }
           if (!Array.isArray(parsed.practiceSubmissions)) {
-            parsed.practiceSubmissions = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.practiceSubmissions || []));
+            parsed.practiceSubmissions = isProd ? [] : JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.practiceSubmissions || []));
           }
           return parsed;
         }
@@ -1243,19 +1302,35 @@ window.StudySnapStore = (function () {
 
     if (remoteIsCleared) {
       stateObj.isClearedForProduction = true;
+    } else if (remoteData.isProduction === false) {
+      stateObj.isClearedForProduction = false;
     }
 
-    if (Array.isArray(remoteData.teachers) && remoteData.teachers.length > 0) {
-      stateObj.teachers = remoteData.teachers.map(function (t) {
-        const subj = String(t.subject || '');
-        return {
-          teacher_id: t.teacher_id || 'GV01',
-          full_name: t.full_name || 'Cô Nguyễn Thu Minh',
-          username: String(t.username || 'gv_minh'),
-          password: String(t.password || '123456'),
-          subject: !subj || subj.indexOf('Tiếng Anh') >= 0 ? 'Tiếng Trung Giao Tiếp & HSK' : subj
-        };
-      });
+    if (Array.isArray(remoteData.teachers)) {
+      if (remoteData.teachers.length > 0) {
+        stateObj.teachers = remoteData.teachers.map(function (t) {
+          const subj = String(t.subject || '');
+          return {
+            teacher_id: t.teacher_id || 'GV01',
+            full_name: t.full_name || 'Hồ Châu Uyển Nhi',
+            username: String(t.username || 'gv_uyennhi'),
+            password: String(t.password || '123456'),
+            subject: !subj || subj.indexOf('Tiếng Anh') >= 0 ? 'Tiếng Trung Giao Tiếp & HSK' : subj
+          };
+        });
+      } else if (remoteIsCleared || stateObj.isClearedForProduction === true) {
+        stateObj.teachers = [];
+      }
+    }
+
+    if (
+      (remoteIsCleared || stateObj.isClearedForProduction === true) &&
+      Array.isArray(remoteData.students) &&
+      remoteData.students.length === 0 &&
+      Array.isArray(remoteData.assignments) &&
+      remoteData.assignments.length === 0
+    ) {
+      stateObj.classes = [];
     }
     if (Array.isArray(remoteData.students)) {
       stateObj.students = remoteData.students.map(function (st) {
@@ -1381,7 +1456,7 @@ window.StudySnapStore = (function () {
       });
     }
 
-    if (Array.isArray(remoteData.practiceExercises) && remoteData.practiceExercises.length > 0) {
+    if (Array.isArray(remoteData.practiceExercises) && (remoteData.practiceExercises.length > 0 || remoteData.isProduction === true || stateObj.isClearedForProduction === true)) {
       stateObj.practiceExercises = remoteData.practiceExercises.map(function (pe) {
         return {
           exercise_id: pe.exercise_id,
@@ -1473,12 +1548,18 @@ window.StudySnapStore = (function () {
     return { key: 'needs_review', label: 'Cần ôn tập lại 📚', badgeClass: 'status-missing' };
   }
 
-  async function clearAllTestData(stateObj) {
+  async function clearAllTestData(stateObj, options) {
+    const includeTeachers = Boolean(options && (options.includeTeachers === true || options.include_teachers === true));
+    if (includeTeachers) {
+      stateObj.teachers = [];
+    }
+    stateObj.classes = [];
     stateObj.students = [];
     stateObj.assignments = [];
     stateObj.submissions = [];
     stateObj.vocabulary = [];
     stateObj.exitTicketLogs = [];
+    stateObj.practiceExercises = [];
     stateObj.practiceSubmissions = [];
     stateObj.isClearedForProduction = true;
     saveState(stateObj);
@@ -1496,7 +1577,10 @@ window.StudySnapStore = (function () {
       // ignore
     }
 
-    return await syncPostToGas(stateObj, { action: 'clearAllData' });
+    return await syncPostToGas(stateObj, {
+      action: includeTeachers ? 'clearAllDataCompletely' : 'clearAllData',
+      include_teachers: includeTeachers
+    });
   }
 
   async function syncPostToGas(stateObj, payload) {
@@ -1526,6 +1610,8 @@ window.StudySnapStore = (function () {
       const json = await response.json();
       if (json && json.ok && json.data) {
         if (
+          json.data.isProduction !== true &&
+          !stateObj.isClearedForProduction &&
           Array.isArray(json.data.teachers) &&
           json.data.teachers.length === 0 &&
           Array.isArray(json.data.students) &&

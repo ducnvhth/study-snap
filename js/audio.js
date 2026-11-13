@@ -83,9 +83,16 @@ window.StudySnapAudio = (function () {
     const isPlaying = existing && existing.isPlaying;
     const currentSec = existing ? existing.currentSeconds : 0;
     const totalSec = existing && existing.totalSeconds ? existing.totalSeconds : parseDurationToSeconds(durationStr);
+    const playbackRate = existing && existing.playbackRate ? existing.playbackRate : 1;
     const currentStr = formatDuration(currentSec);
     const totalStr = formatDuration(totalSec);
     const percent = totalSec > 0 ? Math.min(100, Math.round((currentSec / totalSec) * 1000) / 10) : 0;
+    const speedBtnHtml = opts.showSpeedToggle
+      ? '<button type="button" class="voice-ctrl-btn voice-speed-btn" data-vp-action="speed" ' +
+        'title="Chuyển tốc độ nghe (Chuẩn 1.0x / Chậm 0.8x)" aria-label="Tốc độ nghe">' +
+        '<span data-vp-speed>' + (playbackRate === 0.8 ? '0.8x' : '1.0x') + '</span>' +
+        '</button>'
+      : '';
 
     return (
       '<div class="voice-player-bar' + compactClass + variantClass + (isPlaying ? ' is-playing' : '') + '" ' +
@@ -104,6 +111,7 @@ window.StudySnapAudio = (function () {
           'title="Tua lại 5 giây để nghe lại đoạn vừa rồi" aria-label="Tua lại 5 giây">' +
           '<span>-5s</span>' +
         '</button>' +
+        speedBtnHtml +
         '<div class="voice-timeline-col">' +
           '<div class="voice-meta-row">' +
             '<span class="voice-label-text">' + escapeAttr(label) + '</span>' +
@@ -139,8 +147,10 @@ window.StudySnapAudio = (function () {
       const curEl = el.querySelector('[data-vp-current]');
       const totEl = el.querySelector('[data-vp-total]');
       const slider = el.querySelector('[data-vp-slider]');
+      const speedEl = el.querySelector('[data-vp-speed]');
       if (curEl) curEl.textContent = formatDuration(session.currentSeconds);
       if (totEl) totEl.textContent = formatDuration(session.totalSeconds);
+      if (speedEl) speedEl.textContent = session.playbackRate === 0.8 ? '0.8x' : '1.0x';
       if (slider && !session.isDraggingSlider) {
         const pct = session.totalSeconds > 0
           ? Math.min(100, Math.round((session.currentSeconds / session.totalSeconds) * 1000) / 10)
@@ -169,12 +179,15 @@ window.StudySnapAudio = (function () {
         lang: lang,
         totalSeconds: totalSec,
         currentSeconds: 0,
+        playbackRate: 1,
         isPlaying: false,
         audioEl: null,
         simTimer: null,
         isRealAudio: url.indexOf('data:') === 0 || url.indexOf('blob:') === 0 || url.indexOf('http') === 0,
         fetchingDriveMedia: false
       };
+    } else {
+      playerSessions[id].fallbackText = fallbackText;
     }
     return playerSessions[id];
   }
@@ -234,7 +247,7 @@ window.StudySnapAudio = (function () {
         const slicedText = fullText.slice(startIdx) || fullText;
         const utter = new SpeechSynthesisUtterance(slicedText);
         utter.lang = session.lang || 'zh-CN';
-        utter.rate = 0.92;
+        utter.rate = 0.92 * (session.playbackRate || 1);
         window.speechSynthesis.speak(utter);
       } catch (e) {
         // ignore
@@ -301,6 +314,11 @@ window.StudySnapAudio = (function () {
       attachRealAudioEvents(session, audio);
       audio.src = session.url;
       session.audioEl = audio;
+    }
+    try {
+      session.audioEl.playbackRate = session.playbackRate || 1;
+    } catch (e) {
+      // ignore
     }
 
     if (session.currentSeconds >= session.totalSeconds) {
@@ -390,6 +408,20 @@ window.StudySnapAudio = (function () {
       } else if (action === 'rewind') {
         const nextSec = Math.max(0, session.currentSeconds - 5);
         seekSessionToSeconds(session, nextSec);
+      } else if (action === 'speed') {
+        session.playbackRate = session.playbackRate === 0.8 ? 1 : 0.8;
+        if (session.audioEl) {
+          try {
+            session.audioEl.playbackRate = session.playbackRate;
+          } catch (e) {
+            // ignore
+          }
+        }
+        if (session.isPlaying && !session.isRealAudio) {
+          startSimulatedPlayback(session);
+        } else {
+          syncPlayerDom(session.id);
+        }
       }
     });
 

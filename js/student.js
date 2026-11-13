@@ -1224,7 +1224,7 @@
         leftItems.forEach(function (l) {
           if (secAns[String(l.id)]) answeredCount++;
         });
-      } else if (sec.type === 'multiple_choice') {
+      } else if (sec.type === 'multiple_choice' || sec.type === 'listening_mc') {
         const items = (sec.data && sec.data.items) || [];
         totalCount += items.length;
         items.forEach(function (item) {
@@ -1388,6 +1388,8 @@
       return renderMatchingBodyHtml(sec);
     } else if (sec.type === 'multiple_choice') {
       return renderMultipleChoiceBodyHtml(sec);
+    } else if (sec.type === 'listening_mc') {
+      return renderListeningMcBodyHtml(sec);
     } else if (sec.type === 'fill_blank_wordbank') {
       return renderFillBlankBodyHtml(sec);
     } else if (sec.type === 'error_correction') {
@@ -1526,8 +1528,8 @@
     );
   }
 
-  // --- SECTION 2: MULTIPLE CHOICE (TRẮC NGHIỆM) ---
-  function renderMultipleChoiceBodyHtml(sec) {
+  // --- SECTION 2 & 6 SHARED: MULTIPLE CHOICE CARDS ---
+  function renderMcQuestionCardsHtml(sec, skipEmptyOptions) {
     const secAns = ui.practiceAnswers[sec.section_id] || {};
     const items = (sec.data && sec.data.items) || [];
 
@@ -1537,6 +1539,12 @@
         .map(function (item, idx) {
           const selectedOpt = secAns[item.id];
           const hasSelected = selectedOpt !== undefined && selectedOpt !== null && selectedOpt !== '';
+          const visibleOptions = [];
+          (item.options || []).forEach(function (optText, optIdx) {
+            if (!skipEmptyOptions || (optText && String(optText).trim() !== '') || optIdx < 2) {
+              visibleOptions.push({ optText: optText || '', optIdx: optIdx });
+            }
+          });
 
           return (
             '<div class="mc-card" id="student-mc-' +
@@ -1560,8 +1568,10 @@
               : '') +
             '</div>' +
             '<div class="mc-options-grid">' +
-            (item.options || [])
-              .map(function (optText, optIdx) {
+            visibleOptions
+              .map(function (entry) {
+                const optIdx = entry.optIdx;
+                const optText = entry.optText;
                 const isOptActive = hasSelected && Number(selectedOpt) === optIdx;
                 const letter = String.fromCharCode(65 + optIdx);
                 return (
@@ -1594,6 +1604,62 @@
           );
         })
         .join('') +
+      '</div>'
+    );
+  }
+
+  function renderMultipleChoiceBodyHtml(sec) {
+    return renderMcQuestionCardsHtml(sec, false);
+  }
+
+  // --- SECTION 6: LISTENING COMPREHENSION (NGHE HIỂU HỘI THOẠI) ---
+  function renderListeningMcBodyHtml(sec) {
+    const data = sec.data || {};
+    const audioUrl = (data.audio_url || '').trim();
+    const fallbackScript = (data.audio_transcript || data.context_title || '你好，老师！').trim();
+    const hasAudioSource = Boolean(audioUrl || (data.audio_transcript && data.audio_transcript.trim()));
+
+    const playerHtml = hasAudioSource && window.StudySnapAudio
+      ? '<div class="listening-audio-strip">' +
+          window.StudySnapAudio.renderVoicePlayer({
+            id: 'student-ls-' + sec.section_id,
+            url: audioUrl || 'demo:listening',
+            duration: data.audio_duration || '00:35',
+            label: data.audio_label || 'Nghe đoạn hội thoại',
+            fallbackText: fallbackScript,
+            lang: 'zh-CN',
+            variant: 'student',
+            showSpeedToggle: true
+          }) +
+        '</div>'
+      : '';
+
+    return (
+      '<div>' +
+      '<div class="listening-context-banner">' +
+      '<div class="listening-context-top">' +
+      '<div style="flex:1;min-width:220px;">' +
+      (data.context_label
+        ? '<span class="listening-label-pill">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>' +
+          '<span>' + escapeHtml(data.context_label) + '</span>' +
+          '</span>'
+        : '') +
+      (data.context_title
+        ? '<div style="margin-top:8px;font-size:1.125rem;font-weight:800;color:var(--ink);">' +
+          escapeHtml(data.context_title) +
+          '</div>'
+        : '') +
+      (data.context_subtitle
+        ? '<div style="margin-top:4px;font-size:0.875rem;color:var(--muted);">' +
+          escapeHtml(data.context_subtitle) +
+          '</div>'
+        : '') +
+      '</div>' +
+      '</div>' +
+      playerHtml +
+      '</div>' +
+      renderMcQuestionCardsHtml(sec, true) +
       '</div>'
     );
   }
@@ -2221,21 +2287,30 @@
           );
         })
         .join('');
-    } else if (sec.type === 'multiple_choice') {
+    } else if (sec.type === 'multiple_choice' || sec.type === 'listening_mc') {
       const items = (sec.data && sec.data.items) || [];
-      return items
+      const transcriptHtml = sec.type === 'listening_mc' && sec.data && sec.data.audio_transcript
+        ? '<div class="listening-transcript-box">' +
+            '<strong>Nội dung đoạn nghe (Transcript):</strong> ' +
+            escapeHtml(sec.data.audio_transcript) +
+          '</div>'
+        : '';
+      return transcriptHtml + items
         .map(function (item, idx) {
           const userOpt = studentAns[item.id];
           const isCorrect =
             userOpt !== undefined &&
             userOpt !== null &&
+            userOpt !== '' &&
             Number(userOpt) === Number(item.correctIndex);
           const userOptText =
-            userOpt !== undefined && item.options && item.options[userOpt]
-              ? item.options[userOpt]
+            userOpt !== undefined && userOpt !== null && userOpt !== '' && item.options && item.options[userOpt]
+              ? String.fromCharCode(65 + Number(userOpt)) + '. ' + item.options[userOpt]
               : 'Chưa chọn';
           const correctOptText =
-            item.options && item.options[item.correctIndex] ? item.options[item.correctIndex] : '';
+            item.options && item.options[item.correctIndex]
+              ? String.fromCharCode(65 + Number(item.correctIndex)) + '. ' + item.options[item.correctIndex]
+              : '';
 
           return (
             '<div class="mc-card ' +
@@ -2530,8 +2605,9 @@
                 secScore += 1;
               }
             });
-          } else if (sec.type === 'multiple_choice') {
+          } else if (sec.type === 'multiple_choice' || sec.type === 'listening_mc') {
             const items = (sec.data && sec.data.items) || [];
+            let correctCount = 0;
             items.forEach(function (item) {
               const userVal = secAns[item.id];
               if (
@@ -2540,9 +2616,15 @@
                 userVal !== '' &&
                 Number(userVal) === Number(item.correctIndex)
               ) {
-                secScore += 1;
+                correctCount += 1;
               }
             });
+            const secMax = Number(sec.max_score || items.length);
+            if (items.length > 0 && secMax !== items.length) {
+              secScore = Math.round((correctCount / items.length) * secMax * 10) / 10;
+            } else {
+              secScore = correctCount;
+            }
           } else if (sec.type === 'fill_blank_wordbank') {
             const items = (sec.data && sec.data.items) || [];
             items.forEach(function (item) {
@@ -3390,8 +3472,14 @@
     renderAll();
 
     if (window.StudySnapStore.getGasUrl()) {
-      window.StudySnapStore.fetchBootstrapFromGas(state).then(function () {
+      window.StudySnapStore.fetchBootstrapFromGas(state).then(function (remoteRes) {
         state = window.StudySnapStore.loadState();
+        if (remoteRes && remoteRes.ok && remoteRes.data) {
+          if (!window.StudySnapAuth.revalidateActiveSession(state)) {
+            window.location.replace('index.html?session=expired');
+            return;
+          }
+        }
         renderAll();
       });
     }

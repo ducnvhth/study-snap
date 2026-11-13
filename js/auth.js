@@ -81,6 +81,41 @@ window.StudySnapAuth = (function () {
     window.location.href = 'index.html';
   }
 
+  function revalidateActiveSession(stateObj) {
+    const user = getCurrentUser();
+    if (!user || !stateObj) return null;
+
+    const teachers = Array.isArray(stateObj.teachers) ? stateObj.teachers : [];
+    const students = Array.isArray(stateObj.students) ? stateObj.students : [];
+    let exists = false;
+
+    if (user.role === 'teacher') {
+      const uId = String(user.id || '').trim();
+      const uName = String(user.username || '').trim().toLowerCase();
+      exists = teachers.some(function (t) {
+        return (
+          (uId && String(t.teacher_id || '').trim() === uId) ||
+          (uName && String(t.username || '').trim().toLowerCase() === uName)
+        );
+      });
+    } else if (user.role === 'student') {
+      const sId = String(user.student_id || user.id || '').trim();
+      const sName = String(user.username || '').trim().toLowerCase();
+      exists = students.some(function (s) {
+        return (
+          (sId && String(s.student_id || '').trim() === sId) ||
+          (sName && String(s.username || '').trim().toLowerCase() === sName)
+        );
+      });
+    }
+
+    if (!exists) {
+      setCurrentUser(null);
+      return null;
+    }
+    return user;
+  }
+
   /**
    * Bảo vệ trang theo vai trò ('teacher' hoặc 'student')
    */
@@ -88,34 +123,45 @@ window.StudySnapAuth = (function () {
     const params = new URLSearchParams(window.location.search);
     const isPreview = params.get('preview') === '1';
     const user = getCurrentUser();
+    const state = window.StudySnapStore ? window.StudySnapStore.loadState() : null;
 
     if (!user) {
-      if (isPreview) {
-        const state = window.StudySnapStore.loadState();
+      if (isPreview && state) {
         if (requiredRole === 'teacher') {
-          const t = state.teachers[0];
-          return {
-            role: 'teacher',
-            id: t.teacher_id,
-            full_name: t.full_name,
-            username: t.username,
-            subject: t.subject
-          };
+          const t = (state.teachers || [])[0];
+          if (t) {
+            return {
+              role: 'teacher',
+              id: t.teacher_id,
+              full_name: t.full_name,
+              username: t.username,
+              subject: t.subject
+            };
+          }
         } else {
-          const s = state.students[0];
-          return {
-            role: 'student',
-            id: s.student_id,
-            student_id: s.student_id,
-            full_name: s.full_name,
-            username: s.username,
-            class_name: s.class_name,
-            avatar_initials: s.avatar_initials
-          };
+          const s = (state.students || [])[0];
+          if (s) {
+            return {
+              role: 'student',
+              id: s.student_id,
+              student_id: s.student_id,
+              full_name: s.full_name,
+              username: s.username,
+              class_name: s.class_name,
+              avatar_initials: s.avatar_initials
+            };
+          }
         }
       }
       window.location.replace('index.html');
       return null;
+    }
+
+    if (state && state.isClearedForProduction === true) {
+      if (!revalidateActiveSession(state)) {
+        window.location.replace('index.html?session=expired');
+        return null;
+      }
     }
 
     if (user.role !== requiredRole) {
@@ -130,6 +176,7 @@ window.StudySnapAuth = (function () {
     getCurrentUser: getCurrentUser,
     setCurrentUser: setCurrentUser,
     authenticate: authenticate,
+    revalidateActiveSession: revalidateActiveSession,
     logout: logout,
     enforceRole: enforceRole
   };
