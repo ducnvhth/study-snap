@@ -2745,7 +2745,7 @@ select.form-control {
   background: var(--color-surface-subtle);
 }
 
-/* Danger Delete Assignment Button */
+/* Danger Delete Assignment & Destructive Action Buttons */
 .btn-danger-outline {
   appearance: none;
   background: transparent;
@@ -2762,10 +2762,55 @@ select.form-control {
   transition: all var(--duration-fast) var(--ease-standard);
 }
 
-.btn-danger-outline:hover {
+.btn-danger-outline.btn-sm {
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+}
+
+.btn-danger-outline:hover:not(:disabled) {
   background: var(--color-destructive-bg);
   border-color: var(--color-destructive);
   color: var(--color-destructive-text);
+}
+
+.btn-danger {
+  background-color: var(--color-destructive);
+  color: #FFFFFF;
+  border: 1.5px solid var(--color-destructive);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 5px 16px rgba(190, 18, 60, 0.22);
+  font-weight: 800;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: var(--color-destructive-text);
+  border-color: var(--color-destructive-text);
+  box-shadow: 0 8px 22px rgba(159, 18, 57, 0.28);
+}
+
+.btn-danger.is-loading:disabled {
+  color: #FFFFFF;
+}
+
+.delete-confirm-target {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-subtle);
+  margin-bottom: 14px;
+}
+
+.delete-confirm-warning {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-destructive-bg);
+  color: var(--color-destructive-text);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  margin-bottom: 18px;
 }
 
 /* ====================================================================
@@ -2866,6 +2911,98 @@ select.form-control {
   border-top: 1.5px dashed var(--pink-md);
   border-radius: 0;
   box-shadow: none;
+}
+
+.asg-assign-action-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.asg-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.status-badge.status-unassigned {
+  background-color: var(--soft);
+  color: var(--color-muted-foreground);
+  border: 1px solid var(--color-border-neutral);
+}
+
+.delivery-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--color-border-soft);
+}
+
+.delivery-chip-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.delivery-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 12px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+  border: 1px solid var(--color-success-border);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.delivery-chip-revoke {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background-color: var(--white);
+  color: var(--color-destructive);
+  border: 1px solid var(--color-destructive-border);
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+
+.delivery-chip-revoke:hover:not(:disabled) {
+  background-color: var(--color-destructive-bg);
+  border-color: var(--color-destructive);
+  color: var(--color-destructive-text);
+}
+
+.assign-active-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.assign-active-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
 }
 
 /* ====================================================================

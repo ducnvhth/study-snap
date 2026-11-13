@@ -194,9 +194,10 @@ function doPost(e) {
     }
 
     if (action === 'deleteStudentAccount') {
-      handleDeleteStudentAccount_(ss, payload);
+      const deletedStudent = handleDeleteStudentAccount_(ss, payload);
       return jsonResponse({
         ok: true,
+        deletedStudent: deletedStudent,
         data: getBootstrapData_(ss)
       });
     }
@@ -242,6 +243,40 @@ function doPost(e) {
       return jsonResponse({
         ok: true,
         assignment: result,
+        data: getBootstrapData_(ss)
+      });
+    }
+
+    if (action === 'assignExercisesToClass') {
+      const targetClass = String(payload.target_class || 'all').trim();
+      const ids = Array.isArray(payload.assignment_ids)
+        ? payload.assignment_ids
+        : (payload.assignment_id ? [payload.assignment_id] : []);
+      const result = updateAssignmentsClass_(ss, ids, targetClass);
+      return jsonResponse({
+        ok: true,
+        updated: result,
+        data: getBootstrapData_(ss)
+      });
+    }
+
+    if (action === 'unassignAssignment') {
+      const ids = Array.isArray(payload.assignment_ids)
+        ? payload.assignment_ids
+        : (payload.assignment_id ? [payload.assignment_id] : []);
+      const result = updateAssignmentsClass_(ss, ids, 'unassigned');
+      return jsonResponse({
+        ok: true,
+        updated: result,
+        data: getBootstrapData_(ss)
+      });
+    }
+
+    if (action === 'deleteAssignment') {
+      const result = handleDeleteAssignment_(ss, payload);
+      return jsonResponse({
+        ok: true,
+        deletedAssignment: result,
         data: getBootstrapData_(ss)
       });
     }
@@ -438,6 +473,42 @@ function trashFolderFilesRecursively_(folder) {
   return trashedCount;
 }
 
+const ASSIGNMENT_HEADERS = [
+  'assignment_id',
+  'title',
+  'lesson_tag',
+  'due_date',
+  'description',
+  'require_media',
+  'session_tag',
+  'class_name',
+  'exercise_id',
+  'lesson_id'
+];
+
+function ensureSheetHeaders_(sheet, requiredHeaders) {
+  if (!sheet || !Array.isArray(requiredHeaders) || requiredHeaders.length === 0) return [];
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, requiredHeaders.length).setValues([requiredHeaders]);
+    sheet.getRange(1, 1, 1, requiredHeaders.length).setFontWeight('bold').setBackground('#CCFBF1');
+    sheet.setFrozenRows(1);
+    return requiredHeaders.slice();
+  }
+  const lastCol = Math.max(sheet.getLastColumn(), 1);
+  const currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
+    return String(h || '').trim();
+  });
+  const missing = requiredHeaders.filter(function (h) {
+    return currentHeaders.indexOf(h) === -1;
+  });
+  if (missing.length > 0) {
+    const startCol = currentHeaders.length + 1;
+    sheet.getRange(1, startCol, 1, missing.length).setValues([missing]);
+    sheet.getRange(1, startCol, 1, missing.length).setFontWeight('bold').setBackground('#CCFBF1');
+  }
+  return currentHeaders.concat(missing);
+}
+
 function ensureSheetsExist_(ss) {
   const schemas = [
     {
@@ -450,7 +521,7 @@ function ensureSheetsExist_(ss) {
     },
     {
       name: SHEET_NAMES.ASSIGNMENTS,
-      headers: ['assignment_id', 'title', 'lesson_tag', 'due_date', 'description', 'require_media']
+      headers: ASSIGNMENT_HEADERS
     },
     {
       name: SHEET_NAMES.SUBMISSIONS,
@@ -494,11 +565,7 @@ function ensureSheetsExist_(ss) {
     if (!sheet) {
       sheet = ss.insertSheet(schema.name);
     }
-    if (sheet.getLastRow() === 0) {
-      sheet.getRange(1, 1, 1, schema.headers.length).setValues([schema.headers]);
-      sheet.getRange(1, 1, 1, schema.headers.length).setFontWeight('bold').setBackground('#CCFBF1');
-      sheet.setFrozenRows(1);
-    }
+    ensureSheetHeaders_(sheet, schema.headers);
   });
 }
 
@@ -593,12 +660,35 @@ function handleLogin_(ss, payload) {
   };
 }
 
+function generateNextStudentId_(sheet) {
+  const values = sheet ? sheet.getDataRange().getValues() : [];
+  let maxNum = 0;
+  const existingIds = {};
+  for (let i = 1; i < values.length; i++) {
+    const id = String(values[i][0] || '').trim().toUpperCase();
+    if (!id) continue;
+    existingIds[id] = true;
+    const match = id.match(/^HS(\d+)$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  }
+  let counter = Math.max(maxNum + 1, Math.max(values.length, 1));
+  let candidate = 'HS' + String(counter).padStart(2, '0');
+  while (existingIds[candidate]) {
+    counter++;
+    candidate = 'HS' + String(counter).padStart(2, '0');
+  }
+  return candidate;
+}
+
 /**
  * Giáo viên tạo tài khoản mới cho Học sinh
  */
 function handleCreateStudentAccount_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.STUDENTS);
-  const studentId = payload.student_id || ('HS' + String(sheet.getLastRow()).padStart(2, '0'));
+  const studentId = payload.student_id || generateNextStudentId_(sheet);
   const fullName = payload.full_name || 'Học sinh mới';
   const className = payload.class_name || 'Lớp Tiếng Trung HSK 2';
   const initials = payload.avatar_initials || getInitials_(fullName);
@@ -630,16 +720,79 @@ function handleResetStudentPassword_(ss, payload) {
   return null;
 }
 
-function handleDeleteStudentAccount_(ss, payload) {
-  const sheet = ss.getSheetByName(SHEET_NAMES.STUDENTS);
+function trashDriveFileByUrl_(fileUrl) {
+  const url = String(fileUrl || '').trim();
+  if (!url) return false;
+  const match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (!match || !match[1]) return false;
+  try {
+    DriveApp.getFileById(match[1]).setTrashed(true);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function deleteRowsByColumnMatch_(sheet, colIndex, targetValue, onRowDelete) {
+  if (!sheet || sheet.getLastRow() <= 1) return 0;
   const values = sheet.getDataRange().getValues();
+  const needle = String(targetValue || '').trim();
+  if (!needle) return 0;
+  let deletedCount = 0;
   for (let i = values.length - 1; i >= 1; i--) {
-    if (String(values[i][0]) === String(payload.student_id)) {
+    if (String(values[i][colIndex] || '').trim() === needle) {
+      if (typeof onRowDelete === 'function') {
+        onRowDelete(values[i]);
+      }
       sheet.deleteRow(i + 1);
-      return true;
+      deletedCount++;
     }
   }
-  return false;
+  return deletedCount;
+}
+
+function handleDeleteStudentAccount_(ss, payload) {
+  const studentId = String((payload && payload.student_id) || '').trim();
+  if (!studentId) {
+    return { deleted: false, student_id: '' };
+  }
+
+  const deletedStudents = deleteRowsByColumnMatch_(
+    ss.getSheetByName(SHEET_NAMES.STUDENTS),
+    0,
+    studentId
+  );
+
+  const deletedSubmissions = deleteRowsByColumnMatch_(
+    ss.getSheetByName(SHEET_NAMES.SUBMISSIONS),
+    2,
+    studentId,
+    function (row) {
+      trashDriveFileByUrl_(row[6]);
+      trashDriveFileByUrl_(row[11]);
+    }
+  );
+
+  const deletedExitTickets = deleteRowsByColumnMatch_(
+    ss.getSheetByName(SHEET_NAMES.EXIT_TICKETS),
+    2,
+    studentId
+  );
+
+  const deletedPracticeSubmissions = deleteRowsByColumnMatch_(
+    ss.getSheetByName(SHEET_NAMES.PRACTICE_SUBMISSIONS),
+    2,
+    studentId
+  );
+
+  return {
+    deleted: deletedStudents > 0,
+    student_id: studentId,
+    deleted_students: deletedStudents,
+    deleted_submissions: deletedSubmissions,
+    deleted_exit_tickets: deletedExitTickets,
+    deleted_practice_submissions: deletedPracticeSubmissions
+  };
 }
 
 function getInitials_(fullName) {
@@ -819,16 +972,80 @@ function handleAddVocabulary_(ss, payload) {
 
 function handleAddAssignment_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS);
+  const headers = ensureSheetHeaders_(sheet, ASSIGNMENT_HEADERS);
   const assignmentId = payload.assignment_id || ('BVN0' + sheet.getLastRow());
-  sheet.appendRow([
+  const rowMap = {
+    assignment_id: assignmentId,
+    title: payload.title || '',
+    lesson_tag: payload.lesson_tag || 'Bài mới',
+    due_date: payload.due_date || '',
+    description: payload.description || '',
+    require_media: payload.require_media || 'audio_or_video',
+    session_tag: payload.session_tag || '',
+    class_name: payload.class_name !== undefined && payload.class_name !== null && String(payload.class_name).trim() !== ''
+      ? String(payload.class_name).trim()
+      : 'all',
+    exercise_id: payload.exercise_id || '',
+    lesson_id: payload.lesson_id || ''
+  };
+  const rowValues = headers.map(function (h) {
+    return rowMap[h] !== undefined ? rowMap[h] : '';
+  });
+  sheet.appendRow(rowValues);
+  return { assignment_id: assignmentId, class_name: rowMap.class_name };
+}
+
+function updateAssignmentsClass_(ss, assignmentIds, targetClass) {
+  const sheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS);
+  if (!sheet || sheet.getLastRow() <= 1 || !Array.isArray(assignmentIds) || assignmentIds.length === 0) {
+    return { updated_count: 0, target_class: targetClass };
+  }
+  const headers = ensureSheetHeaders_(sheet, ASSIGNMENT_HEADERS);
+  const classColIdx = headers.indexOf('class_name');
+  if (classColIdx === -1) return { updated_count: 0, target_class: targetClass };
+
+  const idSet = {};
+  assignmentIds.forEach(function (id) {
+    const clean = String(id || '').trim();
+    if (clean) idSet[clean] = true;
+  });
+
+  const values = sheet.getDataRange().getValues();
+  let updatedCount = 0;
+  for (let i = 1; i < values.length; i++) {
+    const rowId = String(values[i][0] || '').trim();
+    if (idSet[rowId]) {
+      sheet.getRange(i + 1, classColIdx + 1).setValue(String(targetClass || 'unassigned').trim());
+      updatedCount++;
+    }
+  }
+  return { updated_count: updatedCount, target_class: targetClass };
+}
+
+function handleDeleteAssignment_(ss, payload) {
+  const assignmentId = String((payload && payload.assignment_id) || '').trim();
+  if (!assignmentId) return { deleted: false, assignment_id: '' };
+
+  const deletedAssignments = deleteRowsByColumnMatch_(
+    ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS),
+    0,
+    assignmentId
+  );
+  const deletedSubmissions = deleteRowsByColumnMatch_(
+    ss.getSheetByName(SHEET_NAMES.SUBMISSIONS),
+    1,
     assignmentId,
-    payload.title || '',
-    payload.lesson_tag || 'Bài mới',
-    payload.due_date || '',
-    payload.description || '',
-    payload.require_media || 'audio_or_video'
-  ]);
-  return { assignment_id: assignmentId };
+    function (row) {
+      trashDriveFileByUrl_(row[6]);
+      trashDriveFileByUrl_(row[11]);
+    }
+  );
+  return {
+    deleted: deletedAssignments > 0,
+    assignment_id: assignmentId,
+    deleted_assignments: deletedAssignments,
+    deleted_submissions: deletedSubmissions
+  };
 }
 
 function saveBase64MediaToDrive_(base64Data, mimeType, fileName) {

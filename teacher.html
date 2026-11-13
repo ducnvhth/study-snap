@@ -145,6 +145,7 @@
               </div>
               <input type="hidden" id="ex-meta-thresh-good" value="25">
               <input type="hidden" id="ex-meta-thresh-verygood" value="31">
+              <div id="teacher-practice-delivery-bar" class="delivery-status-bar"></div>
             </div>
 
             <!-- Thanh Chèn Nhanh Dạng Câu Hỏi (Trượt theo khi cuộn chuột để dễ thêm nhiều phần) -->
@@ -447,10 +448,16 @@
                       <!-- Populated by JS -->
                     </select>
                   </div>
-                  <button type="button" class="btn btn-primary btn-sm" id="btn-assign-selected-action" style="font-weight: 700;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                    <span>Giao cho lớp</span>
-                  </button>
+                  <div class="asg-assign-action-btns">
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-assign-selected-action" style="font-weight: 700;">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                      <span>Giao cho lớp</span>
+                    </button>
+                    <button type="button" class="btn btn-danger-outline btn-sm" id="btn-unassign-selected-action" title="Hủy giao các bài đang chọn (gỡ khỏi lớp học nhưng vẫn giữ bài tập)">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                      <span>Hủy giao đã chọn</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -649,7 +656,7 @@
               <span>Thẻ Flashcard 3D</span>
             </button>
             <button type="button" class="vocab-subtab" data-vsub="quiz">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
               <span>Luyện Trắc Nghiệm</span>
             </button>
             <button type="button" class="vocab-subtab" data-vsub="stroke">
@@ -1126,6 +1133,8 @@
           <input type="text" id="assign-practice-title" class="form-control" readonly style="font-weight:700;background:var(--color-surface-muted);color:var(--color-primary-deep);">
         </div>
 
+        <div id="assign-practice-active-box" style="display: none;"></div>
+
         <div class="form-row-2">
           <div class="form-group">
             <label class="form-label" for="assign-practice-class" style="font-weight:700;">Chọn Lớp nhận bài:</label>
@@ -1383,6 +1392,43 @@
         <button type="button" class="btn btn-outline" id="btn-cancel-practice-import">Hủy bỏ</button>
         <button type="button" class="btn btn-primary" id="btn-confirm-practice-import" disabled style="font-weight: 700;">
           <span>Xác nhận nhập vào đề</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 6: XÁC NHẬN XÓA HỌC SINH -->
+  <div class="modal-backdrop" id="modal-delete-student-confirm" role="dialog" aria-modal="true" aria-labelledby="delete-student-modal-title">
+    <div class="modal-dialog" style="max-width: 480px;">
+      <div class="panel-header" style="margin-bottom: 14px;">
+        <div class="panel-title-row">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-destructive)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            <line x1="10" y1="11" x2="10" y2="17"></line>
+            <line x1="14" y1="11" x2="14" y2="17"></line>
+          </svg>
+          <h2 id="delete-student-modal-title">Xác nhận xóa học sinh</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-delete-student-modal" aria-label="Đóng hộp thoại">✕</button>
+      </div>
+
+      <div id="delete-student-target-summary" class="delete-confirm-target"></div>
+
+      <div class="delete-confirm-warning">
+        Thao tác này sẽ xóa vĩnh viễn tài khoản đăng nhập của học sinh cùng toàn bộ bài nộp BVN, phản hồi giọng nói và kết quả bài luyện tập liên quan. Không thể hoàn tác sau khi xóa.
+      </div>
+
+      <div class="banner-actions" style="justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-outline" id="btn-cancel-delete-student-modal">Hủy bỏ</button>
+        <button type="button" class="btn btn-danger" id="btn-confirm-delete-student">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            <line x1="10" y1="11" x2="10" y2="17"></line>
+            <line x1="14" y1="11" x2="14" y2="17"></line>
+          </svg>
+          <span>Xóa vĩnh viễn học sinh</span>
         </button>
       </div>
     </div>

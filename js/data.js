@@ -119,6 +119,18 @@ window.STUDYSNAP_INITIAL_DATA = {
       due_date: '15/11/2026',
       description: 'Thu âm 21 thanh mẫu và 36 vận mẫu cơ bản trong tiếng Trung. Chú ý phân biệt âm bật hơi p, t, k và không bật hơi b, d, g.',
       require_media: 'audio_or_video'
+    },
+    {
+      assignment_id: 'ASG_PRAC_DEMO_1',
+      session_tag: 'Buổi 1',
+      title: 'Luyện tập cuối bài: HSK 1: Bài 1 (Chào hỏi & Làm quen)',
+      lesson_tag: 'Bài 1',
+      lesson_id: 'bai-1',
+      exercise_id: 'EX_HSK1_BAI_1',
+      class_name: 'all',
+      due_date: '20/11/2026',
+      description: 'Làm bài tập luyện tập cuối bài trực tiếp trên hệ thống.',
+      require_media: 'practice'
     }
   ],
 
@@ -1200,10 +1212,12 @@ window.StudySnapLoading = (function () {
     addAssignment: 'Đang giao bài tập mới...',
     deleteAssignment: 'Đang xóa bài tập...',
     assignExercisesToClass: 'Đang giao bài tập cho lớp...',
+    unassignAssignment: 'Đang hủy giao bài cho lớp...',
     saveTeacherFeedback: 'Đang lưu nhận xét & phản hồi giọng nói...',
     createClass: 'Đang tạo lớp học mới...',
     createStudentAccount: 'Đang tạo tài khoản học sinh...',
     resetStudentPassword: 'Đang cập nhật mật khẩu học sinh...',
+    deleteStudentAccount: 'Đang xóa tài khoản học sinh...',
     addVocabulary: 'Đang thêm từ vựng mới...',
     batchAddVocabulary: 'Đang nhập danh sách từ vựng...',
     clearAllData: 'Đang xóa toàn bộ dữ liệu thử nghiệm...',
@@ -1508,7 +1522,7 @@ window.StudySnapStore = (function () {
                 a.session_tag = (a.lesson_tag && a.lesson_tag.replace('Bài', 'Buổi')) || 'Buổi 1';
               }
               if (!a.class_name) {
-                a.class_name = 'all';
+                a.class_name = a.require_media === 'practice' ? 'unassigned' : 'all';
               }
             });
           }
@@ -1624,7 +1638,12 @@ window.StudySnapStore = (function () {
           session_tag: a.session_tag || (a.lesson_tag && a.lesson_tag.replace('Bài', 'Buổi')) || 'Buổi 1',
           title: a.title,
           lesson_tag: a.lesson_tag,
-          class_name: a.class_name || 'all',
+          lesson_id: a.lesson_id || '',
+          exercise_id: a.exercise_id || '',
+          class_name:
+            a.class_name !== undefined && a.class_name !== null && String(a.class_name).trim() !== ''
+              ? String(a.class_name).trim()
+              : (a.require_media === 'practice' ? 'unassigned' : 'all'),
           due_date: formatCleanDate(a.due_date),
           description: a.description,
           require_media: a.require_media || 'audio_or_video'
@@ -2014,19 +2033,108 @@ window.StudySnapStore = (function () {
     });
   }
 
-  async function assignExercisesToClass(stateObj, assignmentIds, targetClass) {
-    if (!stateObj.assignments || !Array.isArray(assignmentIds)) return;
+  async function deleteStudentAccount(stateObj, studentId) {
+    const targetId = String(studentId || '').trim();
+    if (!stateObj || !targetId) {
+      return { ok: false, offline: !getGasUrl(), remote: null };
+    }
+
+    const prevStudents = Array.isArray(stateObj.students) ? stateObj.students.slice() : [];
+    const prevSubmissions = Array.isArray(stateObj.submissions) ? stateObj.submissions.slice() : [];
+    const prevExitLogs = Array.isArray(stateObj.exitTicketLogs) ? stateObj.exitTicketLogs.slice() : [];
+    const prevPracticeSubs = Array.isArray(stateObj.practiceSubmissions) ? stateObj.practiceSubmissions.slice() : [];
+
+    stateObj.students = prevStudents.filter(function (s) {
+      return String(s.student_id || '').trim() !== targetId;
+    });
+    stateObj.submissions = prevSubmissions.filter(function (s) {
+      return String(s.student_id || '').trim() !== targetId;
+    });
+    stateObj.exitTicketLogs = prevExitLogs.filter(function (l) {
+      return String(l.student_id || '').trim() !== targetId;
+    });
+    stateObj.practiceSubmissions = prevPracticeSubs.filter(function (ps) {
+      return String(ps.student_id || '').trim() !== targetId;
+    });
+    saveState(stateObj);
+
+    const hasGas = Boolean(getGasUrl());
+    const res = await syncPostToGas(stateObj, {
+      action: 'deleteStudentAccount',
+      student_id: targetId
+    });
+
+    if (hasGas && (!res || res.ok === false)) {
+      stateObj.students = prevStudents;
+      stateObj.submissions = prevSubmissions;
+      stateObj.exitTicketLogs = prevExitLogs;
+      stateObj.practiceSubmissions = prevPracticeSubs;
+      saveState(stateObj);
+      return { ok: false, offline: false, remote: res };
+    }
+
+    try {
+      const masteryKey = 'studysnap_mastered_vocab_' + targetId;
+      const draftPrefix = 'studysnap_practice_draft_' + targetId + '_';
+      Object.keys(localStorage).forEach(function (key) {
+        if (key === masteryKey || key.indexOf(draftPrefix) === 0) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch (e) {
+      // ignore localStorage access errors
+    }
+
+    return { ok: true, offline: !hasGas, remote: res };
+  }
+
+  async function updateAssignmentsTargetClass(stateObj, assignmentIds, targetClass, actionName) {
+    const ids = Array.isArray(assignmentIds)
+      ? assignmentIds.map(function (id) { return String(id || '').trim(); }).filter(Boolean)
+      : (assignmentIds ? [String(assignmentIds).trim()] : []);
+    if (!stateObj || !Array.isArray(stateObj.assignments) || ids.length === 0) {
+      return { ok: false, offline: !getGasUrl(), remote: null };
+    }
+
+    const prevClasses = new Map();
     stateObj.assignments.forEach(function (a) {
-      if (assignmentIds.indexOf(a.assignment_id) !== -1) {
+      if (ids.indexOf(String(a.assignment_id || '').trim()) !== -1) {
+        prevClasses.set(a.assignment_id, a.class_name);
         a.class_name = targetClass;
       }
     });
     saveState(stateObj);
-    return await syncPostToGas(stateObj, {
-      action: 'assignExercisesToClass',
-      assignment_ids: assignmentIds,
-      target_class: targetClass
-    });
+
+    const hasGas = Boolean(getGasUrl());
+    const payload = {
+      action: actionName || 'assignExercisesToClass',
+      assignment_ids: ids
+    };
+    if (actionName === 'unassignAssignment') {
+      payload.assignment_id = ids[0];
+    } else {
+      payload.target_class = targetClass;
+    }
+
+    const res = await syncPostToGas(stateObj, payload);
+    if (hasGas && (!res || res.ok === false)) {
+      stateObj.assignments.forEach(function (a) {
+        if (prevClasses.has(a.assignment_id)) {
+          a.class_name = prevClasses.get(a.assignment_id);
+        }
+      });
+      saveState(stateObj);
+      return { ok: false, offline: false, remote: res };
+    }
+    return { ok: true, offline: !hasGas, remote: res };
+  }
+
+  async function assignExercisesToClass(stateObj, assignmentIds, targetClass) {
+    return await updateAssignmentsTargetClass(stateObj, assignmentIds, targetClass || 'all', 'assignExercisesToClass');
+  }
+
+  async function unassignExercises(stateObj, assignmentIds) {
+    return await updateAssignmentsTargetClass(stateObj, assignmentIds, 'unassigned', 'unassignAssignment');
   }
 
   async function batchAddVocabulary(stateObj, vocabList) {
@@ -2066,7 +2174,9 @@ window.StudySnapStore = (function () {
     savePracticeExercise: savePracticeExercise,
     deletePracticeExercise: deletePracticeExercise,
     deleteAssignment: deleteAssignment,
+    deleteStudentAccount: deleteStudentAccount,
     assignExercisesToClass: assignExercisesToClass,
+    unassignExercises: unassignExercises,
     batchAddVocabulary: batchAddVocabulary,
     gradeManualTranslation: gradeManualTranslation,
     getInitials: getInitials,

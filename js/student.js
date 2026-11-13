@@ -177,13 +177,14 @@
       accountBadge.textContent = student.student_id + ' • ' + student.full_name;
     }
 
-    const totalAssignments = state.assignments.length;
+    const visibleAssignments = getStudentAssignments(student);
+    const totalAssignments = visibleAssignments.length;
     let submittedCount = 0;
     let gradedWithVoiceCount = 0;
     let scoreTotal = 0;
     let scoreCount = 0;
 
-    state.assignments.forEach(function (asg) {
+    visibleAssignments.forEach(function (asg) {
       const sub = findSubmission(asg.assignment_id, student.student_id);
       if (sub) {
         submittedCount++;
@@ -239,11 +240,16 @@
   // 2. TAB 1: HOMEWORK SUBMISSION & TEACHER VOICE FEEDBACK VIEWER
   // =========================================================================
   function getStudentAssignments(student) {
-    if (!student) return state.assignments;
-    const sClass = (student.class_name || '').trim();
-    return state.assignments.filter(function (asg) {
-      if (!asg.class_name || asg.class_name === 'all') return true;
-      return asg.class_name.trim() === sClass;
+    const activeList = (state.assignments || []).filter(function (asg) {
+      const clsLower = String(asg.class_name || '').trim().toLowerCase();
+      return Boolean(clsLower && clsLower !== 'unassigned');
+    });
+    if (!student) return activeList;
+    const sClass = String(student.class_name || '').trim().toLowerCase();
+    return activeList.filter(function (asg) {
+      const clsLower = String(asg.class_name || '').trim().toLowerCase();
+      if (clsLower === 'all') return true;
+      return Boolean(sClass && clsLower === sClass);
     });
   }
 
@@ -404,22 +410,21 @@
     const currentAsg =
       filteredAssignments.find(function (a) {
         return a.assignment_id === ui.selectedAssignmentId;
-      }) || filteredAssignments[0] || studentAssignments[0] || state.assignments[0];
+      }) || filteredAssignments[0] || studentAssignments[0] || null;
+
+    const briefTitle = document.getElementById('student-brief-title');
+    const briefDesc = document.getElementById('student-brief-desc');
+    const recorderZone = document.getElementById('student-recorder-zone');
+    const submitBtn = document.querySelector('#student-submit-hw-form button[type="submit"]');
+    let practiceCallout = document.getElementById('practice-asg-callout');
 
     if (currentAsg) {
-      const briefTitle = document.getElementById('student-brief-title');
-      const briefDesc = document.getElementById('student-brief-desc');
       if (briefTitle) {
         briefTitle.textContent = currentAsg.title + ' • Hạn nộp: ' + currentAsg.due_date;
       }
       if (briefDesc) {
         briefDesc.textContent = currentAsg.description;
       }
-
-      // Check if assignment is a practice test
-      const recorderZone = document.getElementById('student-recorder-zone');
-      const submitBtn = document.querySelector('#student-submit-hw-form button[type="submit"]');
-      let practiceCallout = document.getElementById('practice-asg-callout');
 
       if (currentAsg.require_media === 'practice') {
         if (recorderZone) recorderZone.style.display = 'none';
@@ -458,6 +463,16 @@
         if (submitBtn) submitBtn.style.display = 'block';
         if (practiceCallout) practiceCallout.style.display = 'none';
       }
+    } else {
+      if (briefTitle) {
+        briefTitle.textContent = 'Chưa có bài tập nào được giao cho lớp của em';
+      }
+      if (briefDesc) {
+        briefDesc.textContent = 'Khi giáo viên giao bài tập mới cho lớp, hướng dẫn chi tiết và khung nộp bài sẽ hiển thị tại đây.';
+      }
+      if (recorderZone) recorderZone.style.display = 'none';
+      if (submitBtn) submitBtn.style.display = 'none';
+      if (practiceCallout) practiceCallout.style.display = 'none';
     }
 
     const currentSub = currentAsg ? findSubmission(currentAsg.assignment_id, student.student_id) : null;
@@ -473,7 +488,19 @@
   function renderFeedbackDetailPanel(assignment, submission) {
     const statusBadge = document.getElementById('student-feedback-status-badge');
     const bodyEl = document.getElementById('student-feedback-panel-body');
-    if (!bodyEl || !assignment) return;
+    if (!bodyEl) return;
+    if (!assignment) {
+      if (statusBadge) {
+        statusBadge.className = 'status-badge status-submitted';
+        statusBadge.textContent = 'Chưa có bài';
+      }
+      bodyEl.innerHTML =
+        '<div class="assignment-brief-box">' +
+        '<div class="assignment-brief-title">Chưa có bài tập cần nộp</div>' +
+        '<p class="assignment-brief-desc">Hiện lớp của em chưa có bài tập về nhà nào đang mở. Hãy kiểm tra lại khi giáo viên giao bài nhé.</p>' +
+        '</div>';
+      return;
+    }
 
     if (!submission) {
       if (statusBadge) {
@@ -1190,8 +1217,29 @@
     return 'studysnap_practice_draft_' + student.student_id + '_' + exerciseId;
   }
 
-  function getActiveExercise() {
+  function getVisiblePracticeExercises(student) {
+    const activeStudent = student || getActiveStudent();
+    const sClass = activeStudent ? String(activeStudent.class_name || '').trim().toLowerCase() : '';
     const exercises = state.practiceExercises || [];
+    const assignments = state.assignments || [];
+
+    return exercises.filter(function (ex) {
+      const deliveries = assignments.filter(function (a) {
+        return a.require_media === 'practice' && String(a.exercise_id || '') === String(ex.exercise_id || '');
+      });
+      // Đề chưa từng được giao cho lớp nào (Chưa giao lớp nào) không hiển thị cho học sinh
+      if (deliveries.length === 0) return false;
+      return deliveries.some(function (d) {
+        const clsLower = String(d.class_name || '').trim().toLowerCase();
+        if (!clsLower || clsLower === 'unassigned') return false;
+        if (clsLower === 'all') return true;
+        return Boolean(sClass && clsLower === sClass);
+      });
+    });
+  }
+
+  function getActiveExercise() {
+    const exercises = getVisiblePracticeExercises();
     const found = exercises.find(function (e) {
       return e.exercise_id === ui.selectedExerciseId;
     });
@@ -1316,31 +1364,53 @@
   }
 
   function renderPracticeSection() {
+    const visibleExercises = getVisiblePracticeExercises();
     const exercise = getActiveExercise();
+    const titleEl = document.getElementById('student-practice-title');
+    const selectorEl = document.getElementById('student-practice-exercise-selector');
+    const resultsBox = document.getElementById('student-practice-results-box');
+    const formEl = document.getElementById('student-practice-form');
+    const submitPracBtn = document.getElementById('btn-submit-practice');
+    const resetPracBtn = document.getElementById('btn-reset-practice-draft');
+
+    const headerCard = document.querySelector('#student-tab-practice .practice-header-card');
+
     if (!exercise) {
+      if (titleEl) titleEl.textContent = 'Chưa có bài luyện tập cuối buổi cho lớp của em';
+      if (selectorEl) selectorEl.innerHTML = '';
+      if (headerCard) headerCard.style.display = 'none';
+      if (resultsBox) resultsBox.style.display = 'none';
+      if (formEl) formEl.style.display = 'block';
+      if (submitPracBtn) submitPracBtn.style.display = 'none';
+      if (resetPracBtn) resetPracBtn.style.display = 'none';
+      const progressText = document.getElementById('student-practice-progress-text');
+      const progressFill = document.getElementById('student-practice-progress-fill');
+      if (progressText) progressText.textContent = 'Chưa có bài tập được giao';
+      if (progressFill) progressFill.style.width = '0%';
       const container = document.getElementById('student-practice-sections-container');
       if (container) {
         container.innerHTML =
           '<div style="text-align:center;padding:48px 20px;color:var(--color-muted-foreground);">' +
-          '<div style="font-size:2.5rem;margin-bottom:12px;">📚</div>' +
-          '<h3 style="color:var(--color-foreground);margin-bottom:8px;">Chưa có bài tập nào được giao</h3>' +
-          '<p>Giáo viên sẽ sớm cập nhật bài tập luyện tập cuối bài cho bạn tại đây.</p>' +
+          '<h3 style="color:var(--color-foreground);margin-bottom:8px;">Chưa có bài tập nào được giao cho lớp của em</h3>' +
+          '<p>Giáo viên sẽ sớm cập nhật bài tập luyện tập cuối bài cho lớp tại đây.</p>' +
           '</div>';
       }
       return;
     }
 
+    if (headerCard) headerCard.style.display = '';
+    if (submitPracBtn) submitPracBtn.style.display = '';
+    if (resetPracBtn) resetPracBtn.style.display = '';
+
     loadPracticeDraftOrInit(exercise);
 
-    const titleEl = document.getElementById('student-practice-title');
     if (titleEl) {
       titleEl.textContent = exercise.title + ' (' + (exercise.total_score || 35) + ' điểm)';
     }
 
     // Exercise selector pills
-    const selectorEl = document.getElementById('student-practice-exercise-selector');
     if (selectorEl) {
-      selectorEl.innerHTML = (state.practiceExercises || [])
+      selectorEl.innerHTML = visibleExercises
         .map(function (ex) {
           const isActive = ex.exercise_id === exercise.exercise_id;
           return (
@@ -1364,7 +1434,6 @@
           ui.selectedMatchingLeft = null;
           ui.selectedWordBankChip = null;
           ui.selectedTargetBlank = null;
-          ui.selectedTargetBlank = null;
           ui.practiceViewingResult = false;
           renderPracticeSection();
         });
@@ -1374,8 +1443,6 @@
     updatePracticeProgressBar(exercise);
 
     // Results Box vs Form view
-    const resultsBox = document.getElementById('student-practice-results-box');
-    const formEl = document.getElementById('student-practice-form');
     const existingSub = findStudentPracticeSubmission(exercise.exercise_id);
 
     if (existingSub && ui.practiceViewingResult) {
@@ -3548,7 +3615,8 @@
       window.StudySnapStore.fetchBootstrapFromGas(state).then(function (remoteRes) {
         state = window.StudySnapStore.loadState();
         if (remoteRes && remoteRes.ok && remoteRes.data) {
-          if (!window.StudySnapAuth.revalidateActiveSession(state)) {
+          const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
+          if (!isPreview && !window.StudySnapAuth.revalidateActiveSession(state)) {
             window.location.replace('index.html?session=expired');
             return;
           }

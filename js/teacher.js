@@ -15,7 +15,8 @@
     clock: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>',
     alert: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>',
     volume: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>',
-    edit: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>'
+    edit: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>',
+    trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>'
   };
 
   let state = window.StudySnapStore.loadState();
@@ -154,6 +155,26 @@
     return candidate;
   }
 
+  function generateNextStudentId() {
+    let maxNum = 0;
+    (state.students || []).forEach(function (st) {
+      const m = String(st.student_id || '').trim().match(/^HS(\d+)$/i);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n > maxNum) maxNum = n;
+      }
+    });
+    let counter = Math.max(maxNum + 1, (state.students || []).length + 1);
+    let candidate = 'HS' + String(counter).padStart(2, '0');
+    while ((state.students || []).some(function (s) {
+      return String(s.student_id || '').trim().toUpperCase() === candidate;
+    })) {
+      counter++;
+      candidate = 'HS' + String(counter).padStart(2, '0');
+    }
+    return candidate;
+  }
+
   function generateRandomPassword() {
     return String(Math.floor(100000 + Math.random() * 900000));
   }
@@ -224,6 +245,23 @@
     if (elGraded) elGraded.textContent = String(gradedWithFeedback);
   }
 
+  function renderClassAssignOptions(selectEl, includeUnassigned) {
+    if (!selectEl) return;
+    const prevVal = selectEl.value;
+    const availableClasses = getAvailableClasses();
+    const opts = ['<option value="all">Tất cả các lớp học</option>']
+      .concat(availableClasses.map(function (cls) {
+        return '<option value="' + escapeHtml(cls) + '">' + escapeHtml(cls) + '</option>';
+      }));
+    if (includeUnassigned) {
+      opts.push('<option value="unassigned">Chưa giao (Lưu nháp để giao sau)</option>');
+    }
+    selectEl.innerHTML = opts.join('');
+    if (prevVal && Array.from(selectEl.options).some(function (o) { return o.value === prevVal; })) {
+      selectEl.value = prevVal;
+    }
+  }
+
   function renderSessionManager() {
     const picker = document.getElementById('manage-session-picker');
     const checklist = document.getElementById('session-subtasks-checklist');
@@ -262,9 +300,16 @@
         checklist.innerHTML = '<div style="padding:14px;text-align:center;color:var(--color-muted-foreground);font-size:0.875rem;">Buổi học này chưa có bài tập nhỏ nào. Hãy nhập ở form bên dưới để tạo bài tập!</div>';
       } else {
         checklist.innerHTML = subtasks.map(function (asg) {
-          const clsLabel = asg.class_name === 'all'
-            ? 'Tất cả các lớp'
-            : (asg.class_name || 'Chưa giao');
+          const clsRaw = String(asg.class_name || '').trim();
+          const isUnassigned = !clsRaw || clsRaw.toLowerCase() === 'unassigned';
+          const clsLabel = isUnassigned
+            ? 'Chưa giao (Đã hủy)'
+            : (clsRaw === 'all' ? 'Tất cả các lớp' : clsRaw);
+          const badgeClass = isUnassigned ? 'status-badge status-unassigned' : 'status-badge';
+          const badgeStyle = isUnassigned
+            ? ''
+            : ' style="background:var(--color-primary-light);color:var(--color-primary-deep);font-weight:700;"';
+
           return (
             '<div class="asg-check-item">' +
               '<div class="asg-check-left">' +
@@ -275,17 +320,47 @@
                     escapeHtml(asg.title) +
                   '</div>' +
                   '<div class="asg-check-meta">' +
-                    '<span class="status-badge" style="background:var(--color-primary-light);color:var(--color-primary-deep);font-weight:700;">' + escapeHtml(clsLabel) + '</span>' +
+                    '<span class="' + badgeClass + '"' + badgeStyle + '>' + escapeHtml(clsLabel) + '</span>' +
                     '<span class="tabular-nums">Hạn: ' + escapeHtml(asg.due_date || 'Chưa đặt') + '</span>' +
                   '</div>' +
                 '</div>' +
               '</div>' +
-              '<button type="button" class="btn-danger-outline btn-sm" data-delete-asg-item="' + escapeHtml(asg.assignment_id) + '" title="Xóa bài tập này">' +
-                'Xóa' +
-              '</button>' +
+              '<div class="asg-item-actions">' +
+                (isUnassigned
+                  ? ''
+                  : '<button type="button" class="btn btn-outline btn-sm" data-unassign-asg-item="' + escapeHtml(asg.assignment_id) + '" title="Hủy giao bài tập này khỏi lớp nhưng vẫn giữ bài">' +
+                      'Hủy giao' +
+                    '</button>') +
+                '<button type="button" class="btn-danger-outline btn-sm" data-delete-asg-item="' + escapeHtml(asg.assignment_id) + '" title="Xóa bài tập này">' +
+                  'Xóa' +
+                '</button>' +
+              '</div>' +
             '</div>'
           );
         }).join('');
+
+        checklist.querySelectorAll('[data-unassign-asg-item]').forEach(function (btn) {
+          btn.addEventListener('click', async function () {
+            const asgId = btn.getAttribute('data-unassign-asg-item');
+            const targetAsg = state.assignments.find(function (a) { return a.assignment_id === asgId; });
+            const title = targetAsg ? targetAsg.title : asgId;
+            const clsName = targetAsg && targetAsg.class_name === 'all'
+              ? 'Tất cả các lớp'
+              : ((targetAsg && targetAsg.class_name) || 'lớp học');
+            if (!confirm('Hủy giao bài "' + title + '" khỏi "' + clsName + '"?\n(Nội dung bài tập và bài nộp cũ của học sinh vẫn được giữ lại.)')) {
+              return;
+            }
+            const res = await runWithLoading(btn, 'Đang hủy...', async function () {
+              return await window.StudySnapStore.unassignExercises(state, [asgId]);
+            });
+            if (!res || !res.ok) {
+              alert((res && res.error) || 'Không thể hủy giao bài lúc này. Vui lòng thử lại.');
+              return;
+            }
+            showToast('Đã hủy giao bài "' + title + '" khỏi ' + clsName + '!');
+            renderAll();
+          });
+        });
 
         checklist.querySelectorAll('[data-delete-asg-item]').forEach(function (btn) {
           btn.addEventListener('click', async function () {
@@ -304,14 +379,8 @@
     }
 
     // 3. Populate class selects
-    const availableClasses = (state.classes || []).map(function (c) { return c.class_name; });
-    const classOpts = ['<option value="all">Tất cả các lớp học</option>']
-      .concat(availableClasses.map(function (cls) {
-        return '<option value="' + escapeHtml(cls) + '">' + escapeHtml(cls) + '</option>';
-      })).join('');
-
-    if (targetClassSelect) targetClassSelect.innerHTML = classOpts;
-    if (newAsgClassSelect) newAsgClassSelect.innerHTML = classOpts;
+    renderClassAssignOptions(targetClassSelect, false);
+    renderClassAssignOptions(newAsgClassSelect, true);
   }
 
   function renderGradingPanel() {
@@ -359,13 +428,7 @@
     }
 
     const newAsgClassSelect = document.getElementById('new-asg-class');
-    if (newAsgClassSelect) {
-      const asgClassOpts = ['<option value="all">Tất cả các lớp học</option>'];
-      availableClasses.forEach(function (cls) {
-        asgClassOpts.push('<option value="' + escapeHtml(cls) + '">' + escapeHtml(cls) + '</option>');
-      });
-      newAsgClassSelect.innerHTML = asgClassOpts.join('');
-    }
+    renderClassAssignOptions(newAsgClassSelect, true);
 
     const hasStudent = filteredStudents.some(function (st) { return st.student_id === ui.gradingStudentId; });
     if (!hasStudent && filteredStudents.length > 0) {
@@ -515,8 +578,15 @@
       '<tr>' +
         '<th>Học sinh</th>' +
         filteredAssignments.map(function (asg) {
+          const clsRaw = String(asg.class_name || '').trim();
+          const isUnassigned = !clsRaw || clsRaw.toLowerCase() === 'unassigned';
+          const classBadge = isUnassigned
+            ? '<span class="status-badge status-unassigned" style="margin-left:6px;padding:1px 7px;font-size:0.75rem;">Chưa giao (Đã hủy)</span>'
+            : (clsRaw && clsRaw !== 'all'
+              ? '<span style="font-size:0.75rem;font-weight:600;color:var(--color-muted-foreground);"> · ' + escapeHtml(clsRaw) + '</span>'
+              : '');
           return '<th>' +
-            '<div style="font-size:0.75rem;font-weight:700;color:var(--color-primary);">' + escapeHtml(asg.session_tag || 'Buổi 1') + '</div>' +
+            '<div style="font-size:0.75rem;font-weight:700;color:var(--color-primary);">' + escapeHtml(asg.session_tag || 'Buổi 1') + classBadge + '</div>' +
             '<div>' + escapeHtml(asg.lesson_tag) + ': ' + escapeHtml(asg.title.replace(/^Bài \d+:\s*/i, '')) + '</div>' +
             '<div class="tabular-nums" style="font-size:0.8125rem;font-weight:500;color:var(--color-muted-foreground);margin-top:2px;">Hạn nộp: ' + escapeHtml(asg.due_date) + '</div>' +
           '</th>';
@@ -785,6 +855,10 @@
           '</button>' +
           '<button type="button" class="btn btn-outline btn-sm" data-reset-password="' + escapeHtml(st.student_id) + '">' +
             '<span>Đổi mật khẩu</span>' +
+          '</button>' +
+          '<button type="button" class="btn btn-danger-outline btn-sm" data-delete-student="' + escapeHtml(st.student_id) + '" title="Xóa tài khoản học sinh này" aria-label="Xóa học sinh ' + escapeHtml(st.full_name) + ' (' + escapeHtml(st.student_id) + ')">' +
+            ICONS.trash +
+            '<span>Xóa HS</span>' +
           '</button>' +
         '</div>' +
       '</div>';
@@ -1449,6 +1523,131 @@
     ex.total_score = totalScore;
   }
 
+  function getExerciseDeliveries(exerciseId) {
+    const all = (state.assignments || []).filter(function (a) {
+      return a.require_media === 'practice' && a.exercise_id === exerciseId;
+    });
+    const active = all.filter(function (a) {
+      return String(a.class_name || '').trim().toLowerCase() !== 'unassigned';
+    });
+    return { all: all, active: active };
+  }
+
+  async function revokePracticeDelivery(assignmentId, triggerBtn, onDone) {
+    const asg = (state.assignments || []).find(function (a) { return a.assignment_id === assignmentId; });
+    if (!asg) return;
+    const clsLabel = asg.class_name === 'all' ? 'Tất cả các lớp' : (asg.class_name || 'lớp học');
+    const title = asg.title || 'Bài luyện tập';
+    if (!confirm('Bạn có chắc chắn muốn hủy giao đề "' + title + '" khỏi "' + clsLabel + '" không?\n(Nội dung đề và bài học sinh đã làm vẫn được giữ lại.)')) {
+      return;
+    }
+
+    const res = await runWithLoading(triggerBtn || null, 'Đang hủy giao...', async function () {
+      return await window.StudySnapStore.unassignExercises(state, [assignmentId]);
+    });
+    if (!res || !res.ok) {
+      alert((res && res.error) || 'Không thể hủy giao đề lúc này. Vui lòng thử lại.');
+      return;
+    }
+
+    if (typeof onDone === 'function') onDone();
+    renderAll();
+    showToast('Đã hủy giao đề khỏi "' + clsLabel + '"!');
+  }
+
+  function renderAssignModalActiveDeliveries(ex) {
+    const box = document.getElementById('assign-practice-active-box');
+    if (!box) return;
+    if (!ex) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+    const active = getExerciseDeliveries(ex.exercise_id).active;
+    if (active.length === 0) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+
+    box.style.display = 'block';
+    box.innerHTML =
+      '<div style="font-size:0.8125rem;font-weight:700;color:var(--color-primary-deep);margin-bottom:6px;">Các lớp đang nhận đề này (bấm Hủy giao nếu giao nhầm lớp):</div>' +
+      '<div class="assign-active-list">' +
+        active.map(function (asg) {
+          const clsLabel = asg.class_name === 'all' ? 'Tất cả các lớp' : (asg.class_name || 'Lớp học');
+          return (
+            '<div class="assign-active-row">' +
+              '<div>' +
+                '<strong>' + escapeHtml(clsLabel) + '</strong>' +
+                (asg.due_date ? ' <span class="tabular-nums" style="font-size:0.8125rem;opacity:0.9;">· Hạn: ' + escapeHtml(asg.due_date) + '</span>' : '') +
+              '</div>' +
+              '<button type="button" class="btn btn-danger-outline btn-sm" data-modal-unassign-delivery="' + escapeHtml(asg.assignment_id) + '">Hủy giao</button>' +
+            '</div>'
+          );
+        }).join('') +
+      '</div>';
+
+    box.querySelectorAll('[data-modal-unassign-delivery]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const asgId = btn.getAttribute('data-modal-unassign-delivery');
+        revokePracticeDelivery(asgId, btn, function () {
+          renderAssignModalActiveDeliveries(ex);
+        });
+      });
+    });
+  }
+
+  function renderPracticeDeliveryBar(ex) {
+    const bar = document.getElementById('teacher-practice-delivery-bar');
+    if (!bar) return;
+    if (!ex) {
+      bar.style.display = 'none';
+      bar.innerHTML = '';
+      return;
+    }
+
+    const deliveries = getExerciseDeliveries(ex.exercise_id);
+    const active = deliveries.active;
+    bar.style.display = 'flex';
+
+    if (active.length === 0) {
+      const hintText = deliveries.all.length > 0
+        ? 'Đã hủy giao khỏi lớp trước đó. Học sinh hiện chưa thấy đề này.'
+        : 'Đề luyện tập này chưa được giao cho lớp nào.';
+      bar.innerHTML =
+        '<span class="status-badge status-unassigned">Chưa giao lớp nào</span>' +
+        '<span style="font-size:0.8125rem;color:var(--color-muted-foreground);flex:1;min-width:180px;">' + hintText + '</span>' +
+        '<button type="button" class="btn btn-outline btn-sm" id="btn-delivery-bar-reassign" data-ex-id="' + escapeHtml(ex.exercise_id) + '">Giao bài cho lớp</button>';
+      return;
+    }
+
+    bar.innerHTML =
+      '<span style="font-size:0.8125rem;font-weight:700;color:var(--color-primary-deep);">Đang giao cho:</span>' +
+      '<div class="delivery-chip-list">' +
+        active.map(function (asg) {
+          const clsLabel = asg.class_name === 'all' ? 'Tất cả các lớp' : (asg.class_name || 'Lớp học');
+          return (
+            '<span class="delivery-chip">' +
+              '<span>' + escapeHtml(clsLabel) + (asg.due_date ? ' · ' + escapeHtml(asg.due_date) : '') + '</span>' +
+              '<button type="button" class="delivery-chip-revoke" data-unassign-practice-delivery="' + escapeHtml(asg.assignment_id) + '" title="Hủy giao đề khỏi ' + escapeHtml(clsLabel) + '">' +
+                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>' +
+                '<span>Hủy giao</span>' +
+              '</button>' +
+            '</span>'
+          );
+        }).join('') +
+      '</div>' +
+      '<button type="button" class="btn btn-outline btn-sm" id="btn-delivery-bar-reassign" data-ex-id="' + escapeHtml(ex.exercise_id) + '" style="margin-left:auto;">Giao thêm lớp</button>';
+
+    bar.querySelectorAll('[data-unassign-practice-delivery]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const asgId = btn.getAttribute('data-unassign-practice-delivery');
+        revokePracticeDelivery(asgId, btn);
+      });
+    });
+  }
+
   function renderTeacherPracticeTab() {
     const ex = getActivePracticeExercise();
     const selectEl = document.getElementById('teacher-practice-select');
@@ -1471,6 +1670,7 @@
       if (maxScoreBadge) maxScoreBadge.textContent = 'Tổng 0 điểm';
       if (stickySummaryBadge) stickySummaryBadge.textContent = '0 phần • Tổng 0 điểm';
       if (subCountPill) subCountPill.textContent = '0';
+      renderPracticeDeliveryBar(null);
 
       const listEl = document.getElementById('teacher-builder-sections-list');
       if (listEl) {
@@ -1577,6 +1777,7 @@
       return s.exercise_id === ex.exercise_id;
     });
     if (subCountPill) subCountPill.textContent = String(subs.length);
+    renderPracticeDeliveryBar(ex);
 
     // Render Google Form interactive builder
     renderBuilderSectionsList(ex);
@@ -3985,6 +4186,8 @@
         noteInp.value = 'Làm bài luyện tập cuối bài cẩn thận, mục tiêu đạt từ ' + ((ex.thresholds && ex.thresholds.good) || 25) + ' điểm trở lên nhé các em!';
       }
 
+      renderAssignModalActiveDeliveries(ex);
+
       if (form) {
         form.setAttribute('data-target-ex-id', ex.exercise_id);
       }
@@ -4032,6 +4235,15 @@
         const dueVal = document.getElementById('assign-practice-due').value.trim();
         const noteVal = document.getElementById('assign-practice-note').value.trim();
 
+        const targetLower = String(classVal || '').trim().toLowerCase();
+        const existingActive = getExerciseDeliveries(ex.exercise_id).active.find(function (a) {
+          return String(a.class_name || '').trim().toLowerCase() === targetLower;
+        });
+        if (existingActive) {
+          showToast('Đề này hiện đã được giao cho "' + (classVal === 'all' ? 'Tất cả các lớp' : classVal) + '" rồi!');
+          return;
+        }
+
         const newAsg = {
           assignment_id: 'ASG_PRAC_' + Date.now(),
           title: 'Luyện tập cuối bài: ' + ex.title.replace(/^Bài tập luyện tập cuối bài\s*—\s*/i, ''),
@@ -4046,15 +4258,17 @@
 
         if (!Array.isArray(state.assignments)) state.assignments = [];
         state.assignments.push(newAsg);
+        const prevGradingAsgId = ui.gradingAssignmentId;
         ui.gradingAssignmentId = newAsg.assignment_id;
         window.StudySnapStore.saveState(state);
 
-        await runWithLoading(submitBtn, 'Đang giao bài...', async function () {
-          await window.StudySnapStore.syncPostToGas(state, {
+        const res = await runWithLoading(submitBtn, 'Đang giao bài...', async function () {
+          return await window.StudySnapStore.syncPostToGas(state, {
             action: 'addAssignment',
             assignment_id: newAsg.assignment_id,
             title: newAsg.title,
             lesson_tag: newAsg.lesson_tag,
+            lesson_id: newAsg.lesson_id,
             due_date: newAsg.due_date,
             description: newAsg.description,
             class_name: newAsg.class_name,
@@ -4062,6 +4276,14 @@
             exercise_id: newAsg.exercise_id
           });
         });
+
+        if (!res || !res.ok) {
+          state.assignments = state.assignments.filter(function (a) { return a.assignment_id !== newAsg.assignment_id; });
+          ui.gradingAssignmentId = prevGradingAsgId;
+          window.StudySnapStore.saveState(state);
+          alert((res && res.error) || 'Không thể giao bài lúc này. Vui lòng thử lại.');
+          return;
+        }
 
         closeAssignPracticeModal();
         renderAll();
@@ -4255,7 +4477,11 @@
 
         createAsgForm.reset();
         renderAll();
-        showToast('Đã giao bài tập mới "' + newAsg.title + '" (' + newAsg.session_tag + ')!');
+        if (newAsg.class_name === 'unassigned') {
+          showToast('Đã lưu bài tập nháp "' + newAsg.title + '" (' + newAsg.session_tag + ') — chưa giao cho lớp nào.');
+        } else {
+          showToast('Đã giao bài tập mới "' + newAsg.title + '" (' + newAsg.session_tag + ')!');
+        }
       });
     }
 
@@ -4324,10 +4550,48 @@
         const targetClass = targetClassSelect ? targetClassSelect.value : 'all';
         const classNameLabel = targetClass === 'all' ? 'Tất cả các lớp' : targetClass;
 
-        await runWithLoading(btnAssignSelected, 'Đang giao bài...', async function () {
-          await window.StudySnapStore.assignExercisesToClass(state, selectedIds, targetClass);
+        const res = await runWithLoading(btnAssignSelected, 'Đang giao bài...', async function () {
+          return await window.StudySnapStore.assignExercisesToClass(state, selectedIds, targetClass);
         });
+        if (!res || !res.ok) {
+          alert((res && res.error) || 'Không thể giao bài lúc này. Vui lòng thử lại.');
+          return;
+        }
         showToast('Đã giao thành công ' + selectedIds.length + ' bài tập nhỏ cho ' + classNameLabel + '!');
+        renderAll();
+      });
+    }
+
+    const btnUnassignSelected = document.getElementById('btn-unassign-selected-action');
+    if (btnUnassignSelected) {
+      btnUnassignSelected.addEventListener('click', async function () {
+        const checkedBoxes = Array.from(document.querySelectorAll('.asg-subtask-check:checked'));
+        if (checkedBoxes.length === 0) {
+          alert('Vui lòng tích chọn ít nhất 1 bài tập nhỏ để hủy giao!');
+          return;
+        }
+        const selectedIds = checkedBoxes.map(function (c) { return c.getAttribute('data-asg-id'); });
+        const activeIds = selectedIds.filter(function (id) {
+          const asg = (state.assignments || []).find(function (a) { return a.assignment_id === id; });
+          const cls = asg ? String(asg.class_name || '').trim().toLowerCase() : '';
+          return Boolean(cls && cls !== 'unassigned');
+        });
+        if (activeIds.length === 0) {
+          showToast('Các bài đang chọn hiện đều ở trạng thái chưa giao!');
+          return;
+        }
+        if (!confirm('Hủy giao ' + activeIds.length + ' bài tập đang chọn khỏi các lớp?\n(Nội dung bài tập và bài nộp cũ vẫn được giữ lại.)')) {
+          return;
+        }
+
+        const res = await runWithLoading(btnUnassignSelected, 'Đang hủy giao...', async function () {
+          return await window.StudySnapStore.unassignExercises(state, activeIds);
+        });
+        if (!res || !res.ok) {
+          alert((res && res.error) || 'Không thể hủy giao bài lúc này. Vui lòng thử lại.');
+          return;
+        }
+        showToast('Đã hủy giao ' + activeIds.length + ' bài tập khỏi lớp!');
         renderAll();
       });
     }
@@ -4437,7 +4701,7 @@
           username = generateNextUsername();
         }
 
-        const nextId = 'HS' + String(state.students.length + 1).padStart(2, '0');
+        const nextId = generateNextStudentId();
         const initials = window.StudySnapStore.getInitials(fullName);
         const newStudent = {
           student_id: nextId,
@@ -5775,6 +6039,128 @@
       });
     });
 
+    // Modal Xác nhận Xóa Học Sinh
+    const modalDeleteStudent = document.getElementById('modal-delete-student-confirm');
+    const deleteStudentSummary = document.getElementById('delete-student-target-summary');
+    const btnCloseDeleteStudent = document.getElementById('btn-close-delete-student-modal');
+    const btnCancelDeleteStudent = document.getElementById('btn-cancel-delete-student-modal');
+    const btnConfirmDeleteStudent = document.getElementById('btn-confirm-delete-student');
+    let pendingDeleteStudentId = null;
+    let isDeletingStudent = false;
+
+    function openDeleteStudentModal(st) {
+      if (!modalDeleteStudent || !st) return;
+      pendingDeleteStudentId = st.student_id;
+
+      if (deleteStudentSummary) {
+        const subCount = (state.submissions || []).filter(function (s) {
+          return String(s.student_id || '').trim() === String(st.student_id || '').trim();
+        }).length;
+        const pracCount = (state.practiceSubmissions || []).filter(function (ps) {
+          return String(ps.student_id || '').trim() === String(st.student_id || '').trim();
+        }).length;
+        const uname = st.username || String(st.student_id || '').toLowerCase();
+
+        deleteStudentSummary.innerHTML =
+          '<span class="student-avatar">' + escapeHtml(st.avatar_initials || window.StudySnapStore.getInitials(st.full_name)) + '</span>' +
+          '<div style="min-width: 0; flex: 1;">' +
+            '<div style="font-weight: 800; color: var(--color-foreground); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">' +
+              '<span>' + escapeHtml(st.full_name) + ' (' + escapeHtml(st.student_id) + ')</span>' +
+              '<span class="status-badge status-submitted" style="font-size: 0.75rem;">' + escapeHtml(st.class_name || 'Chưa xếp lớp') + '</span>' +
+            '</div>' +
+            '<div class="tabular-nums" style="font-size: 0.8125rem; color: var(--color-muted-foreground); margin-top: 4px;">' +
+              'Tên đăng nhập: <strong>' + escapeHtml(uname) + '</strong> • ' +
+              subCount + ' bài nộp BVN • ' + pracCount + ' bài luyện tập' +
+            '</div>' +
+          '</div>';
+      }
+
+      modalDeleteStudent.classList.add('is-open', 'is-visible');
+      if (btnCancelDeleteStudent) btnCancelDeleteStudent.focus();
+    }
+
+    function closeDeleteStudentModal(force) {
+      if (isDeletingStudent && !force) return;
+      pendingDeleteStudentId = null;
+      if (modalDeleteStudent) {
+        modalDeleteStudent.classList.remove('is-open', 'is-visible');
+      }
+    }
+
+    if (btnCloseDeleteStudent) {
+      btnCloseDeleteStudent.addEventListener('click', function () {
+        closeDeleteStudentModal(false);
+      });
+    }
+    if (btnCancelDeleteStudent) {
+      btnCancelDeleteStudent.addEventListener('click', function () {
+        closeDeleteStudentModal(false);
+      });
+    }
+    if (modalDeleteStudent) {
+      modalDeleteStudent.addEventListener('click', function (ev) {
+        if (ev.target === modalDeleteStudent) closeDeleteStudentModal(false);
+      });
+    }
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && modalDeleteStudent && modalDeleteStudent.classList.contains('is-open')) {
+        closeDeleteStudentModal(false);
+      }
+    });
+    if (btnConfirmDeleteStudent) {
+      btnConfirmDeleteStudent.addEventListener('click', async function () {
+        if (isDeletingStudent || !pendingDeleteStudentId) return;
+        const targetStudent = findStudent(pendingDeleteStudentId);
+        if (!targetStudent) {
+          closeDeleteStudentModal(true);
+          renderAll();
+          return;
+        }
+
+        isDeletingStudent = true;
+        if (btnCancelDeleteStudent) btnCancelDeleteStudent.disabled = true;
+        if (btnCloseDeleteStudent) btnCloseDeleteStudent.disabled = true;
+        window.StudySnapAudio.pauseAll();
+
+        let deleteRes = null;
+        try {
+          deleteRes = await runWithLoading(
+            btnConfirmDeleteStudent,
+            'Đang xóa học sinh...',
+            async function () {
+              return await window.StudySnapStore.deleteStudentAccount(state, targetStudent.student_id);
+            }
+          );
+        } finally {
+          isDeletingStudent = false;
+          if (btnCancelDeleteStudent) btnCancelDeleteStudent.disabled = false;
+          if (btnCloseDeleteStudent) btnCloseDeleteStudent.disabled = false;
+        }
+
+        if (!deleteRes || !deleteRes.ok) {
+          showToast('Không thể kết nối máy chủ để xóa học sinh. Vui lòng thử lại!');
+          return;
+        }
+
+        if (String(ui.gradingStudentId || '') === String(targetStudent.student_id || '')) {
+          ui.gradingStudentId = state.students[0] ? state.students[0].student_id : '';
+          ui.teacherDraftVoice = null;
+        }
+        if (
+          ui.activeGradingSubId &&
+          !(state.practiceSubmissions || []).some(function (ps) {
+            return ps.submission_id === ui.activeGradingSubId;
+          })
+        ) {
+          ui.activeGradingSubId = null;
+        }
+
+        closeDeleteStudentModal(true);
+        renderAll();
+        showToast('Đã xóa học sinh ' + targetStudent.full_name + ' (' + targetStudent.student_id + ') khỏi hệ thống!');
+      });
+    }
+
     // Event delegation
     document.body.addEventListener('click', async function (ev) {
       const playStudentBtn = ev.target.closest('[data-play-student]');
@@ -5849,6 +6235,16 @@
           renderStudentAccountsTab();
           showToast('Đã cập nhật mật khẩu mới cho ' + st.full_name + '!');
         }
+        return;
+      }
+
+      // Mở hộp thoại xác nhận xóa học sinh
+      const deleteStudentBtn = ev.target.closest('[data-delete-student]');
+      if (deleteStudentBtn) {
+        const stId = deleteStudentBtn.getAttribute('data-delete-student');
+        const st = findStudent(stId);
+        if (!st) return;
+        openDeleteStudentModal(st);
         return;
       }
 
@@ -5958,8 +6354,8 @@
         return;
       }
 
-      // Mở modal giao đề bài tập luyện tập đồng bộ từ Tab 3
-      const assignPracticeBtn = ev.target.closest('#btn-synced-assign-practice');
+      // Mở modal giao đề bài tập luyện tập đồng bộ từ Tab 3 hoặc thanh trạng thái giao đề
+      const assignPracticeBtn = ev.target.closest('#btn-synced-assign-practice, #btn-delivery-bar-reassign');
       if (assignPracticeBtn) {
         const exId = assignPracticeBtn.getAttribute('data-ex-id');
         const ex = (state.practiceExercises || []).find(function (e) { return e.exercise_id === exId; });
@@ -6014,6 +6410,7 @@
 
   function renderAll() {
     renderSummaryStats();
+    renderSessionManager();
     renderGradingPanel();
     renderProgressMatrix();
     renderStudentAccountsTab();
@@ -6027,7 +6424,8 @@
     if (window.StudySnapStore.getGasUrl()) {
       window.StudySnapStore.fetchBootstrapFromGas(state).then(function (remoteRes) {
         if (remoteRes && remoteRes.ok && remoteRes.data) {
-          if (!window.StudySnapAuth.revalidateActiveSession(state)) {
+          const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
+          if (!isPreview && !window.StudySnapAuth.revalidateActiveSession(state)) {
             window.location.replace('index.html?session=expired');
             return;
           }
