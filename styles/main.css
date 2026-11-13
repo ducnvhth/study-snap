@@ -3167,6 +3167,9 @@ select.form-control {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  .ss-spinner {
+    animation-duration: 1.5s !important;
+  }
 }
 
 /* =============================================================================
@@ -3456,4 +3459,198 @@ select.form-control {
   font-size: 0.8125rem;
   color: var(--muted);
   line-height: 1.65;
+}
+
+/* ====================================================================
+   GLOBAL API LOADING BAR, BUTTON SPINNERS & OVERLAY (PASTEL SYSTEM)
+   ==================================================================== */
+@keyframes ss-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ss-bar-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.ss-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2.2px solid currentColor;
+  border-bottom-color: transparent;
+  animation: ss-spin 0.72s linear infinite;
+}
+
+.ss-spinner-sm {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+}
+
+.ss-spinner-lg {
+  width: 26px;
+  height: 26px;
+  border-width: 3px;
+}
+
+.btn.is-loading,
+.btn.is-loading:disabled,
+.btn-danger-outline.is-loading,
+.btn-danger-outline.is-loading:disabled,
+.gform-type-btn.is-loading {
+  opacity: 0.92;
+  cursor: wait;
+  pointer-events: none;
+  box-shadow: none;
+  transform: none;
+}
+
+.btn.is-loading:disabled {
+  color: var(--ink);
+}
+
+.btn-danger-outline.is-loading:disabled {
+  color: var(--color-destructive);
+}
+
+.status-badge.is-syncing {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--ylt);
+  color: var(--ink);
+  border: 1.5px solid #FFE082;
+}
+
+.ss-api-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 110;
+  pointer-events: none;
+  background-color: rgba(255, 179, 209, 0.25);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 160ms var(--ease-out);
+}
+
+.ss-api-progress-bar.is-active {
+  opacity: 1;
+}
+
+.ss-api-progress-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--pink) 0%, var(--peach) 35%, var(--mint) 68%, var(--pink) 100%);
+  background-size: 220% 100%;
+  animation: ss-bar-shimmer 1.4s linear infinite;
+}
+
+.ss-api-status-chip {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translate(-50%, -14px);
+  z-index: 111;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 18px;
+  border-radius: var(--radius-pill);
+  background-color: rgba(255, 255, 255, 0.97);
+  color: var(--ink);
+  border: 1.5px solid var(--pink-md);
+  box-shadow: 0 10px 26px rgba(45, 27, 78, 0.14);
+  font-size: 0.875rem;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+}
+
+.ss-api-status-chip.is-active {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.ss-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background-color: rgba(45, 27, 78, 0.42);
+}
+
+.ss-loading-overlay.is-open {
+  display: flex;
+}
+
+.ss-loading-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 28px 30px;
+  border-radius: var(--radius-2xl);
+  background-color: var(--white);
+  border: 1.5px solid var(--pink-md);
+  box-shadow: 0 18px 48px rgba(45, 27, 78, 0.22);
+  text-align: center;
+}
+
+.ss-loading-icon-badge {
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 14px;
+  border-radius: 18px;
+  background: var(--grad-hero-bg);
+  border: 1.5px solid var(--pink-md);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ss-loading-title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+
+.ss-loading-desc {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.55;
+}
+
+.voice-player-bar.is-loading .voice-play-toggle {
+  cursor: wait;
+  opacity: 0.88;
+}
+
+@media (max-width: 640px) {
+  .ss-api-status-chip {
+    max-width: calc(100vw - 24px);
+    padding: 7px 14px;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }

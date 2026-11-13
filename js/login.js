@@ -69,6 +69,31 @@
     }
   }
 
+  function setSyncBadgeState(isLoading) {
+    const syncBadge = document.getElementById('login-sync-badge');
+    if (!syncBadge) return;
+    if (isLoading) {
+      syncBadge.classList.add('is-syncing');
+      syncBadge.innerHTML =
+        '<span class="ss-spinner ss-spinner-sm" aria-hidden="true"></span>' +
+        '<span>Đang đồng bộ hệ thống...</span>';
+    } else {
+      syncBadge.classList.remove('is-syncing');
+      syncBadge.textContent = 'Hệ thống học tập trực tuyến';
+    }
+  }
+
+  function setFormInteractive(enabled) {
+    const ids = ['login-username', 'login-password', 'btn-toggle-password', 'btn-clear-session'];
+    ids.forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !enabled;
+    });
+    document.querySelectorAll('[data-role-tab]').forEach(function (btn) {
+      btn.disabled = !enabled;
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('session') === 'expired') {
@@ -82,13 +107,18 @@
 
     // Đồng bộ ngầm dữ liệu mới nhất từ hệ thống và xác thực lại phiên đang lưu
     if (window.StudySnapStore.getGasUrl()) {
-      window.StudySnapStore.fetchBootstrapFromGas(state).then(function (remoteRes) {
-        state = window.StudySnapStore.loadState();
-        if (remoteRes && remoteRes.ok && remoteRes.data) {
-          window.StudySnapAuth.revalidateActiveSession(state);
-          renderSessionBanner();
-        }
-      });
+      setSyncBadgeState(true);
+      window.StudySnapStore.fetchBootstrapFromGas(state)
+        .then(function (remoteRes) {
+          state = window.StudySnapStore.loadState();
+          if (remoteRes && remoteRes.ok && remoteRes.data) {
+            window.StudySnapAuth.revalidateActiveSession(state);
+            renderSessionBanner();
+          }
+        })
+        .finally(function () {
+          setSyncBadgeState(false);
+        });
     }
 
     document.querySelectorAll('[data-role-tab]').forEach(function (btn) {
@@ -118,23 +148,29 @@
 
     const loginForm = document.getElementById('login-form');
     const errorBox = document.getElementById('login-error-box');
-    const submitText = document.getElementById('login-submit-text');
 
     if (loginForm) {
       loginForm.addEventListener('submit', async function (ev) {
         ev.preventDefault();
         const u = document.getElementById('login-username').value;
         const p = document.getElementById('login-password').value;
-        const submitBtn = loginForm.querySelector('button[type="submit"]');
-        if (submitBtn && submitBtn.disabled) return;
-        if (submitBtn) submitBtn.disabled = true;
+        const submitBtn = document.getElementById('login-submit-btn') || loginForm.querySelector('button[type="submit"]');
+        const loading = window.StudySnapLoading;
+        if (submitBtn && (submitBtn.disabled || submitBtn.classList.contains('is-loading'))) return;
+
+        if (errorBox) errorBox.classList.remove('is-visible');
+        setFormInteractive(false);
+        if (loading && submitBtn) {
+          loading.setButtonLoading(submitBtn, true, 'Đang kiểm tra tài khoản...');
+        } else if (submitBtn) {
+          submitBtn.disabled = true;
+        }
 
         let result = null;
+        let didRedirect = false;
 
         try {
-          // Khi có kết nối Google Apps Script, ưu tiên xác thực trực tiếp với Google Sheets làm nguồn chuẩn
           if (window.StudySnapStore.getGasUrl()) {
-            if (submitText) submitText.textContent = 'Đang kiểm tra tài khoản...';
             const remoteAuth = await window.StudySnapStore.syncPostToGas(state, {
               action: 'login',
               username: u,
@@ -143,11 +179,17 @@
 
             if (remoteAuth && remoteAuth.ok && remoteAuth.user) {
               window.StudySnapAuth.setCurrentUser(remoteAuth.user);
+              if (loading) {
+                if (submitBtn) loading.setButtonLoading(submitBtn, true, 'Đang tải dữ liệu lớp học...');
+                loading.showOverlay('Đăng nhập thành công!', 'Đang tải dữ liệu lớp học và mở không gian làm việc...');
+              }
               await window.StudySnapStore.fetchBootstrapFromGas(state);
               state = window.StudySnapStore.loadState();
               result = { ok: true, user: remoteAuth.user };
             } else if (remoteAuth) {
-              // Máy chủ phản hồi từ chối rõ ràng -> đồng bộ lại state cục bộ, tuyệt đối không fallback tài khoản cũ/mẫu
+              if (loading && submitBtn) {
+                loading.setButtonLoading(submitBtn, true, 'Đang cập nhật thông tin...');
+              }
               await window.StudySnapStore.fetchBootstrapFromGas(state);
               state = window.StudySnapStore.loadState();
               renderSessionBanner();
@@ -164,24 +206,32 @@
               // Ngoại tuyến / mất mạng mới kiểm tra cục bộ
               result = window.StudySnapAuth.authenticate(u, p);
             }
-            setRoleTab(selectedRole);
           } else {
             result = window.StudySnapAuth.authenticate(u, p);
           }
-        } finally {
-          if (submitBtn) submitBtn.disabled = false;
-        }
 
-        if (!result || !result.ok) {
-          if (errorBox) {
-            errorBox.textContent = (result && result.error) || 'Đăng nhập thất bại.';
-            errorBox.classList.add('is-visible');
+          if (result && result.ok) {
+            didRedirect = true;
+            window.location.href = result.user.role === 'teacher' ? 'teacher.html' : 'student.html';
+            return;
           }
-          return;
+        } finally {
+          if (!didRedirect) {
+            if (loading) {
+              loading.hideOverlay(true);
+              if (submitBtn) loading.setButtonLoading(submitBtn, false);
+            } else if (submitBtn) {
+              submitBtn.disabled = false;
+            }
+            setFormInteractive(true);
+            setRoleTab(selectedRole);
+          }
         }
 
-        if (errorBox) errorBox.classList.remove('is-visible');
-        window.location.href = result.user.role === 'teacher' ? 'teacher.html' : 'student.html';
+        if (errorBox) {
+          errorBox.textContent = (result && result.error) || 'Đăng nhập thất bại.';
+          errorBox.classList.add('is-visible');
+        }
       });
     }
   });

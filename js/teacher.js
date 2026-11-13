@@ -58,6 +58,20 @@
     }, 3400);
   }
 
+  async function runWithLoading(btnOrList, loadingLabel, asyncFn, overlayOpts) {
+    const loading = window.StudySnapLoading;
+    if (!loading) return await asyncFn();
+    const wrapped = overlayOpts
+      ? function () {
+          return loading.withOverlay(overlayOpts.title, overlayOpts.desc, asyncFn);
+        }
+      : asyncFn;
+    if (btnOrList) {
+      return await loading.withButtonLoading(btnOrList, loadingLabel, wrapped);
+    }
+    return await wrapped();
+  }
+
   function findSubmission(assignmentId, studentId) {
     return state.submissions.find(function (s) {
       return String(s.assignment_id) === String(assignmentId) && String(s.student_id) === String(studentId);
@@ -274,15 +288,16 @@
         }).join('');
 
         checklist.querySelectorAll('[data-delete-asg-item]').forEach(function (btn) {
-          btn.addEventListener('click', function () {
+          btn.addEventListener('click', async function () {
             const asgId = btn.getAttribute('data-delete-asg-item');
             const targetAsg = state.assignments.find(function (a) { return a.assignment_id === asgId; });
             const title = targetAsg ? targetAsg.title : asgId;
             if (!confirm('Bạn có chắc chắn muốn xóa bài tập "' + title + '" không?')) return;
-            window.StudySnapStore.deleteAssignment(state, asgId).then(function () {
-              showToast('Đã xóa bài tập!');
-              renderAll();
+            await runWithLoading(btn, 'Đang xóa...', async function () {
+              await window.StudySnapStore.deleteAssignment(state, asgId);
             });
+            showToast('Đã xóa bài tập!');
+            renderAll();
           });
         });
       }
@@ -1474,9 +1489,11 @@
 
         const btnEmptyNew = document.getElementById('btn-empty-new-practice');
         if (btnEmptyNew) {
-          btnEmptyNew.addEventListener('click', function () {
+          btnEmptyNew.addEventListener('click', async function () {
             const newEx = createFreshPracticeExercise(null, null, false);
-            window.StudySnapStore.savePracticeExercise(state, newEx);
+            await runWithLoading(btnEmptyNew, 'Đang tạo bài...', async function () {
+              await window.StudySnapStore.savePracticeExercise(state, newEx);
+            });
             switchPracticeSubView('builder');
             renderTeacherPracticeTab();
             showToast('Đã tạo bài luyện tập cuối buổi mới!');
@@ -1491,13 +1508,15 @@
         }
         const btnEmptyTpl = document.getElementById('btn-empty-fill-template');
         if (btnEmptyTpl) {
-          btnEmptyTpl.addEventListener('click', function () {
+          btnEmptyTpl.addEventListener('click', async function () {
             const tpl = createFreshPracticeExercise(
               'Bài tập luyện tập cuối bài — HSK 1: Bài 1',
               'Bài 1',
               true
             );
-            window.StudySnapStore.savePracticeExercise(state, tpl);
+            await runWithLoading(btnEmptyTpl, 'Đang nạp mẫu...', async function () {
+              await window.StudySnapStore.savePracticeExercise(state, tpl);
+            });
             switchPracticeSubView('builder');
             renderTeacherPracticeTab();
             showToast('Đã nạp bộ câu hỏi mẫu chuẩn HSK!');
@@ -1590,11 +1609,13 @@
 
       const btnFill = document.getElementById('btn-quick-fill-template');
       if (btnFill) {
-        btnFill.addEventListener('click', function () {
+        btnFill.addEventListener('click', async function () {
           const tpl = createTemplateExercise(ex.title, ex.lesson_tag);
           ex.sections = tpl.sections;
           ex.total_score = tpl.total_score;
-          window.StudySnapStore.savePracticeExercise(state, ex);
+          await runWithLoading(btnFill, 'Đang nạp mẫu...', async function () {
+            await window.StudySnapStore.savePracticeExercise(state, ex);
+          });
           renderTeacherPracticeTab();
           showToast('Đã nạp sẵn 5 câu hỏi mẫu vào bài tập!');
         });
@@ -2737,7 +2758,7 @@
         });
         if (!sec || !sec.data) return;
 
-        window.StudySnapAudio.readUploadedMediaFile(file, function (mediaInfo) {
+        window.StudySnapAudio.readUploadedMediaFile(file, async function (mediaInfo) {
           const gasUrl = window.StudySnapStore.getGasUrl && window.StudySnapStore.getGasUrl();
           if (!gasUrl && mediaInfo.sizeKB > 1800) {
             showToast('File âm thanh hơi lớn (' + mediaInfo.sizeKB + 'KB) so với bộ nhớ cục bộ. Nên dùng file <= 1.5MB hoặc dán đường dẫn audio!');
@@ -2747,7 +2768,17 @@
           if (!sec.data.audio_label) {
             sec.data.audio_label = file.name.replace(/\.[^/.]+$/, '');
           }
-          window.StudySnapStore.savePracticeExercise(state, ex);
+          await runWithLoading(
+            null,
+            null,
+            async function () {
+              await window.StudySnapStore.savePracticeExercise(state, ex);
+            },
+            {
+              title: 'Đang lưu tệp âm thanh bài nghe...',
+              desc: 'Hệ thống đang tải lên và đồng bộ tệp âm thanh cho bài tập.'
+            }
+          );
           renderTeacherPracticeTab();
           showToast('Đã gắn file nghe: ' + file.name);
         });
@@ -2776,12 +2807,22 @@
           function (timeStr) {
             if (labelSpan) labelSpan.textContent = 'Đang thu ' + timeStr + ' (Bấm dừng)';
           },
-          function (recInfo) {
+          async function (recInfo) {
             btn.setAttribute('data-recording', '0');
             if (labelSpan) labelSpan.textContent = 'Ghi âm trực tiếp';
             sec.data.audio_url = recInfo.dataUrl;
             sec.data.audio_duration = recInfo.duration || '00:30';
-            window.StudySnapStore.savePracticeExercise(state, ex);
+            await runWithLoading(
+              btn,
+              'Đang lưu bản thu...',
+              async function () {
+                await window.StudySnapStore.savePracticeExercise(state, ex);
+              },
+              {
+                title: 'Đang lưu bản thu âm bài nghe...',
+                desc: 'Hệ thống đang đồng bộ bản ghi âm lên máy chủ.'
+              }
+            );
             renderTeacherPracticeTab();
             showToast('Đã ghi âm đoạn nghe (' + recInfo.duration + ')!');
           },
@@ -3158,7 +3199,7 @@
     showToast('Đã xuất file Excel (CSV) điểm bài tập luyện tập!');
   }
 
-  function handleJsonImport() {
+  async function handleJsonImport() {
     const textarea = document.getElementById('json-import-textarea');
     if (!textarea) return;
     const raw = textarea.value.trim();
@@ -3176,7 +3217,10 @@
         return;
       }
 
-      window.StudySnapStore.savePracticeExercise(state, parsed);
+      const submitBtn = document.getElementById('btn-submit-json-import');
+      await runWithLoading(submitBtn, 'Đang nhập đề...', async function () {
+        await window.StudySnapStore.savePracticeExercise(state, parsed);
+      });
       ui.selectedPracticeExId = parsed.exercise_id;
       renderTeacherPracticeTab();
 
@@ -3188,7 +3232,7 @@
     }
   }
 
-  function handleExcelPaste() {
+  async function handleExcelPaste() {
     const ex = getActivePracticeExercise();
     if (!ex) return;
     const typeSelect = document.getElementById('excel-target-section-type');
@@ -3307,7 +3351,10 @@
     });
     ex.total_score = totalScore;
 
-    window.StudySnapStore.savePracticeExercise(state, ex);
+    const submitExcelBtn = document.getElementById('btn-submit-excel-paste');
+    await runWithLoading(submitExcelBtn, 'Đang lưu dữ liệu...', async function () {
+      await window.StudySnapStore.savePracticeExercise(state, ex);
+    });
     renderTeacherPracticeTab();
 
     const modal = document.getElementById('modal-excel-paste');
@@ -3391,10 +3438,11 @@
     }
 
     if (formCreateEx && modalCreateEx) {
-      formCreateEx.addEventListener('submit', function (e) {
+      formCreateEx.addEventListener('submit', async function (e) {
         e.preventDefault();
         const titleInp = document.getElementById('new-ex-title');
         const tagInp = document.getElementById('new-ex-tag');
+        const submitBtn = formCreateEx.querySelector('button[type="submit"]');
 
         const nextNum = (state.practiceExercises || []).length + 1;
         const title = (titleInp ? titleInp.value : '').trim() || ('Bài ' + nextNum);
@@ -3412,7 +3460,9 @@
         if (!Array.isArray(state.practiceExercises)) {
           state.practiceExercises = [];
         }
-        window.StudySnapStore.savePracticeExercise(state, newEx);
+        await runWithLoading(submitBtn, 'Đang tạo bài tập...', async function () {
+          await window.StudySnapStore.savePracticeExercise(state, newEx);
+        });
         ui.selectedPracticeExId = newEx.exercise_id;
         ui.practiceCurrentView = 'builder';
         modalCreateEx.classList.remove('is-open', 'is-visible');
@@ -3504,7 +3554,7 @@
     // 5. Exercise Meta & Sections Save Submit
     const metaForm = document.getElementById('teacher-exercise-meta-form');
     if (metaForm) {
-      metaForm.addEventListener('submit', function (e) {
+      metaForm.addEventListener('submit', async function (e) {
         e.preventDefault();
         const ex = getActivePracticeExercise() || createFreshPracticeExercise(null, null, false);
 
@@ -3527,16 +3577,22 @@
         });
         ex.total_score = total;
 
-        window.StudySnapStore.savePracticeExercise(state, ex);
+        const saveBtns = [
+          document.getElementById('btn-save-top-bar'),
+          document.getElementById('btn-save-sticky-bar')
+        ].filter(Boolean);
+        await runWithLoading(saveBtns, 'Đang lưu đề...', async function () {
+          await window.StudySnapStore.savePracticeExercise(state, ex);
+        });
         renderTeacherPracticeTab();
-        showToast('💾 Đã lưu bài tập "' + ex.title + '" thành công!');
+        showToast('Đã lưu bài tập "' + ex.title + '" thành công!');
       });
     }
 
     // 6. Delete Current Exercise Button
     const btnDeleteEx = document.getElementById('btn-delete-current-ex');
     if (btnDeleteEx) {
-      btnDeleteEx.addEventListener('click', function () {
+      btnDeleteEx.addEventListener('click', async function () {
         const ex = getActivePracticeExercise();
         if (!ex) return;
         if (
@@ -3546,7 +3602,9 @@
               '" không? Toàn bộ câu hỏi và bài nộp sẽ bị xóa.'
           )
         ) {
-          window.StudySnapStore.deletePracticeExercise(state, ex.exercise_id);
+          await runWithLoading(btnDeleteEx, 'Đang xóa...', async function () {
+            await window.StudySnapStore.deletePracticeExercise(state, ex.exercise_id);
+          });
           ui.selectedPracticeExId =
             state.practiceExercises && state.practiceExercises[0]
               ? state.practiceExercises[0].exercise_id
@@ -3728,13 +3786,16 @@
 
         const newRating = window.StudySnapStore.calculateRating(newTotal, ex.thresholds);
 
-        await window.StudySnapStore.gradeManualTranslation(
-          state,
-          sub.submission_id,
-          manualGrades,
-          newTotal,
-          newRating
-        );
+        const submitManualBtn = manualForm.querySelector('button[type="submit"]');
+        await runWithLoading(submitManualBtn, 'Đang lưu điểm...', async function () {
+          await window.StudySnapStore.gradeManualTranslation(
+            state,
+            sub.submission_id,
+            manualGrades,
+            newTotal,
+            newRating
+          );
+        });
 
         if (modalManual) modalManual.classList.remove('is-open', 'is-visible');
         renderTeacherPracticeTab();
@@ -3804,7 +3865,17 @@
         ui.activeGradingSubId = null;
         ui.gradingStudentId = '';
         ui.gradingAssignmentId = '';
-        await window.StudySnapStore.clearAllTestData(state);
+        await runWithLoading(
+          clearAllBtn,
+          'Đang xóa dữ liệu...',
+          async function () {
+            await window.StudySnapStore.clearAllTestData(state);
+          },
+          {
+            title: 'Đang xóa toàn bộ dữ liệu thử nghiệm...',
+            desc: 'Hệ thống đang làm sạch dữ liệu và giữ lại tài khoản Giáo viên.'
+          }
+        );
         renderAll();
         showToast('Đã xóa toàn bộ dữ liệu thử nghiệm! Hệ thống đã sẵn sàng cho dữ liệu lớp học thật.');
       });
@@ -3858,7 +3929,9 @@
         );
         if (!confirmDelete) return;
 
-        await window.StudySnapStore.deleteAssignment(state, asgToDelete.assignment_id);
+        await runWithLoading(btnDeleteAsg, 'Đang xóa...', async function () {
+          await window.StudySnapStore.deleteAssignment(state, asgToDelete.assignment_id);
+        });
         showToast('Đã xóa bài tập "' + asgToDelete.title + '"!');
         const remaining = getFilteredAssignments();
         ui.gradingAssignmentId = remaining[0] ? remaining[0].assignment_id : '';
@@ -3948,12 +4021,13 @@
 
     const formAssignPractice = document.getElementById('form-assign-practice-to-class');
     if (formAssignPractice) {
-      formAssignPractice.addEventListener('submit', function (ev) {
+      formAssignPractice.addEventListener('submit', async function (ev) {
         ev.preventDefault();
         const targetExId = formAssignPractice.getAttribute('data-target-ex-id');
         const ex = (state.practiceExercises || []).find(function (e) { return e.exercise_id === targetExId; }) || getActivePracticeExercise();
         if (!ex) return;
 
+        const submitBtn = formAssignPractice.querySelector('button[type="submit"]');
         const classVal = document.getElementById('assign-practice-class').value;
         const dueVal = document.getElementById('assign-practice-due').value.trim();
         const noteVal = document.getElementById('assign-practice-note').value.trim();
@@ -3975,21 +4049,23 @@
         ui.gradingAssignmentId = newAsg.assignment_id;
         window.StudySnapStore.saveState(state);
 
+        await runWithLoading(submitBtn, 'Đang giao bài...', async function () {
+          await window.StudySnapStore.syncPostToGas(state, {
+            action: 'addAssignment',
+            assignment_id: newAsg.assignment_id,
+            title: newAsg.title,
+            lesson_tag: newAsg.lesson_tag,
+            due_date: newAsg.due_date,
+            description: newAsg.description,
+            class_name: newAsg.class_name,
+            require_media: 'practice',
+            exercise_id: newAsg.exercise_id
+          });
+        });
+
         closeAssignPracticeModal();
         renderAll();
         showToast('Đã giao bài "' + ex.title + '" cho ' + (classVal === 'all' ? 'tất cả các lớp' : classVal) + ' thành công!');
-
-        window.StudySnapStore.syncPostToGas(state, {
-          action: 'addAssignment',
-          assignment_id: newAsg.assignment_id,
-          title: newAsg.title,
-          lesson_tag: newAsg.lesson_tag,
-          due_date: newAsg.due_date,
-          description: newAsg.description,
-          class_name: newAsg.class_name,
-          require_media: 'practice',
-          exercise_id: newAsg.exercise_id
-        });
       });
     }
 
@@ -4054,8 +4130,9 @@
     // Giáo viên lưu chấm bài & phản hồi
     const teacherGradingForm = document.getElementById('teacher-grading-form');
     if (teacherGradingForm) {
-      teacherGradingForm.addEventListener('submit', function (ev) {
+      teacherGradingForm.addEventListener('submit', async function (ev) {
         ev.preventDefault();
+        const submitBtn = teacherGradingForm.querySelector('button[type="submit"]');
         const scoreVal = document.getElementById('teacher-score-input').value.trim();
         const commentVal = document.getElementById('teacher-comment-input').value.trim();
         const nowStr = new Date().toLocaleString('vi-VN');
@@ -4096,31 +4173,45 @@
         }
 
         const draftVoice = ui.teacherDraftVoice;
+        const hasVoiceUpload = Boolean(draftVoice && draftVoice.dataUrl);
         ui.teacherDraftVoice = null;
         window.StudySnapStore.saveState(state);
-        renderAll();
 
+        await runWithLoading(
+          submitBtn,
+          hasVoiceUpload ? 'Đang tải Voice & lưu...' : 'Đang lưu phản hồi...',
+          async function () {
+            await window.StudySnapStore.syncPostToGas(state, {
+              action: 'saveTeacherFeedback',
+              assignment_id: ui.gradingAssignmentId,
+              student_id: ui.gradingStudentId,
+              score: sub.score,
+              teacher_comment: sub.teacher_comment,
+              teacher_voice_duration: voiceDur,
+              teacher_voice_base64: draftVoice ? draftVoice.dataUrl : '',
+              teacher_voice_mime_type: draftVoice ? draftVoice.mimeType : ''
+            });
+          },
+          hasVoiceUpload
+            ? {
+                title: 'Đang lưu nhận xét & bản thu Voice Feedback...',
+                desc: 'Hệ thống đang tải tệp âm thanh chữa bài lên máy chủ.'
+              }
+            : null
+        );
+
+        renderAll();
         const st = findStudent(ui.gradingStudentId);
         showToast('Đã lưu nhận xét & Voice Feedback cho ' + (st ? st.full_name : '') + '!');
-
-        window.StudySnapStore.syncPostToGas(state, {
-          action: 'saveTeacherFeedback',
-          assignment_id: ui.gradingAssignmentId,
-          student_id: ui.gradingStudentId,
-          score: sub.score,
-          teacher_comment: sub.teacher_comment,
-          teacher_voice_duration: voiceDur,
-          teacher_voice_base64: draftVoice ? draftVoice.dataUrl : '',
-          teacher_voice_mime_type: draftVoice ? draftVoice.mimeType : ''
-        });
       });
     }
 
     // Giáo viên Giao BVN mới
     const createAsgForm = document.getElementById('create-assignment-form');
     if (createAsgForm) {
-      createAsgForm.addEventListener('submit', function (ev) {
+      createAsgForm.addEventListener('submit', async function (ev) {
         ev.preventDefault();
+        const submitBtn = createAsgForm.querySelector('button[type="submit"]');
         const sessionInput = document.getElementById('new-asg-session');
         const sessionTag = sessionInput ? sessionInput.value.trim() : 'Buổi 1';
         const tag = document.getElementById('new-asg-tag').value.trim();
@@ -4148,20 +4239,23 @@
           ui.gradingSessionFilter = newAsg.session_tag;
         }
         window.StudySnapStore.saveState(state);
+
+        await runWithLoading(submitBtn, 'Đang giao bài tập...', async function () {
+          await window.StudySnapStore.syncPostToGas(state, {
+            action: 'addAssignment',
+            assignment_id: newAsg.assignment_id,
+            session_tag: newAsg.session_tag,
+            title: newAsg.title,
+            lesson_tag: newAsg.lesson_tag,
+            due_date: newAsg.due_date,
+            description: newAsg.description,
+            class_name: newAsg.class_name
+          });
+        });
+
         createAsgForm.reset();
         renderAll();
         showToast('Đã giao bài tập mới "' + newAsg.title + '" (' + newAsg.session_tag + ')!');
-
-        window.StudySnapStore.syncPostToGas(state, {
-          action: 'addAssignment',
-          assignment_id: newAsg.assignment_id,
-          session_tag: newAsg.session_tag,
-          title: newAsg.title,
-          lesson_tag: newAsg.lesson_tag,
-          due_date: newAsg.due_date,
-          description: newAsg.description,
-          class_name: newAsg.class_name
-        });
       });
     }
 
@@ -4219,7 +4313,7 @@
 
     const btnAssignSelected = document.getElementById('btn-assign-selected-action');
     if (btnAssignSelected) {
-      btnAssignSelected.addEventListener('click', function () {
+      btnAssignSelected.addEventListener('click', async function () {
         const checkedBoxes = Array.from(document.querySelectorAll('.asg-subtask-check:checked'));
         if (checkedBoxes.length === 0) {
           alert('Vui lòng tích chọn ít nhất 1 bài tập nhỏ để giao cho lớp!');
@@ -4230,17 +4324,18 @@
         const targetClass = targetClassSelect ? targetClassSelect.value : 'all';
         const classNameLabel = targetClass === 'all' ? 'Tất cả các lớp' : targetClass;
 
-        window.StudySnapStore.assignExercisesToClass(state, selectedIds, targetClass).then(function () {
-          showToast('Đã giao thành công ' + selectedIds.length + ' bài tập nhỏ cho ' + classNameLabel + '!');
-          renderAll();
+        await runWithLoading(btnAssignSelected, 'Đang giao bài...', async function () {
+          await window.StudySnapStore.assignExercisesToClass(state, selectedIds, targetClass);
         });
+        showToast('Đã giao thành công ' + selectedIds.length + ' bài tập nhỏ cho ' + classNameLabel + '!');
+        renderAll();
       });
     }
 
         // Giáo viên Tạo Lớp học mới
     const createClassForm = document.getElementById('create-class-form');
     if (createClassForm) {
-      createClassForm.addEventListener('submit', function (ev) {
+      createClassForm.addEventListener('submit', async function (ev) {
         ev.preventDefault();
         const nameInput = document.getElementById('new-class-name');
         const className = (nameInput ? nameInput.value : '').trim();
@@ -4256,6 +4351,7 @@
           return;
         }
 
+        const submitBtn = createClassForm.querySelector('button[type="submit"]');
         const newClass = {
           class_id: 'CLS_' + Date.now(),
           class_name: className,
@@ -4263,17 +4359,19 @@
         };
         state.classes.push(newClass);
         window.StudySnapStore.saveState(state);
-        if (nameInput) nameInput.value = '';
 
+        await runWithLoading(submitBtn, 'Đang tạo lớp...', async function () {
+          await window.StudySnapStore.syncPostToGas(state, {
+            action: 'createClass',
+            class_id: newClass.class_id,
+            class_name: newClass.class_name
+          });
+        });
+
+        if (nameInput) nameInput.value = '';
         ui.studentAccountsClassFilter = className;
         renderAll();
         showToast('Đã tạo lớp học mới: ' + className + '! Bạn có thể chọn lớp này ở dropdown bên dưới.');
-
-        window.StudySnapStore.syncPostToGas(state, {
-          action: 'createClass',
-          class_id: newClass.class_id,
-          class_name: newClass.class_name
-        });
       });
     }
 
@@ -4313,7 +4411,7 @@
     // Giáo viên Tạo tài khoản mới cho Học sinh
     const createStudentForm = document.getElementById('create-student-account-form');
     if (createStudentForm) {
-      createStudentForm.addEventListener('submit', function (ev) {
+      createStudentForm.addEventListener('submit', async function (ev) {
         ev.preventDefault();
         const nameInput = document.getElementById('new-student-name');
         const fullName = (nameInput ? nameInput.value : '').trim();
@@ -4324,6 +4422,7 @@
 
         if (!fullName) return;
 
+        const submitBtn = createStudentForm.querySelector('button[type="submit"]');
         if (!username) {
           username = generateNextUsername();
         }
@@ -4353,6 +4452,18 @@
         state.students.push(newStudent);
         window.StudySnapStore.saveState(state);
 
+        await runWithLoading(submitBtn, 'Đang tạo tài khoản...', async function () {
+          await window.StudySnapStore.syncPostToGas(state, {
+            action: 'createStudentAccount',
+            student_id: newStudent.student_id,
+            full_name: newStudent.full_name,
+            class_name: newStudent.class_name,
+            avatar_initials: newStudent.avatar_initials,
+            username: newStudent.username,
+            password: newStudent.password
+          });
+        });
+
         // Reset form: chỉ cần xóa tên học sinh, tự động sinh username kế tiếp và sinh mật khẩu ngẫu nhiên mới
         if (nameInput) {
           nameInput.value = '';
@@ -4369,16 +4480,6 @@
 
         renderAll();
         showToast('Đã thêm học sinh ' + fullName + ' vào ' + className + ' (TK: ' + username + ' / MK: ' + password + ')!');
-
-        window.StudySnapStore.syncPostToGas(state, {
-          action: 'createStudentAccount',
-          student_id: newStudent.student_id,
-          full_name: newStudent.full_name,
-          class_name: newStudent.class_name,
-          avatar_initials: newStudent.avatar_initials,
-          username: newStudent.username,
-          password: newStudent.password
-        });
       });
     }
 
@@ -4413,7 +4514,7 @@
     // Thêm từ vựng mới
     const addVocabForm = document.getElementById('add-vocab-form');
     if (addVocabForm) {
-      addVocabForm.addEventListener('submit', function (ev) {
+      addVocabForm.addEventListener('submit', async function (ev) {
         ev.preventDefault();
         const lessonSelectVal = document.getElementById('new-vocab-lesson').value;
         const wordVal = document.getElementById('new-vocab-word').value.trim();
@@ -4424,6 +4525,7 @@
 
         if (!wordVal || !meaningVal) return;
 
+        const submitBtn = addVocabForm.querySelector('button[type="submit"]');
         const lessonObj = (state.lessons || []).find(function (l) { return l.lesson_id === lessonSelectVal; });
         const lessonTitle = lessonObj ? lessonObj.title : (lessonSelectVal || 'Bài mới');
         const newVocab = {
@@ -4440,6 +4542,21 @@
 
         state.vocabulary.push(newVocab);
         window.StudySnapStore.saveState(state);
+
+        await runWithLoading(submitBtn, 'Đang lưu từ vựng...', async function () {
+          await window.StudySnapStore.syncPostToGas(state, {
+            action: 'addVocabulary',
+            lesson_id: newVocab.lesson_id,
+            lesson_title: newVocab.lesson_title,
+            word: newVocab.word,
+            ipa: newVocab.ipa,
+            part_of_speech: newVocab.part_of_speech,
+            meaning_vi: newVocab.meaning_vi,
+            example_en: newVocab.example_en,
+            example_vi: newVocab.example_vi
+          });
+        });
+
         addVocabForm.reset();
         if (Array.isArray(window.StudySnapVocabList)) {
           window.StudySnapVocabList.unshift([wordVal, ipaVal, meaningVal]);
@@ -4450,18 +4567,6 @@
         }
         renderAll();
         showToast('Đã thêm từ vựng "' + wordVal + '" vào ' + newVocab.lesson_title + '!');
-
-        window.StudySnapStore.syncPostToGas(state, {
-          action: 'addVocabulary',
-          lesson_id: newVocab.lesson_id,
-          lesson_title: newVocab.lesson_title,
-          word: newVocab.word,
-          ipa: newVocab.ipa,
-          part_of_speech: newVocab.part_of_speech,
-          meaning_vi: newVocab.meaning_vi,
-          example_en: newVocab.example_en,
-          example_vi: newVocab.example_vi
-        });
       });
     }
 
@@ -4795,7 +4900,19 @@
           };
         });
 
-        await window.StudySnapStore.batchAddVocabulary(state, newVocabs);
+        await runWithLoading(
+          btnConfirmVocabImport,
+          'Đang nhập ' + newVocabs.length + ' từ...',
+          async function () {
+            await window.StudySnapStore.batchAddVocabulary(state, newVocabs);
+          },
+          newVocabs.length >= 15
+            ? {
+                title: 'Đang nhập danh sách từ vựng...',
+                desc: 'Hệ thống đang lưu ' + newVocabs.length + ' từ vựng vào kho bài học.'
+              }
+            : null
+        );
         if (Array.isArray(window.StudySnapVocabList)) {
           newVocabs.forEach(function (nv) {
             window.StudySnapVocabList.push([nv.word, nv.ipa, nv.meaning_vi]);
@@ -5560,7 +5677,7 @@
     }
 
     if (btnConfirmPracticeImport) {
-      btnConfirmPracticeImport.addEventListener('click', function () {
+      btnConfirmPracticeImport.addEventListener('click', async function () {
         if (!parsedPracticeResult || !parsedPracticeResult.sections || parsedPracticeResult.sections.length === 0) return;
 
         const mode = (practiceImportModeSel && practiceImportModeSel.value) || 'append';
@@ -5606,7 +5723,17 @@
           targetEx.thresholds.very_good = Math.max(1, Math.round(targetEx.total_score * 0.85));
         }
 
-        window.StudySnapStore.savePracticeExercise(state, targetEx);
+        await runWithLoading(
+          btnConfirmPracticeImport,
+          'Đang nhập vào đề...',
+          async function () {
+            await window.StudySnapStore.savePracticeExercise(state, targetEx);
+          },
+          {
+            title: 'Đang nhập đề luyện tập từ Excel...',
+            desc: 'Hệ thống đang lưu ' + importedSections.length + ' phần (' + parsedPracticeResult.totalItems + ' câu hỏi) lên máy chủ.'
+          }
+        );
         switchPracticeSubView('builder');
         renderTeacherPracticeTab();
 
@@ -5649,7 +5776,7 @@
     });
 
     // Event delegation
-    document.body.addEventListener('click', function (ev) {
+    document.body.addEventListener('click', async function (ev) {
       const playStudentBtn = ev.target.closest('[data-play-student]');
       if (playStudentBtn) {
         const subId = playStudentBtn.getAttribute('data-play-student');
@@ -5712,13 +5839,15 @@
         if (newPwd && newPwd.trim()) {
           st.password = newPwd.trim();
           window.StudySnapStore.saveState(state);
+          await runWithLoading(resetPwdBtn, 'Đang cập nhật...', async function () {
+            await window.StudySnapStore.syncPostToGas(state, {
+              action: 'resetStudentPassword',
+              student_id: st.student_id,
+              new_password: st.password
+            });
+          });
           renderStudentAccountsTab();
           showToast('Đã cập nhật mật khẩu mới cho ' + st.full_name + '!');
-          window.StudySnapStore.syncPostToGas(state, {
-            action: 'resetStudentPassword',
-            student_id: st.student_id,
-            new_password: st.password
-          });
         }
         return;
       }
@@ -5854,7 +5983,9 @@
         if (!Array.isArray(state.practiceExercises)) state.practiceExercises = [];
         state.practiceExercises.push(newEx);
         ui.selectedPracticeExId = newEx.exercise_id;
-        window.StudySnapStore.savePracticeExercise(state, newEx);
+        await runWithLoading(createPracticeBtn, 'Đang tạo đề...', async function () {
+          await window.StudySnapStore.savePracticeExercise(state, newEx);
+        });
         switchTeacherTab('practice');
         renderTeacherPracticeTab();
         showToast('Đã khởi tạo đề mới cho ' + tag + '! Hãy bấm chọn dạng bài bên dưới để soạn câu hỏi.');

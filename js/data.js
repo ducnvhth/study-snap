@@ -1184,6 +1184,264 @@ window.STUDYSNAP_INITIAL_DATA = {
 };
 
 /**
+ * Shared Global Loading UI Controller (Progress Bar, Status Chip, Overlay & Button Spinners)
+ */
+window.StudySnapLoading = (function () {
+  const ACTION_LABELS = {
+    bootstrap: 'Đang đồng bộ dữ liệu hệ thống...',
+    setupDatabase: 'Đang khởi tạo dữ liệu ban đầu...',
+    login: 'Đang xác thực tài khoản...',
+    submitHomework: 'Đang gửi bài tập về nhà...',
+    submitExitTicket: 'Đang lưu kết quả luyện tập...',
+    submitPracticeExercise: 'Đang nộp bài luyện tập cuối buổi...',
+    savePracticeExercise: 'Đang lưu đề luyện tập...',
+    deletePracticeExercise: 'Đang xóa đề luyện tập...',
+    gradeManualTranslation: 'Đang lưu điểm chấm câu dịch...',
+    addAssignment: 'Đang giao bài tập mới...',
+    deleteAssignment: 'Đang xóa bài tập...',
+    assignExercisesToClass: 'Đang giao bài tập cho lớp...',
+    saveTeacherFeedback: 'Đang lưu nhận xét & phản hồi giọng nói...',
+    createClass: 'Đang tạo lớp học mới...',
+    createStudentAccount: 'Đang tạo tài khoản học sinh...',
+    resetStudentPassword: 'Đang cập nhật mật khẩu học sinh...',
+    addVocabulary: 'Đang thêm từ vựng mới...',
+    batchAddVocabulary: 'Đang nhập danh sách từ vựng...',
+    clearAllData: 'Đang xóa toàn bộ dữ liệu thử nghiệm...',
+    clearAllDataCompletely: 'Đang xóa trắng toàn bộ dữ liệu...',
+    getMedia: 'Đang tải tệp âm thanh...'
+  };
+
+  let activeRequests = [];
+  let seqCounter = 0;
+  let hideTimer = null;
+  let overlayLockCount = 0;
+  const savedButtons = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
+
+  function resolveLabel(actionOrLabel) {
+    if (!actionOrLabel) return 'Đang kết nối máy chủ...';
+    return ACTION_LABELS[actionOrLabel] || String(actionOrLabel);
+  }
+
+  function ensureUi() {
+    if (typeof document === 'undefined' || !document.body) return false;
+
+    if (!document.getElementById('studysnap-api-progress')) {
+      const bar = document.createElement('div');
+      bar.id = 'studysnap-api-progress';
+      bar.className = 'ss-api-progress-bar';
+      bar.setAttribute('aria-hidden', 'true');
+      bar.innerHTML = '<div class="ss-api-progress-fill"></div>';
+      document.body.appendChild(bar);
+    }
+
+    if (!document.getElementById('studysnap-api-pill')) {
+      const chip = document.createElement('div');
+      chip.id = 'studysnap-api-pill';
+      chip.className = 'ss-api-status-chip';
+      chip.setAttribute('role', 'status');
+      chip.setAttribute('aria-live', 'polite');
+      chip.innerHTML =
+        '<span class="ss-spinner ss-spinner-sm" aria-hidden="true"></span>' +
+        '<span id="studysnap-api-pill-text">Đang đồng bộ dữ liệu...</span>';
+      document.body.appendChild(chip);
+    }
+
+    if (!document.getElementById('studysnap-loading-overlay')) {
+      const overlay = document.createElement('div');
+      overlay.id = 'studysnap-loading-overlay';
+      overlay.className = 'ss-loading-overlay';
+      overlay.setAttribute('role', 'status');
+      overlay.setAttribute('aria-live', 'assertive');
+      overlay.setAttribute('aria-hidden', 'true');
+      overlay.innerHTML =
+        '<div class="ss-loading-card">' +
+          '<div class="ss-loading-icon-badge" aria-hidden="true">' +
+            '<span class="ss-spinner ss-spinner-lg"></span>' +
+          '</div>' +
+          '<h3 class="ss-loading-title" id="studysnap-loading-title">Đang xử lý yêu cầu...</h3>' +
+          '<p class="ss-loading-desc" id="studysnap-loading-desc">Vui lòng chờ trong giây lát để hệ thống hoàn tất đồng bộ.</p>' +
+        '</div>';
+      document.body.appendChild(overlay);
+    }
+
+    return true;
+  }
+
+  function syncIndicator() {
+    if (!ensureUi()) return;
+    const bar = document.getElementById('studysnap-api-progress');
+    const chip = document.getElementById('studysnap-api-pill');
+    const chipText = document.getElementById('studysnap-api-pill-text');
+    if (!bar || !chip || !chipText) return;
+
+    if (activeRequests.length > 0) {
+      if (hideTimer) {
+        clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+      const latest = activeRequests[activeRequests.length - 1];
+      chipText.textContent = latest.label;
+      bar.classList.add('is-active');
+      chip.classList.add('is-active');
+    } else {
+      if (hideTimer) clearTimeout(hideTimer);
+      hideTimer = setTimeout(function () {
+        if (activeRequests.length === 0) {
+          bar.classList.remove('is-active');
+          chip.classList.remove('is-active');
+        }
+      }, 80);
+    }
+  }
+
+  function beginRequest(actionOrLabel) {
+    seqCounter += 1;
+    const id = 'req_' + seqCounter;
+    activeRequests.push({ id: id, label: resolveLabel(actionOrLabel) });
+    syncIndicator();
+    return id;
+  }
+
+  function endRequest(id) {
+    activeRequests = activeRequests.filter(function (r) {
+      return r.id !== id;
+    });
+    syncIndicator();
+  }
+
+  async function trackPromise(actionOrLabel, promiseOrFn) {
+    const id = beginRequest(actionOrLabel);
+    try {
+      const target = typeof promiseOrFn === 'function' ? promiseOrFn() : promiseOrFn;
+      return await target;
+    } finally {
+      endRequest(id);
+    }
+  }
+
+  function showOverlay(title, desc) {
+    overlayLockCount += 1;
+    if (!ensureUi()) return;
+    const overlay = document.getElementById('studysnap-loading-overlay');
+    const titleEl = document.getElementById('studysnap-loading-title');
+    const descEl = document.getElementById('studysnap-loading-desc');
+    if (titleEl && title) titleEl.textContent = String(title);
+    if (descEl && desc) descEl.textContent = String(desc);
+    if (overlay) {
+      overlay.classList.add('is-open');
+      overlay.setAttribute('aria-hidden', 'false');
+    }
+  }
+
+  function hideOverlay(force) {
+    overlayLockCount = force ? 0 : Math.max(0, overlayLockCount - 1);
+    if (overlayLockCount > 0) return;
+    if (typeof document === 'undefined') return;
+    const overlay = document.getElementById('studysnap-loading-overlay');
+    if (overlay) {
+      overlay.classList.remove('is-open');
+      overlay.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  async function withOverlay(title, desc, asyncFn) {
+    showOverlay(title, desc);
+    try {
+      return await asyncFn();
+    } finally {
+      hideOverlay();
+    }
+  }
+
+  function toButtonArray(btnOrList) {
+    if (!btnOrList) return [];
+    if (Array.isArray(btnOrList)) return btnOrList.filter(Boolean);
+    if (typeof btnOrList.length === 'number' && typeof btnOrList.tagName === 'undefined') {
+      return Array.prototype.slice.call(btnOrList).filter(Boolean);
+    }
+    return [btnOrList];
+  }
+
+  function setSingleButtonLoading(btn, isLoading, loadingText) {
+    if (!btn || typeof btn.tagName === 'undefined') return;
+    if (isLoading) {
+      if (savedButtons && !savedButtons.has(btn)) {
+        savedButtons.set(btn, {
+          html: btn.innerHTML,
+          disabled: Boolean(btn.disabled)
+        });
+      }
+      btn.disabled = true;
+      btn.classList.add('is-loading');
+      btn.setAttribute('aria-busy', 'true');
+      const existingText = btn.querySelector('.ss-btn-loading-label');
+      if (existingText) {
+        existingText.textContent = loadingText || 'Đang xử lý...';
+      } else {
+        btn.innerHTML = '';
+        const spinner = document.createElement('span');
+        spinner.className = 'ss-spinner ss-spinner-sm';
+        spinner.setAttribute('aria-hidden', 'true');
+        const label = document.createElement('span');
+        label.className = 'ss-btn-loading-label';
+        label.textContent = loadingText || 'Đang xử lý...';
+        btn.appendChild(spinner);
+        btn.appendChild(label);
+      }
+    } else {
+      btn.classList.remove('is-loading');
+      btn.removeAttribute('aria-busy');
+      if (savedButtons && savedButtons.has(btn)) {
+        const prev = savedButtons.get(btn);
+        btn.innerHTML = prev.html;
+        btn.disabled = prev.disabled;
+        savedButtons.delete(btn);
+      } else {
+        btn.disabled = false;
+      }
+    }
+  }
+
+  function setButtonLoading(btnOrList, isLoading, loadingText) {
+    toButtonArray(btnOrList).forEach(function (btn) {
+      setSingleButtonLoading(btn, isLoading, loadingText);
+    });
+  }
+
+  async function withButtonLoading(btnOrList, loadingText, asyncFn) {
+    const btns = toButtonArray(btnOrList);
+    if (btns.some(function (b) { return b.classList && b.classList.contains('is-loading'); })) {
+      return null;
+    }
+    setButtonLoading(btns, true, loadingText);
+    try {
+      return await asyncFn();
+    } finally {
+      setButtonLoading(btns, false);
+    }
+  }
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', function () {
+      if (activeRequests.length > 0) syncIndicator();
+    });
+  }
+
+  return {
+    ACTION_LABELS: ACTION_LABELS,
+    resolveLabel: resolveLabel,
+    beginRequest: beginRequest,
+    endRequest: endRequest,
+    trackPromise: trackPromise,
+    showOverlay: showOverlay,
+    hideOverlay: hideOverlay,
+    withOverlay: withOverlay,
+    setButtonLoading: setButtonLoading,
+    withButtonLoading: withButtonLoading
+  };
+})();
+
+/**
  * Shared Store & Backend Sync Manager
  */
 window.StudySnapStore = (function () {
@@ -1583,15 +1841,45 @@ window.StudySnapStore = (function () {
     });
   }
 
+  async function fetchWithTimeout(url, options, timeoutMs) {
+    if (typeof AbortController === 'undefined') {
+      return await fetch(url, options);
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(function () {
+      controller.abort();
+    }, timeoutMs || 25000);
+    try {
+      const fetchOpts = Object.assign({}, options || {}, { signal: controller.signal });
+      return await fetch(url, fetchOpts);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function syncPostToGas(stateObj, payload) {
     const url = getGasUrl();
     if (!url) return null;
+    const loadingCtrl = typeof window !== 'undefined' ? window.StudySnapLoading : null;
+    const actionName = payload && payload.action ? payload.action : 'sync';
+    const customLabel = (payload && payload._loadingLabel) || actionName;
+    const hasHeavyBody = Boolean(
+      payload &&
+        (payload.media_base64 ||
+          payload.teacher_voice_base64 ||
+          (Array.isArray(payload.vocabulary) && payload.vocabulary.length > 10))
+    );
+    const reqId = loadingCtrl ? loadingCtrl.beginRequest(customLabel) : null;
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      });
+      const response = await fetchWithTimeout(
+        url,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        },
+        hasHeavyBody ? 45000 : 25000
+      );
       const json = await response.json();
       if (json && json.ok && json.data) {
         mergeRemoteData(stateObj, json.data);
@@ -1599,14 +1887,18 @@ window.StudySnapStore = (function () {
       return json;
     } catch (e) {
       return null;
+    } finally {
+      if (loadingCtrl && reqId) loadingCtrl.endRequest(reqId);
     }
   }
 
   async function fetchBootstrapFromGas(stateObj) {
     const url = getGasUrl();
     if (!url) return null;
+    const loadingCtrl = typeof window !== 'undefined' ? window.StudySnapLoading : null;
+    const reqId = loadingCtrl ? loadingCtrl.beginRequest('bootstrap') : null;
     try {
-      const response = await fetch(url + '?action=bootstrap');
+      const response = await fetchWithTimeout(url + '?action=bootstrap', {}, 25000);
       const json = await response.json();
       if (json && json.ok && json.data) {
         if (
@@ -1624,6 +1916,8 @@ window.StudySnapStore = (function () {
       return json;
     } catch (e) {
       return null;
+    } finally {
+      if (loadingCtrl && reqId) loadingCtrl.endRequest(reqId);
     }
   }
 
@@ -1775,6 +2069,7 @@ window.StudySnapStore = (function () {
     assignExercisesToClass: assignExercisesToClass,
     batchAddVocabulary: batchAddVocabulary,
     gradeManualTranslation: gradeManualTranslation,
-    getInitials: getInitials
+    getInitials: getInitials,
+    loading: typeof window !== 'undefined' ? window.StudySnapLoading : null
   };
 })();

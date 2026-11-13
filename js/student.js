@@ -807,6 +807,8 @@
         const noteArea = document.getElementById('student-note-textarea');
         const noteText = noteArea ? noteArea.value.trim() : '';
         const existingSub = findSubmission(ui.selectedAssignmentId, student.student_id);
+        const submitBtn = formEl.querySelector('button[type="submit"]');
+        const loading = window.StudySnapLoading;
 
         const now = new Date();
         const timestamp =
@@ -823,6 +825,10 @@
           media_url: existingSub ? existingSub.media_url : 'demo:student-' + student.student_id + '-' + Date.now(),
           media_duration: existingSub ? existingSub.media_duration : '01:15'
         };
+
+        const hasBinaryMedia = Boolean(
+          mediaData.media_url && String(mediaData.media_url).indexOf('data:') === 0
+        );
 
         const submissionRecord = {
           submission_id: existingSub ? existingSub.submission_id : 'SUB_' + Date.now(),
@@ -841,42 +847,69 @@
           graded_at: existingSub ? existingSub.graded_at : ''
         };
 
-        const existingIndex = state.submissions.findIndex(function (s) {
-          return s.assignment_id === ui.selectedAssignmentId && s.student_id === student.student_id;
-        });
+        const runSubmit = async function () {
+          const runSync = async function () {
+            return await window.StudySnapStore.syncPostToGas(state, {
+              action: 'submitHomework',
+              assignment_id: submissionRecord.assignment_id,
+              student_id: submissionRecord.student_id,
+              student_note: submissionRecord.student_note,
+              media_type: submissionRecord.media_type,
+              media_url: submissionRecord.media_url,
+              media_duration: submissionRecord.media_duration,
+              media_base64: hasBinaryMedia ? mediaData.media_url : '',
+              media_mime_type: mediaData.media_type === 'video' ? 'video/mp4' : 'audio/webm'
+            });
+          };
 
-        if (existingIndex >= 0) {
-          state.submissions[existingIndex] = submissionRecord;
+          const remoteRes = loading
+            ? await loading.withOverlay(
+                hasBinaryMedia ? 'Đang tải tệp bài nộp lên hệ thống...' : 'Đang gửi bài tập về nhà...',
+                'Vui lòng giữ nguyên trang cho đến khi hệ thống xác nhận đã nhận bài.',
+                runSync
+              )
+            : await runSync();
+
+          if (remoteRes && remoteRes.ok === false) {
+            showToast(remoteRes.error || 'Chưa thể nộp bài lúc này. Vui lòng thử lại sau.');
+            return;
+          }
+
+          const existingIndex = state.submissions.findIndex(function (s) {
+            return s.assignment_id === ui.selectedAssignmentId && s.student_id === student.student_id;
+          });
+
+          if (existingIndex >= 0) {
+            state.submissions[existingIndex] = submissionRecord;
+          } else {
+            state.submissions.push(submissionRecord);
+          }
+
+          window.StudySnapStore.saveState(state);
+          ui.pendingMedia = null;
+          renderPendingMediaPreview();
+          if (recStatusText) {
+            recStatusText.textContent = 'Đã nộp thành công lúc ' + timestamp;
+          }
+
+          renderStudentHeaderAndStats();
+          renderHomeworkSection();
+          showToast(
+            remoteRes === null && window.StudySnapStore.getGasUrl()
+              ? 'Đã lưu bài nộp trên thiết bị (mất kết nối máy chủ).'
+              : 'Đã nộp Bài Tập Về Nhà thành công cho tài khoản ' + student.full_name + '!'
+          );
+        };
+
+        if (loading && submitBtn) {
+          await loading.withButtonLoading(
+            submitBtn,
+            hasBinaryMedia ? 'Đang tải tệp bài nộp...' : 'Đang gửi bài nộp...',
+            runSubmit
+          );
         } else {
-          state.submissions.push(submissionRecord);
+          await runSubmit();
         }
-
-        window.StudySnapStore.saveState(state);
-        ui.pendingMedia = null;
-        renderPendingMediaPreview();
-        if (recStatusText) {
-          recStatusText.textContent = 'Đã nộp thành công lúc ' + timestamp;
-        }
-
-        renderStudentHeaderAndStats();
-        renderHomeworkSection();
-        showToast('Đã nộp Bài Tập Về Nhà thành công cho tài khoản ' + student.full_name + '!');
-
-        await window.StudySnapStore.syncPostToGas(state, {
-          action: 'submitHomework',
-          assignment_id: submissionRecord.assignment_id,
-          student_id: submissionRecord.student_id,
-          student_note: submissionRecord.student_note,
-          media_type: submissionRecord.media_type,
-          media_url: submissionRecord.media_url,
-          media_duration: submissionRecord.media_duration,
-          media_base64:
-            mediaData.media_url && String(mediaData.media_url).indexOf('data:') === 0
-              ? mediaData.media_url
-              : '',
-          media_mime_type:
-            mediaData.media_type === 'video' ? 'video/mp4' : 'audio/webm'
-        });
       });
     }
   }
@@ -1058,7 +1091,6 @@
               ui.quizAnswered = false;
               renderExitTicketSection();
             } else {
-              ui.quizFinished = true;
               const now = new Date();
               const logRecord = {
                 record_id: 'EXT_' + Date.now(),
@@ -1076,19 +1108,33 @@
                   ':' +
                   String(now.getMinutes()).padStart(2, '0')
               };
-              state.exitTicketLogs.unshift(logRecord);
-              window.StudySnapStore.saveState(state);
-              renderExitTicketSection();
-              showToast('Đã lưu kết quả bài luyện tập cuối giờ của ' + student.full_name + '!');
 
-              await window.StudySnapStore.syncPostToGas(state, {
-                action: 'submitExitTicket',
-                ticket_id: logRecord.ticket_id,
-                student_id: logRecord.student_id,
-                student_name: logRecord.student_name,
-                score: logRecord.score,
-                total: logRecord.total
-              });
+              const runSaveExitTicket = async function () {
+                const remoteRes = await window.StudySnapStore.syncPostToGas(state, {
+                  action: 'submitExitTicket',
+                  ticket_id: logRecord.ticket_id,
+                  student_id: logRecord.student_id,
+                  student_name: logRecord.student_name,
+                  score: logRecord.score,
+                  total: logRecord.total
+                });
+                if (remoteRes && remoteRes.ok === false) {
+                  showToast(remoteRes.error || 'Chưa thể lưu kết quả lúc này. Vui lòng thử lại!');
+                  return;
+                }
+                ui.quizFinished = true;
+                state.exitTicketLogs.unshift(logRecord);
+                window.StudySnapStore.saveState(state);
+                showToast('Đã lưu kết quả bài luyện tập cuối giờ của ' + student.full_name + '!');
+                renderExitTicketSection();
+              };
+
+              const loading = window.StudySnapLoading;
+              if (loading) {
+                await loading.withButtonLoading(btnNext, 'Đang lưu kết quả...', runSaveExitTicket);
+              } else {
+                await runSaveExitTicket();
+              }
             }
           });
         }
@@ -2693,24 +2739,51 @@
           status: hasManualQuestions ? 'pending_manual' : 'graded'
         };
 
-        await window.StudySnapStore.submitPracticeExercise(state, newSubmission);
+        const submitBtn =
+          document.getElementById('btn-submit-practice') ||
+          formEl.querySelector('button[type="submit"]');
+        const loading = window.StudySnapLoading;
 
-        try {
-          localStorage.removeItem(getPracticeDraftKey(exercise.exercise_id));
-        } catch (err) {
-          // ignore
+        const runPracticeSubmit = async function () {
+          const doSubmit = async function () {
+            return await window.StudySnapStore.submitPracticeExercise(state, newSubmission);
+          };
+          const remoteRes = loading
+            ? await loading.withOverlay(
+                'Đang nộp bài luyện tập cuối buổi...',
+                'Hệ thống đang chấm điểm tự động và lưu kết quả bài làm của em.',
+                doSubmit
+              )
+            : await doSubmit();
+
+          if (remoteRes && remoteRes.ok === false) {
+            showToast(remoteRes.error || 'Chưa thể nộp bài lúc này. Vui lòng thử lại!');
+            return;
+          }
+
+          try {
+            localStorage.removeItem(getPracticeDraftKey(exercise.exercise_id));
+          } catch (err) {
+            // ignore
+          }
+
+          ui.practiceViewingResult = true;
+          showToast(
+            'Đã nộp bài tập thành công! Điểm số: ' +
+              totalEarnedScore +
+              '/' +
+              (exercise.total_score || 35) +
+              ' điểm'
+          );
+          renderPracticeSection();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        if (loading && submitBtn) {
+          await loading.withButtonLoading(submitBtn, 'Đang chấm & nộp bài...', runPracticeSubmit);
+        } else {
+          await runPracticeSubmit();
         }
-
-        ui.practiceViewingResult = true;
-        showToast(
-          'Đã nộp bài tập thành công! Điểm số: ' +
-            totalEarnedScore +
-            '/' +
-            (exercise.total_score || 35) +
-            ' điểm'
-        );
-        renderPracticeSection();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
       });
     }
   }

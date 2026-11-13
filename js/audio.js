@@ -106,6 +106,7 @@ window.StudySnapAudio = (function () {
           'aria-label="' + (isPlaying ? 'Tạm dừng âm thanh' : 'Phát âm thanh') + '">' +
           '<span class="vp-icon-play"' + (isPlaying ? ' style="display:none;"' : '') + '>' + PLAYER_ICONS.play + '</span>' +
           '<span class="vp-icon-pause"' + (isPlaying ? '' : ' style="display:none;"') + '>' + PLAYER_ICONS.pause + '</span>' +
+          '<span class="vp-icon-loading" style="display:none;"><span class="ss-spinner ss-spinner-sm" aria-hidden="true"></span></span>' +
         '</button>' +
         '<button type="button" class="voice-ctrl-btn voice-rewind-btn" data-vp-action="rewind" ' +
           'title="Tua lại 5 giây để nghe lại đoạn vừa rồi" aria-label="Tua lại 5 giây">' +
@@ -134,15 +135,27 @@ window.StudySnapAudio = (function () {
     if (!session) return;
     const containers = document.querySelectorAll('[data-voice-player="' + CSS.escape(playerId) + '"]');
     containers.forEach(function (el) {
-      el.classList.toggle('is-playing', Boolean(session.isPlaying));
+      const isLoading = Boolean(session.fetchingDriveMedia);
+      el.classList.toggle('is-playing', Boolean(session.isPlaying) && !isLoading);
+      el.classList.toggle('is-loading', isLoading);
       const playIcon = el.querySelector('.vp-icon-play');
       const pauseIcon = el.querySelector('.vp-icon-pause');
+      const loadingIcon = el.querySelector('.vp-icon-loading');
       const toggleBtn = el.querySelector('[data-vp-action="toggle"]');
-      if (playIcon) playIcon.style.display = session.isPlaying ? 'none' : '';
-      if (pauseIcon) pauseIcon.style.display = session.isPlaying ? '' : 'none';
+      if (playIcon) playIcon.style.display = !isLoading && !session.isPlaying ? '' : 'none';
+      if (pauseIcon) pauseIcon.style.display = !isLoading && session.isPlaying ? '' : 'none';
+      if (loadingIcon) loadingIcon.style.display = isLoading ? 'inline-flex' : 'none';
       if (toggleBtn) {
-        toggleBtn.setAttribute('title', session.isPlaying ? 'Tạm dừng (Pause)' : 'Phát (Play)');
-        toggleBtn.setAttribute('aria-label', session.isPlaying ? 'Tạm dừng âm thanh' : 'Phát âm thanh');
+        toggleBtn.disabled = isLoading;
+        toggleBtn.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+        toggleBtn.setAttribute(
+          'title',
+          isLoading ? 'Đang tải âm thanh...' : (session.isPlaying ? 'Tạm dừng (Pause)' : 'Phát (Play)')
+        );
+        toggleBtn.setAttribute(
+          'aria-label',
+          isLoading ? 'Đang tải âm thanh' : (session.isPlaying ? 'Tạm dừng âm thanh' : 'Phát âm thanh')
+        );
       }
       const curEl = el.querySelector('[data-vp-current]');
       const totEl = el.querySelector('[data-vp-total]');
@@ -336,6 +349,8 @@ window.StudySnapAudio = (function () {
       }
     }
 
+    if (session.fetchingDriveMedia) return;
+
     session.isPlaying = true;
     activePlayerId = session.id;
     syncPlayerDom(session.id);
@@ -343,27 +358,36 @@ window.StudySnapAudio = (function () {
     try {
       await session.audioEl.play();
     } catch (err) {
-      // Nếu link Google Drive bị trình duyệt chặn CORS redirect trên thẻ <audio>,
-      // tự động tải dữ liệu Base64 qua Google Apps Script (?action=getMedia&fileId=...)
+      // Nếu file bị trình duyệt chặn CORS redirect trên thẻ <audio>,
+      // tự động tải dữ liệu Base64 qua API (?action=getMedia&fileId=...)
       const driveFileId = extractDriveFileId(session.url);
       if (driveFileId && !session.fetchingDriveMedia && window.StudySnapStore && window.StudySnapStore.getGasUrl) {
         session.fetchingDriveMedia = true;
+        session.isPlaying = false;
+        syncPlayerDom(session.id);
         try {
           const gasUrl = window.StudySnapStore.getGasUrl();
-          const res = await fetch(gasUrl + '?action=getMedia&fileId=' + encodeURIComponent(driveFileId));
-          const json = await res.json();
+          const fetchReq = fetch(gasUrl + '?action=getMedia&fileId=' + encodeURIComponent(driveFileId)).then(function (r) {
+            return r.json();
+          });
+          const json = window.StudySnapLoading
+            ? await window.StudySnapLoading.trackPromise('getMedia', fetchReq)
+            : await fetchReq;
           if (json && json.ok && json.dataUrl) {
             session.url = json.dataUrl;
             session.audioEl.src = json.dataUrl;
             session.audioEl.currentTime = session.currentSeconds;
-            await session.audioEl.play();
             session.fetchingDriveMedia = false;
+            session.isPlaying = true;
+            syncPlayerDom(session.id);
+            await session.audioEl.play();
             return;
           }
         } catch (fetchErr) {
           // Fallback to simulated timeline
         }
         session.fetchingDriveMedia = false;
+        syncPlayerDom(session.id);
       }
       // Fallback sang trình phát mô phỏng có thanh tua nếu file không truy cập được
       session.isRealAudio = false;
