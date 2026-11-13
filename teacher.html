@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cổng Giáo Viên — StudySnap (Chấm BVN Voice, Bảng Tổng Hợp &amp; Quản Lý Học Sinh)</title>
   <meta name="description" content="Không gian làm việc dành riêng cho Giáo viên: chấm chữa BVN bằng giọng nói, theo dõi bảng tự động tổng hợp tiến độ, tạo tài khoản cho học sinh và quản lý kho từ vựng.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/main.css">
+  <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -26,13 +30,33 @@
       </div>
 
       <nav class="module-nav" aria-label="Chức năng của Giáo viên">
-        <button type="button" class="nav-tab is-active" data-teacher-tab="grading">
+        <button type="button" class="nav-tab is-active" data-teacher-tab="practice">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          <span>1. Luyện Tập Cuối Buổi</span>
+        </button>
+
+        <button type="button" class="nav-tab" data-teacher-tab="grading">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
             <line x1="12" x2="12" y1="19" y2="22"></line>
           </svg>
-          <span>1. Chữa BVN &amp; Bảng Tổng Hợp</span>
+          <span>2. Chữa BVN &amp; Bảng Theo Dõi</span>
+        </button>
+
+        <button type="button" class="nav-tab" data-teacher-tab="content">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+          <span>3. Ôn Từ Vựng</span>
         </button>
 
         <button type="button" class="nav-tab" data-teacher-tab="accounts">
@@ -42,27 +66,7 @@
             <line x1="19" x2="19" y1="8" y2="14"></line>
             <line x1="22" x2="16" y1="11" y2="11"></line>
           </svg>
-          <span>2. Tạo Tài Khoản Học Sinh</span>
-        </button>
-
-        <button type="button" class="nav-tab" data-teacher-tab="content">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-            <polyline points="2 17 12 22 22 17"></polyline>
-            <polyline points="2 12 12 17 22 12"></polyline>
-          </svg>
-          <span>3. Kho Từ Vựng &amp; Kết Quả Cuối Giờ</span>
-        </button>
-
-        <button type="button" class="nav-tab" data-teacher-tab="practice">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10 9 9 9 8 9"></polyline>
-          </svg>
-          <span>4. Bài Tập Luyện Tập Cuối Bài</span>
+          <span>4. Quản Lý Lớp &amp; Học Sinh</span>
         </button>
       </nav>
 
@@ -74,10 +78,152 @@
 
     <main>
       <!-- ====================================================================
-           TAB 1: CHẤM CHỮA BVN VOICE & BẢNG TỰ ĐỘNG TỔNG HỢP TIẾN ĐỘ
+           TAB 1: BÀI TẬP LUYỆN TẬP CUỐI BUỔI (GOOGLE FORMS QUIZ MAKER & CHẤM ĐIỂM)
            ==================================================================== -->
-      <section id="teacher-tab-grading" class="module-section is-active" aria-label="Chấm chữa BVN và Bảng tự động tổng hợp">
-        <!-- Banner Thống Kê & Bảng Điều Khiển (Chỉ hiển thị tại Tab 1) -->
+      <section id="teacher-tab-practice" class="module-section is-active" aria-label="Quản lý bài tập luyện tập cuối bài và chấm điểm">
+        <!-- Top Toolbar: Cực kỳ tinh gọn -->
+        <div class="matrix-toolbar" style="margin-bottom: 20px; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
+          <!-- Trái: Chọn bài tập & Nút thêm bài mới -->
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label for="teacher-practice-select" style="font-weight: 700; color: var(--color-primary-deep);">Bài tập:</label>
+            <select id="teacher-practice-select" class="form-control" style="min-width: 260px; width: auto; font-weight: 600;"></select>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-create-practice-ex">
+              <span>+ Tạo bài tập mới</span>
+            </button>
+          </div>
+
+          <!-- Giữa: Chuyển đổi Soạn câu hỏi vs Điểm học sinh -->
+          <div class="filter-pill-group" role="tablist" aria-label="Chế độ làm việc">
+            <button type="button" class="filter-pill is-active" id="subtab-btn-builder" data-practice-view="builder">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+              <span>Soạn câu hỏi</span>
+            </button>
+            <button type="button" class="filter-pill" id="subtab-btn-submissions" data-practice-view="submissions">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+              <span>Điểm học sinh (<span id="teacher-practice-sub-count-pill">0</span>)</span>
+            </button>
+          </div>
+
+          <!-- Phải: Nút Giao Bài Cho Lớp, Lưu Toàn Bộ & Nút Xóa Đề -->
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-assign-practice-to-class" style="font-weight: 700;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              <span>Giao bài cho lớp</span>
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-save-top-bar" style="font-weight: 700;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+              <span>Lưu bài tập</span>
+            </button>
+            <button type="button" class="btn-danger-outline" id="btn-delete-current-ex" title="Xóa bài tập này">
+              <span>Xóa bài này</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ==================== VIEW 1: SOẠN CÂU HỎI (GOOGLE FORM STYLE) ==================== -->
+        <div id="teacher-practice-view-builder">
+          <form id="teacher-exercise-meta-form">
+            <!-- Form Header Card (Giống tiêu đề đầu đề Google Form) -->
+            <div class="surface-panel" style="margin-bottom: 20px;">
+              <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 260px;">
+                  <label class="form-label" for="ex-meta-title" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground); text-transform: uppercase; letter-spacing: 0.05em;">Tiêu đề bài tập</label>
+                  <input type="text" id="ex-meta-title" class="form-control" style="font-size: 1.125rem; font-weight: 800; color: var(--ink);" placeholder="Ví dụ: Bài tập luyện tập cuối bài — HSK 1: Bài 1" required>
+                </div>
+                <div style="width: 160px;">
+                  <label class="form-label" for="ex-meta-tag" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground); text-transform: uppercase; letter-spacing: 0.05em;">Thuộc bài</label>
+                  <input type="text" id="ex-meta-tag" class="form-control" style="font-weight: 600;" placeholder="Ví dụ: Bài 1" required>
+                </div>
+                <div style="align-self: flex-end; padding-bottom: 4px;">
+                  <span class="status-badge status-graded tabular-nums" id="teacher-practice-maxscore-badge" style="font-size: 0.9375rem; font-weight: 700; padding: 8px 14px;">Tổng 35 điểm</span>
+                </div>
+              </div>
+              <input type="hidden" id="ex-meta-thresh-good" value="25">
+              <input type="hidden" id="ex-meta-thresh-verygood" value="31">
+            </div>
+
+            <!-- Thanh Chèn Nhanh Dạng Câu Hỏi (Quick Add Bar - Google Forms) -->
+            <div class="gform-quick-add-bar" style="margin-bottom: 20px;">
+              <div class="gform-quick-add-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                <span>Bấm chọn dạng bài để chèn ngay mẫu câu hỏi vào đề:</span>
+              </div>
+              <div class="gform-type-buttons">
+                <button type="button" class="gform-type-btn" data-quick-add-type="matching">
+                  <span>+ 1. Nối từ</span>
+                </button>
+                <button type="button" class="gform-type-btn" data-quick-add-type="multiple_choice">
+                  <span>+ 2. Trắc nghiệm</span>
+                </button>
+                <button type="button" class="gform-type-btn" data-quick-add-type="fill_blank_wordbank">
+                  <span>+ 3. Điền từ</span>
+                </button>
+                <button type="button" class="gform-type-btn" data-quick-add-type="error_correction">
+                  <span>+ 4. Sửa câu sai</span>
+                </button>
+                <button type="button" class="gform-type-btn" data-quick-add-type="translation">
+                  <span>+ 5. Dịch câu</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Danh sách các câu hỏi hiển thị dạng Card trực quan -->
+            <div id="teacher-builder-sections-list"></div>
+
+            <!-- Nút Lưu Cuối Trang -->
+            <div class="banner-actions" style="margin-top: 24px; justify-content: center; gap: 14px;">
+              <button type="submit" class="btn btn-primary" id="btn-save-exercise-meta" style="min-width: 240px; font-size: 1rem; font-weight: 700; padding: 12px 24px;">
+                <span>💾 Lưu Toàn Bộ Bài Tập</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- ==================== VIEW 2: BẢNG BÀI NỘP & CHẤM ĐIỂM ==================== -->
+        <div id="teacher-practice-view-submissions" class="surface-panel" style="display:none;">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+              </svg>
+              <h2>Danh sách bài nộp &amp; Chấm câu Dịch</h2>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <button type="button" class="btn btn-outline btn-sm" id="btn-export-practice-csv">
+                <span>Xuất điểm (CSV Excel)</span>
+              </button>
+              <span class="status-badge status-submitted" id="teacher-practice-sub-count">0 bài nộp</span>
+            </div>
+          </div>
+
+          <p style="color:var(--color-muted-foreground);font-size:0.875rem;">
+            Hệ thống tự động chấm điểm Phần 1–4. Giáo viên có thể bấm "Chấm câu Dịch" để cho điểm và gửi lời nhận xét cho học sinh.
+          </p>
+
+          <div style="overflow-x:auto;">
+            <table class="vocab-manage-table" aria-label="Bảng điểm bài tập luyện tập của học sinh">
+              <thead>
+                <tr>
+                  <th>Học sinh</th>
+                  <th>Điểm tổng</th>
+                  <th>Xếp loại</th>
+                  <th>Điểm các phần</th>
+                  <th>Trạng thái</th>
+                  <th>Hành động</th>
+                </tr>
+              </thead>
+              <tbody id="teacher-practice-submissions-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           TAB 2: CHỮA BÀI VỀ NHÀ VÀ BẢNG THEO DÕI
+           ==================================================================== -->
+      <section id="teacher-tab-grading" class="module-section" aria-label="Chữa bài về nhà và bảng theo dõi">
+        <!-- Banner Thống Kê & Bảng Điều Khiển -->
         <div class="workspace-banner" aria-label="Thống kê tiến độ lớp học">
           <div>
             <h1>Bảng điều khiển giảng dạy &amp; chấm chữa bài</h1>
@@ -114,18 +260,27 @@
           </div>
         </div>
 
-        <!-- Thanh Chọn Lớp Học Dùng Chung Cho Toàn Bộ Tab 1 -->
+        <!-- Thanh Chọn Lớp Học & Buổi Học Dùng Chung Cho Toàn Bộ Tab 2 -->
         <div class="class-selector-card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--color-surface);border:1px solid var(--color-border-soft);padding:12px 18px;border-radius:var(--radius-xl);margin-bottom:20px;box-shadow:var(--shadow-sm);flex-wrap:wrap;">
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
             <label for="teacher-class-filter" style="font-weight:800;color:var(--color-primary-deep);font-size:0.9375rem;display:flex;align-items:center;gap:6px;">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
               <span>Chọn Lớp học:</span>
             </label>
-            <select id="teacher-class-filter" class="form-control" style="min-width:260px;width:auto;font-weight:700;color:var(--color-primary-deep);"></select>
+            <select id="teacher-class-filter" class="form-control" style="min-width:240px;width:auto;font-weight:700;color:var(--color-primary-deep);"></select>
             <span class="status-badge status-submitted" id="teacher-class-count-badge">6 học sinh</span>
+
+            <!-- Bộ lọc theo Buổi học (Buổi 1, Buổi 2... tránh 60 bài rối mắt) -->
+            <label for="teacher-grading-session-filter" style="font-weight:800;color:var(--color-primary-deep);font-size:0.9375rem;display:flex;align-items:center;gap:6px;margin-left:8px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              <span>Buổi học:</span>
+            </label>
+            <select id="teacher-grading-session-filter" class="form-control" style="min-width:160px;width:auto;font-weight:700;color:var(--color-primary-deep);">
+              <option value="all">Tất cả các buổi</option>
+            </select>
           </div>
           <div style="font-size:0.8125rem;color:var(--color-muted-foreground);">
-            💡 Bảng tổng hợp &amp; danh sách bài tập sẽ tự động lọc theo lớp học được chọn
+            💡 Bảng tổng hợp &amp; danh sách bài tập sẽ tự động lọc theo lớp học và buổi học được chọn
           </div>
         </div>
 
@@ -150,8 +305,15 @@
                 <select id="grade-student-select" class="form-control"></select>
               </div>
               <div class="form-group">
-                <label class="form-label" for="grade-assignment-select">Chọn Bài tập về nhà</label>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                  <label class="form-label" for="grade-assignment-select" style="margin:0;">Chọn Bài tập về nhà</label>
+                  <button type="button" class="btn-danger-outline" id="btn-delete-current-asg" title="Xóa bài tập này nếu lỡ tạo sai">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    <span>Xóa bài này</span>
+                  </button>
+                </div>
                 <select id="grade-assignment-select" class="form-control"></select>
+                <div id="grade-assignment-session-hint" style="font-size:0.75rem;color:var(--color-muted-foreground);margin-top:3px;"></div>
               </div>
             </div>
 
@@ -197,62 +359,119 @@
             </form>
           </div>
 
-          <!-- Cột Phải: Giáo viên Giao Bài Tập Về Nhà Mới -->
+          <!-- Cột Phải: Quản lý & Giao BVN theo Buổi học (Phần Chọn & Phần Nhập) -->
           <div class="surface-panel">
             <div class="panel-header">
               <div class="panel-title-row">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                   <polyline points="14 2 14 8 20 8"></polyline>
-                  <line x1="12" x2="12" y1="18" y2="12"></line>
+                  <line x1="12" y1="18" x2="12" y2="12"></line>
                   <line x1="9" x2="15" y1="15" y2="15"></line>
                 </svg>
-                <h2>Giao Bài tập về nhà mới cho lớp</h2>
+                <h2>Quản lý &amp; Giao BVN theo Buổi học</h2>
               </div>
-              <span class="status-badge status-graded">Tự động thêm cột vào Bảng tổng hợp</span>
+              <span class="status-badge status-graded">Phần chọn &amp; Phần nhập bài cho lớp</span>
             </div>
 
-            <p style="color:var(--color-muted-foreground);">
-              Bài tập mới sau khi tạo sẽ xuất hiện ngay trên Cổng Học sinh của lớp được chọn để học sinh nộp bài thu âm/video.
-            </p>
-
-            <form id="create-assignment-form">
-              <div class="form-row-2">
-                <div class="form-group">
-                  <label class="form-label" for="new-asg-class">Giao cho Lớp học</label>
-                  <select id="new-asg-class" class="form-control"></select>
+            <div class="session-manage-box">
+              <!-- PHẦN 1: CHỌN BUỔI HỌC & CHỌN BÀI ĐỂ GIAO CHO LỚP NÀO -->
+              <div style="background: var(--bg); border-radius: var(--radius-lg); padding: 16px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <label for="manage-session-picker" style="font-weight: 700; font-size: 0.875rem; color: var(--color-primary-deep);">
+                      1. Chọn Buổi học:
+                    </label>
+                    <select id="manage-session-picker" class="form-control" style="width: auto; min-width: 140px; font-weight: 700;">
+                      <!-- Populated by JS: Buổi 1, Buổi 2... -->
+                    </select>
+                  </div>
+                  <button type="button" class="btn btn-outline btn-sm" id="btn-toggle-add-session" style="font-weight: 700;">
+                    <span>+ Thêm Buổi mới</span>
+                  </button>
                 </div>
-                <div class="form-group">
-                  <label class="form-label" for="new-asg-tag">Thuộc Bài học</label>
-                  <select id="new-asg-tag" class="form-control">
-                    <option value="Bài 1">Bài 1: Chào hỏi &amp; Làm quen</option>
-                    <option value="Bài 2">Bài 2: Học tập &amp; Ngôn ngữ</option>
-                    <option value="Bài 3">Bài 3: Mua sắm &amp; Đời sống</option>
-                    <option value="Bài 4">Bài 4: Đồ ăn &amp; Nhà hàng</option>
-                  </select>
+
+                <!-- Dòng thêm buổi học mới nếu cần -->
+                <div id="quick-add-session-row" style="display: none; margin-bottom: 12px; padding: 10px; background: var(--color-primary-light); border-radius: var(--radius-md);">
+                  <div style="display: flex; gap: 8px;">
+                    <input type="text" id="new-custom-session-name" class="form-control" placeholder="Tên buổi mới (Ví dụ: Buổi 4, Buổi 5...)">
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-create-session-confirm">Tạo</button>
+                    <button type="button" class="btn btn-outline btn-sm" id="btn-cancel-add-session">Hủy</button>
+                  </div>
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                  <span style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground);">
+                    Các bài tập nhỏ trong buổi này:
+                  </span>
+                  <div style="display: flex; gap: 8px;">
+                    <button type="button" class="btn btn-outline btn-sm" id="btn-check-all-subtasks" style="padding: 2px 8px; font-size: 0.75rem;">Chọn tất cả</button>
+                    <button type="button" class="btn btn-outline btn-sm" id="btn-uncheck-all-subtasks" style="padding: 2px 8px; font-size: 0.75rem;">Bỏ chọn</button>
+                  </div>
+                </div>
+
+                <!-- Danh sách bài tập nhỏ có checkbox để chọn -->
+                <div id="session-subtasks-checklist" class="session-asg-checklist">
+                  <!-- Populated by JS -->
+                </div>
+
+                <!-- Thanh chọn giao bài cho lớp nào -->
+                <div class="asg-assign-action-bar" style="margin-top: 12px;">
+                  <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 220px;">
+                    <label for="assign-selected-target-class" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-primary-deep); white-space: nowrap;">
+                      Giao bài đã chọn cho Lớp:
+                    </label>
+                    <select id="assign-selected-target-class" class="form-control" style="font-size: 0.8125rem;">
+                      <!-- Populated by JS -->
+                    </select>
+                  </div>
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-assign-selected-action" style="font-weight: 700;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    <span>Giao cho lớp</span>
+                  </button>
                 </div>
               </div>
 
-              <div class="form-row-2">
-                <div class="form-group">
-                  <label class="form-label" for="new-asg-due">Hạn nộp bài</label>
-                  <input type="text" id="new-asg-due" class="form-control tabular-nums" placeholder="Ví dụ: 20/11/2026" required>
-                </div>
-                <div class="form-group">
-                  <label class="form-label" for="new-asg-title">Tiêu đề Bài tập về nhà</label>
-                  <input type="text" id="new-asg-title" class="form-control" placeholder="Ví dụ: Bài 4: Thu âm hội thoại đặt món ăn bằng tiếng Trung" required>
-                </div>
-              </div>
+              <!-- PHẦN 2: NHẬP THÊM BÀI TẬP NHỎ VÀO BUỔI NÀY -->
+              <div style="background: var(--bg); border-radius: var(--radius-lg); padding: 16px;">
+                <h3 style="font-size: 0.9375rem; margin-top: 0; margin-bottom: 12px; color: var(--color-primary-deep);">
+                  2. Nhập thêm bài tập nhỏ vào buổi này:
+                </h3>
 
-              <div class="form-group">
-                <label class="form-label" for="new-asg-desc">Hướng dẫn &amp; Yêu cầu thu âm/quay video</label>
-                <textarea id="new-asg-desc" class="form-control" placeholder="Mô tả yêu cầu phát âm thanh điệu, chữ Hán, độ dài file ghi âm hoặc video..." required></textarea>
-              </div>
+                <form id="create-assignment-form">
+                  <input type="hidden" id="new-asg-session" value="Buổi 1">
+                  <div class="form-row-2">
+                    <div class="form-group" style="margin-bottom: 8px;">
+                      <label class="form-label" for="new-asg-tag" style="font-size: 0.8125rem;">Tên bài trong buổi</label>
+                      <input type="text" id="new-asg-tag" class="form-control" placeholder="Ví dụ: Bài 3, Bài 4..." required value="Bài 1">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 8px;">
+                      <label class="form-label" for="new-asg-due" style="font-size: 0.8125rem;">Hạn nộp bài</label>
+                      <input type="text" id="new-asg-due" class="form-control tabular-nums" placeholder="Ví dụ: 20/11/2026" required>
+                    </div>
+                  </div>
 
-              <button type="submit" class="btn btn-secondary">
-                <span>🚀 Giao bài tập về nhà cho lớp</span>
-              </button>
-            </form>
+                  <div class="form-group" style="margin-bottom: 8px;">
+                    <label class="form-label" for="new-asg-class" style="font-size: 0.8125rem;">Giao ngay cho Lớp học</label>
+                    <select id="new-asg-class" class="form-control" style="font-size: 0.8125rem;"></select>
+                  </div>
+
+                  <div class="form-group" style="margin-bottom: 8px;">
+                    <label class="form-label" for="new-asg-title" style="font-size: 0.8125rem;">Tiêu đề Bài tập về nhà</label>
+                    <input type="text" id="new-asg-title" class="form-control" placeholder="Ví dụ: Bài 3: Thu âm đàm thoại mua sắm" required>
+                  </div>
+
+                  <div class="form-group" style="margin-bottom: 12px;">
+                    <label class="form-label" for="new-asg-desc" style="font-size: 0.8125rem;">Hướng dẫn &amp; Yêu cầu thu âm/video</label>
+                    <textarea id="new-asg-desc" class="form-control" rows="2" placeholder="Yêu cầu phát âm, thanh điệu, thời lượng audio/video..." required></textarea>
+                  </div>
+
+                  <button type="submit" class="btn btn-secondary btn-sm" style="width: 100%; justify-content: center; font-weight: 700;">
+                    <span>+ Lưu bài tập nhỏ vào buổi này</span>
+                  </button>
+                </form>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -291,7 +510,362 @@
         </div>
       </section>
       <!-- ====================================================================
-           TAB 2: QUẢN LÝ LỚP HỌC & TÀI KHOẢN HỌC SINH
+           TAB 3: ÔN TỪ VỰNG TIẾNG TRUNG ĐA NĂNG (FLASHCARD, TRẮC NGHIỆM, TẬP VIẾT NÉT, TRA CỨU)
+           ==================================================================== -->
+      <section id="teacher-tab-content" class="module-section" aria-label="Luyện tập và ôn từ vựng tiếng Trung">
+        <div class="vocab-workspace">
+          <div class="panel-header" style="flex-wrap: wrap; gap: 12px;">
+            <div class="panel-title-row">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+              </svg>
+              <h2>Luyện Tập &amp; Ôn Từ Vựng Tiếng Trung</h2>
+              <span class="status-badge status-graded" id="vocab-total-badge">272 từ vựng</span>
+            </div>
+
+            <!-- Công cụ quản trị dành riêng cho Giáo viên -->
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <button type="button" class="btn btn-outline btn-sm" id="btn-open-import-vocab-modal" style="font-weight: 700;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <span>Nhập từ Excel / CSV</span>
+              </button>
+              <button type="button" class="btn btn-primary btn-sm" id="btn-toggle-manual-add-vocab" style="font-weight: 700;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>+ Thêm từ thủ công</span>
+              </button>
+            </div>
+          </div>
+
+          <p style="margin-top: 0; margin-bottom: 16px; color: var(--color-muted-foreground);">
+            Ôn luyện từ vựng toàn diện với 4 chế độ: Thẻ lật 3D ghi nhớ, Luyện trắc nghiệm phản xạ, Tập viết từng nét chữ Hán chuẩn nét và Tra cứu phát âm toàn bộ 272 từ vựng HSK. Giáo viên có thể nhập thêm từ vựng mới qua file Excel/CSV hoặc thêm trực tiếp vào kho từ.
+          </p>
+
+          <!-- KHUNG THÊM TỪ VỰNG THỦ CÔNG DÀNH CHO GIÁO VIÊN (Collapsible Box) -->
+          <div id="teacher-manual-vocab-box" style="display: none; background: var(--white); border: 1.5px dashed var(--pink-md); border-radius: var(--radius-xl); padding: 18px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <h3 style="margin: 0; font-size: 1rem; color: var(--color-primary-deep); font-weight: 800; display: inline-flex; align-items: center; gap: 8px;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                <span>Thêm từ vựng mới vào kho từ vựng</span>
+              </h3>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-close-manual-add-vocab" title="Đóng khung này">✕ Đóng</button>
+            </div>
+
+            <form id="add-vocab-form">
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label class="form-label" for="new-vocab-lesson">Thuộc bài học</label>
+                  <select id="new-vocab-lesson" class="form-control"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="new-vocab-word">Từ vựng tiếng Trung (Chữ Hán)</label>
+                  <input type="text" id="new-vocab-word" class="form-control" placeholder="Ví dụ: 谢谢 hoặc 学习" required>
+                </div>
+              </div>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label class="form-label" for="new-vocab-ipa">Phiên âm (Pinyin)</label>
+                  <input type="text" id="new-vocab-ipa" class="form-control tabular-nums" placeholder="Ví dụ: xiè xie / xué xí">
+                  <div class="pinyin-tone-bar" aria-label="Bấm để chèn nhanh dấu thanh điệu Pinyin">
+                    <span style="font-size:0.75rem;color:var(--color-muted-foreground);font-weight:600;">Dấu thanh:</span>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ā">ā</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="á">á</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǎ">ǎ</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="à">à</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ō">ō</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ó">ó</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǒ">ǒ</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ò">ò</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ē">ē</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="é">é</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ě">ě</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="è">è</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ī">ī</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="í">í</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǐ">ǐ</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ì">ì</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ū">ū</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ú">ú</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǔ">ǔ</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ù">ù</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǖ">ǖ</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǘ">ǘ</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǚ">ǚ</button>
+                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǜ">ǜ</button>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="new-vocab-pos">Từ loại</label>
+                  <input type="text" id="new-vocab-pos" class="form-control" placeholder="Ví dụ: Động từ / Danh từ">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="new-vocab-meaning">Nghĩa tiếng Việt</label>
+                <input type="text" id="new-vocab-meaning" class="form-control" placeholder="Ví dụ: Cảm ơn / Học tập" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="new-vocab-example-en">Câu ví dụ tiếng Trung (kèm Pinyin)</label>
+                <input type="text" id="new-vocab-example-en" class="form-control" placeholder="Ví dụ: 谢谢你的帮助。(Xièxie nǐ de bāngzhù.)">
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="btn btn-outline" id="btn-cancel-manual-vocab">Hủy</button>
+                <button type="submit" class="btn btn-primary">
+                  <span>Lưu từ vựng mới</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- 4 Sub-Tabs Navigation -->
+          <nav class="vocab-subnav" aria-label="Các chế độ ôn tập từ vựng">
+            <button type="button" class="vocab-subtab is-active" data-vsub="flashcard">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 8 6 4-6 4Z"/></svg>
+              <span>Thẻ Flashcard 3D</span>
+            </button>
+            <button type="button" class="vocab-subtab" data-vsub="quiz">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>Luyện Trắc Nghiệm</span>
+            </button>
+            <button type="button" class="vocab-subtab" data-vsub="stroke">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
+              <span>Tập Viết Nét Chữ</span>
+            </button>
+            <button type="button" class="vocab-subtab" data-vsub="list">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <span>Bảng Tra Cứu Toàn Bộ</span>
+            </button>
+          </nav>
+
+          <!-- SUB-PANEL 1: FLASHCARD 3D -->
+          <div id="vpanel-flashcard" class="vocab-panel is-active">
+            <div class="fc-stage-container">
+              <div class="fc-controls-bar">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <label for="fc-order-select" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-foreground);">Thứ tự:</label>
+                  <select id="fc-order-select" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8125rem;">
+                    <option value="seq">Tuần tự</option>
+                    <option value="rand">Ngẫu nhiên</option>
+                  </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <label for="fc-side-select" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-foreground);">Hiện trước:</label>
+                  <select id="fc-side-select" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8125rem;">
+                    <option value="zh">Chữ Hán</option>
+                    <option value="vi">Tiếng Việt</option>
+                  </select>
+                </div>
+                <button type="button" class="btn btn-outline btn-sm" id="btn-fc-reset">
+                  <span>Làm lại từ đầu</span>
+                </button>
+              </div>
+
+              <!-- Progress bar -->
+              <div class="practice-progress-bar-wrap" style="margin-bottom: 6px;">
+                <div class="practice-progress-bar" id="fc-progress-bar" style="width: 1%;"></div>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--color-muted-foreground); margin-bottom: 14px;">
+                <span>Tiến độ ghi nhớ</span>
+                <span id="fc-progress-label" class="tabular-nums font-bold">1 / 272</span>
+              </div>
+
+              <!-- 3D Card -->
+              <div class="flashcard-3d-wrap" id="fc-3d-card-wrap" role="button" tabindex="0" title="Nhấp vào thẻ để lật xem mặt sau">
+                <div class="flashcard-3d" id="fc-3d-card">
+                  <div class="fc-3d-face fc-3d-front">
+                    <span class="status-badge" style="background: #FFFFFF; color: var(--ink); font-weight: 800;" id="fc-front-stt">#1</span>
+                    <div class="fc-3d-hanzi" id="fc-front-main-text">老师</div>
+                    <span style="font-size: 0.8125rem; opacity: 0.85;">👆 Nhấp hoặc gõ phím cách để lật thẻ</span>
+                  </div>
+                  <div class="fc-3d-face fc-3d-back">
+                    <div class="fc-3d-hanzi" id="fc-back-hanzi-text" style="color: var(--color-primary-deep); font-size: 2rem;">老师</div>
+                    <div class="fc-3d-pinyin" id="fc-back-pinyin-text">lǎoshī</div>
+                    <div class="fc-3d-meaning" id="fc-back-meaning-text">Giáo viên</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Action buttons -->
+              <div class="fc-action-buttons">
+                <button type="button" class="btn btn-outline btn-sm" id="btn-fc-speak-word" title="Nghe phát âm chuẩn giọng Bắc Kinh">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                  <span>Phát âm (Speech)</span>
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" id="btn-fc-go-stroke" title="Xem thứ tự từng nét viết chữ này">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
+                  <span>Xem nét chữ</span>
+                </button>
+              </div>
+
+              <!-- Navigation Controls -->
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px;">
+                <button type="button" class="btn btn-outline" id="btn-fc-prev-card">
+                  <span>← Từ trước</span>
+                </button>
+                <button type="button" class="btn btn-primary" id="btn-fc-next-card">
+                  <span>Tiếp theo →</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-PANEL 2: TRẮC NGHIỆM (QUIZ) -->
+          <div id="vpanel-quiz" class="vocab-panel">
+            <div style="max-width: 640px; margin: 0 auto;">
+              <div class="fc-controls-bar" style="margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <label for="quiz-mode-select" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-foreground);">Kiểu hỏi:</label>
+                  <select id="quiz-mode-select" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8125rem;">
+                    <option value="zh2vi">Hán → Việt</option>
+                    <option value="vi2zh">Việt → Hán</option>
+                    <option value="mixed">Hỗn hợp</option>
+                  </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <label for="quiz-count-select" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-foreground);">Số câu:</label>
+                  <select id="quiz-count-select" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8125rem;">
+                    <option value="20">20 câu</option>
+                    <option value="30">30 câu</option>
+                    <option value="50">50 câu</option>
+                    <option value="all">Tất cả</option>
+                  </select>
+                </div>
+                <button type="button" class="btn btn-outline btn-sm" id="btn-quiz-restart">
+                  <span>Bắt đầu lại</span>
+                </button>
+              </div>
+
+              <!-- Header điểm số -->
+              <div id="quiz-active-block">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
+                  <div style="display: gap: 10px; display: flex;">
+                    <span class="status-badge status-graded" id="quiz-stat-correct">Đúng: 0</span>
+                    <span class="status-badge" style="background: var(--color-destructive-bg); color: var(--color-destructive); border: 1px solid var(--color-destructive-border);" id="quiz-stat-wrong">Sai: 0</span>
+                    <span class="status-badge status-submitted" id="quiz-stat-total">Đã làm: 0</span>
+                  </div>
+                  <span id="quiz-counter-text" class="tabular-nums" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground);">1 / 20</span>
+                </div>
+
+                <div class="practice-progress-bar-wrap" style="margin-bottom: 16px;">
+                  <div class="practice-progress-bar" id="quiz-progress-bar" style="width: 5%;"></div>
+                </div>
+
+                <!-- Thẻ câu hỏi -->
+                <div style="text-align: center; padding: 28px 24px; margin-bottom: 16px; background: var(--grad-hero-bg); border-radius: var(--radius-xl);">
+                  <div id="quiz-main-question" style="font-family: var(--font-display); font-size: 2.5rem; font-weight: 800; color: var(--color-primary-deep); line-height: 1.2;">老师</div>
+                  <div id="quiz-pinyin-question" style="font-size: 1.125rem; color: var(--color-muted-foreground); margin-top: 4px;">lǎoshī</div>
+                  <div id="quiz-ask-direction" style="font-size: 0.875rem; font-weight: 600; color: var(--color-foreground); margin-top: 10px;">Chọn nghĩa tiếng Việt chính xác:</div>
+                </div>
+
+                <!-- 4 Options -->
+                <div id="quiz-options-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;">
+                </div>
+
+                <div id="quiz-feedback-box" style="min-height: 28px; text-align: center; font-weight: 700; font-size: 0.9375rem; margin-bottom: 14px;"></div>
+
+                <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
+                  <button type="button" class="btn btn-outline btn-sm" id="btn-quiz-speak-question">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                    <span>Nghe phát âm</span>
+                  </button>
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-quiz-next-question" style="display: none;">
+                    <span>Câu tiếp theo →</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Result Screen -->
+              <div id="quiz-result-view" style="display: none; text-align: center; padding: 32px 16px;">
+                <div style="display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 120px; height: 120px; border-radius: 50%; background-color: #FF99BE; background: var(--grad-pink-peach); color: var(--ink); padding: 12px; margin-bottom: 16px; border: 2px solid #FFFFFF; box-shadow: 0 8px 24px rgba(255, 107, 157, 0.24);">
+                  <span id="quiz-result-percent" style="font-family: var(--font-display); font-size: 1.75rem; font-weight: 800;">100%</span>
+                  <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">Chính xác</span>
+                </div>
+                <h3 id="quiz-result-title" style="font-size: 1.5rem; margin-bottom: 8px;">🎉 Xuất sắc!</h3>
+                <p id="quiz-result-desc" style="color: var(--color-muted-foreground); margin-bottom: 20px;">Bạn đã hoàn thành bài trắc nghiệm từ vựng một cách tuyệt vời!</p>
+                <button type="button" class="btn btn-primary" id="btn-quiz-try-again">
+                  <span>Làm lại bài trắc nghiệm</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-PANEL 3: TẬP VIẾT NÉT CHỮ (STROKE) -->
+          <div id="vpanel-stroke" class="vocab-panel">
+            <div style="margin-bottom: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+              <input type="search" id="stroke-search-input" class="form-control" style="flex: 1; min-width: 200px;" placeholder="Tìm chữ Hán hoặc Pinyin để xem nét viết...">
+              <button type="button" class="btn btn-primary btn-sm" id="btn-stroke-search-action">
+                <span>Xem chữ</span>
+              </button>
+            </div>
+
+            <div class="stroke-view-wrapper">
+              <div class="stroke-canvas-column">
+                <div id="hanzi-writer-canvas"></div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-stroke-animate">
+                    <span>▶ Xem viết</span>
+                  </button>
+                  <button type="button" class="btn btn-outline btn-sm" id="btn-stroke-quiz">
+                    <span>✏️ Luyện viết</span>
+                  </button>
+                  <button type="button" class="btn btn-outline btn-sm" id="btn-stroke-speak">
+                    <span>🔊 Nghe</span>
+                  </button>
+                </div>
+                <div id="stroke-feedback-status" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-primary-deep); min-height: 20px; text-align: center;"></div>
+              </div>
+
+              <div class="stroke-detail-column">
+                <div class="stroke-char-heading" id="stroke-active-char">学</div>
+                <div class="stroke-pinyin-text" id="stroke-active-pinyin">xué</div>
+                <div class="stroke-meaning-text" id="stroke-active-meaning">Học, học tập</div>
+
+                <p style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground); margin: 16px 0 8px;">
+                  Chọn nhanh chữ Hán từ kho từ vựng:
+                </p>
+                <div class="stroke-chips-scroll" id="stroke-quick-chips">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-PANEL 4: DANH SÁCH TRA CỨU TOÀN BỘ -->
+          <div id="vpanel-list" class="vocab-panel">
+            <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 14px;">
+              <input type="search" id="vlist-search-input" class="form-control" style="flex: 1; min-width: 220px;" placeholder="🔍 Tìm kiếm chữ Hán, Pinyin hoặc nghĩa tiếng Việt...">
+              <select id="vlist-range-select" class="form-control" style="width: auto; padding: 8px 12px;">
+                <option value="all">Tất cả các từ (272 từ)</option>
+                <option value="1-50">Từ 1 – 50</option>
+                <option value="51-100">Từ 51 – 100</option>
+                <option value="101-150">Từ 101 – 150</option>
+                <option value="151-200">Từ 151 – 200</option>
+                <option value="201-272">Từ 201 – 272</option>
+              </select>
+            </div>
+
+            <div class="matrix-scroll-wrapper">
+              <table class="progress-matrix-table" style="font-size: 0.875rem;">
+                <thead>
+                  <tr>
+                    <th style="width: 50px;">STT</th>
+                    <th style="width: 130px;">Chữ Hán</th>
+                    <th>Pinyin &amp; Nghĩa Tiếng Việt</th>
+                    <th style="width: 140px; text-align: center;">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="vlist-table-body">
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           TAB 4: QUẢN LÝ LỚP HỌC & TÀI KHOẢN HỌC SINH
            ==================================================================== -->
       <section id="teacher-tab-accounts" class="module-section" aria-label="Giáo viên tạo lớp học và quản lý tài khoản học sinh">
         <!-- Khung 1: Quản lý Danh sách Lớp Học -->
@@ -431,302 +1005,6 @@
           </div>
         </div>
       </section>
-      <!-- ====================================================================
-           TAB 3: BÀI HỌC: KHO TỪ VỰNG & BÀI KIỂM TRA CUỐI BUỔI ĐỒNG BỘ
-           ==================================================================== -->
-      <section id="teacher-tab-content" class="module-section" aria-label="Quản lý kho từ vựng và bài kiểm tra cuối buổi đồng bộ theo bài học">
-        <!-- Thanh Chọn Bài Học Đồng Bộ (1 Bài học = Từ vựng + Kiểm tra cuối buổi) -->
-        <div class="class-selector-card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--color-surface);border:1px solid var(--color-border-soft);padding:12px 18px;border-radius:var(--radius-xl);margin-bottom:20px;box-shadow:var(--shadow-sm);flex-wrap:wrap;">
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <label for="teacher-lesson-select" style="font-weight:800;color:var(--color-primary-deep);font-size:0.9375rem;display:flex;align-items:center;gap:6px;">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path><path d="M6 6h10"></path><path d="M6 10h10"></path></svg>
-              <span>Chọn Bài học:</span>
-            </label>
-            <select id="teacher-lesson-select" class="form-control" style="min-width:280px;width:auto;font-weight:700;color:var(--color-primary-deep);"></select>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <span class="status-badge status-graded" id="lesson-vocab-count-badge">4 từ vựng</span>
-            <span class="status-badge status-submitted" id="lesson-practice-status-badge">Đã có đề luyện tập (35đ)</span>
-          </div>
-        </div>
-
-        <div class="bvn-workspace-grid">
-          <!-- Cột Trái: Thêm Từ Vựng Mới Vào Bài Học Đang Chọn -->
-          <div class="surface-panel">
-            <div class="panel-header">
-              <div class="panel-title-row">
-                <h2>Thêm từ vựng mới vào bài học</h2>
-              </div>
-              <span class="status-badge status-graded">Đồng bộ sang Web Ôn Từ Vựng</span>
-            </div>
-
-            <form id="add-vocab-form">
-              <div class="form-row-2">
-                <div class="form-group">
-                  <label class="form-label" for="new-vocab-lesson">Thuộc bài học</label>
-                  <select id="new-vocab-lesson" class="form-control"></select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label" for="new-vocab-word">Từ vựng tiếng Trung (Chữ Hán)</label>
-                  <input type="text" id="new-vocab-word" class="form-control" placeholder="Ví dụ: 谢谢 hoặc 学习" required>
-                </div>
-              </div>
-
-              <div class="form-row-2">
-                <div class="form-group">
-                  <label class="form-label" for="new-vocab-ipa">Phiên âm (Pinyin)</label>
-                  <input type="text" id="new-vocab-ipa" class="form-control tabular-nums" placeholder="Ví dụ: xiè xie / xué xí">
-                  <div class="pinyin-tone-bar" aria-label="Bấm để chèn nhanh dấu thanh điệu Pinyin">
-                    <span style="font-size:0.75rem;color:var(--color-muted-foreground);font-weight:600;">Dấu thanh:</span>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ā">ā</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="á">á</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǎ">ǎ</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="à">à</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ō">ō</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ó">ó</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǒ">ǒ</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ò">ò</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ē">ē</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="é">é</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ě">ě</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="è">è</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ī">ī</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="í">í</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǐ">ǐ</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ì">ì</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ū">ū</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ú">ú</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǔ">ǔ</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ù">ù</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǖ">ǖ</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǘ">ǘ</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǚ">ǚ</button>
-                    <button type="button" class="pinyin-tone-btn" data-insert-tone="ǜ">ǜ</button>
-                  </div>
-                </div>
-                <div class="form-group">
-                  <label class="form-label" for="new-vocab-pos">Từ loại</label>
-                  <input type="text" id="new-vocab-pos" class="form-control" placeholder="Ví dụ: Động từ / Danh từ">
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label class="form-label" for="new-vocab-meaning">Nghĩa tiếng Việt</label>
-                <input type="text" id="new-vocab-meaning" class="form-control" placeholder="Ví dụ: Cảm ơn / Học tập" required>
-              </div>
-
-              <div class="form-group">
-                <label class="form-label" for="new-vocab-example-en">Câu ví dụ tiếng Trung (kèm Pinyin)</label>
-                <input type="text" id="new-vocab-example-en" class="form-control" placeholder="Ví dụ: 谢谢你的帮助。(Xièxie nǐ de bāngzhù.)">
-              </div>
-
-              <button type="submit" class="btn btn-primary">
-                <span>Thêm từ vựng vào bài học</span>
-              </button>
-            </form>
-          </div>
-
-          <!-- Cột Phải: Bài Luyện Tập Cuối Buổi Tương Ứng & Điểm Số Học Sinh -->
-          <div class="surface-panel">
-            <div class="panel-header">
-              <div class="panel-title-row">
-                <h2>Bài luyện tập cuối buổi của bài học này</h2>
-              </div>
-              <span class="status-badge status-graded" id="synced-practice-badge">Đồng bộ</span>
-            </div>
-
-            <div id="synced-lesson-practice-card" style="margin-bottom:16px;"></div>
-
-            <div class="panel-header" style="margin-top:20px;margin-bottom:10px;padding-top:14px;border-top:1px solid var(--color-border-soft);">
-              <div class="panel-title-row">
-                <h3 style="font-size:0.9375rem;margin:0;color:var(--color-primary-deep);">Kết quả học sinh đã làm bài kiểm tra</h3>
-              </div>
-            </div>
-
-            <div id="teacher-exit-ticket-logs"></div>
-          </div>
-        </div>
-
-        <!-- Danh Sách Từ Vựng Hiện Có Trong Kho Theo Bài Học -->
-        <div class="surface-panel" style="margin-top: 24px;">
-          <div class="panel-header">
-            <div class="panel-title-row">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
-                <path d="M6 6h10"></path>
-                <path d="M6 10h10"></path>
-              </svg>
-              <h2>Danh sách từ vựng tiếng Trung hiện có trong bài học</h2>
-            </div>
-            <span class="status-badge status-graded tabular-nums" id="teacher-vocab-count-badge">0 từ vựng</span>
-          </div>
-
-          <div class="matrix-toolbar">
-            <div class="filter-pill-group" id="teacher-vocab-filter-group">
-              <button type="button" class="filter-pill is-active" data-teacher-vocab-filter="all">Tất cả bài học</button>
-              <button type="button" class="filter-pill" data-teacher-vocab-filter="bai-1">Bài 1</button>
-              <button type="button" class="filter-pill" data-teacher-vocab-filter="bai-2">Bài 2</button>
-              <button type="button" class="filter-pill" data-teacher-vocab-filter="bai-3">Bài 3</button>
-              <button type="button" class="filter-pill" data-teacher-vocab-filter="bai-4">Bài 4</button>
-            </div>
-          </div>
-
-          <div style="overflow-x:auto;">
-            <table class="vocab-manage-table" aria-label="Bảng từ vựng tiếng Trung">
-              <thead>
-                <tr>
-                  <th>Chữ Hán</th>
-                  <th>Phiên âm Pinyin</th>
-                  <th>Từ loại</th>
-                  <th>Nghĩa tiếng Việt</th>
-                  <th>Câu ví dụ tiếng Trung</th>
-                  <th>Bài học</th>
-                  <th>Phát âm</th>
-                </tr>
-              </thead>
-              <tbody id="teacher-vocab-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ====================================================================
-           TAB 4: QUẢN LÝ BÀI TẬP LUYỆN TẬP CUỐI BÀI (GOOGLE FORMS QUIZ MAKER)
-           ==================================================================== -->
-      <section id="teacher-tab-practice" class="module-section" aria-label="Quản lý bài tập luyện tập cuối bài và chấm điểm">
-        <!-- Top Toolbar: Cực kỳ tinh gọn -->
-        <div class="matrix-toolbar" style="margin-bottom: 20px; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
-          <!-- Trái: Chọn bài tập & Nút thêm bài mới -->
-          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-            <label for="teacher-practice-select" style="font-weight: 700; color: var(--color-primary-deep);">Bài tập:</label>
-            <select id="teacher-practice-select" class="form-control" style="min-width: 260px; width: auto; font-weight: 600;"></select>
-            <button type="button" class="btn btn-primary btn-sm" id="btn-create-practice-ex">
-              <span>+ Tạo bài tập mới</span>
-            </button>
-          </div>
-
-          <!-- Giữa: Chuyển đổi Soạn câu hỏi vs Điểm học sinh -->
-          <div class="filter-pill-group" role="tablist" aria-label="Chế độ làm việc">
-            <button type="button" class="filter-pill is-active" id="subtab-btn-builder" data-practice-view="builder">
-              <span>📝 Soạn câu hỏi</span>
-            </button>
-            <button type="button" class="filter-pill" id="subtab-btn-submissions" data-practice-view="submissions">
-              <span>📊 Điểm học sinh (<span id="teacher-practice-sub-count-pill">0</span>)</span>
-            </button>
-          </div>
-
-          <!-- Phải: Nút Giao Bài Cho Lớp, Lưu Toàn Bộ & Nút Xóa Đề -->
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-assign-practice-to-class" style="font-weight: 700;">
-              <span>🚀 Giao bài cho lớp</span>
-            </button>
-            <button type="button" class="btn btn-primary btn-sm" id="btn-save-top-bar" style="font-weight: 700;">
-              <span>💾 Lưu bài tập</span>
-            </button>
-            <button type="button" class="btn btn-outline btn-sm" id="btn-delete-current-ex" style="color: var(--color-destructive); border-color: var(--color-destructive);" title="Xóa bài tập này">
-              <span>Xóa bài này</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- ==================== VIEW 1: SOẠN CÂU HỎI (GOOGLE FORM STYLE) ==================== -->
-        <div id="teacher-practice-view-builder">
-          <form id="teacher-exercise-meta-form">
-            <!-- Form Header Card (Giống tiêu đề đầu đề Google Form) -->
-            <div class="surface-panel" style="margin-bottom: 20px;">
-              <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 260px;">
-                  <label class="form-label" for="ex-meta-title" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground); text-transform: uppercase; letter-spacing: 0.05em;">Tiêu đề bài tập</label>
-                  <input type="text" id="ex-meta-title" class="form-control" style="font-size: 1.25rem; font-weight: 700; color: var(--color-primary-deep);" placeholder="Ví dụ: Bài tập luyện tập cuối bài — HSK 1: Bài 1" required>
-                </div>
-                <div style="width: 160px;">
-                  <label class="form-label" for="ex-meta-tag" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground); text-transform: uppercase; letter-spacing: 0.05em;">Thuộc bài</label>
-                  <input type="text" id="ex-meta-tag" class="form-control" style="font-weight: 600;" placeholder="Ví dụ: Bài 1" required>
-                </div>
-                <div style="align-self: flex-end; padding-bottom: 4px;">
-                  <span class="status-badge status-graded tabular-nums" id="teacher-practice-maxscore-badge" style="font-size: 0.9375rem; font-weight: 700; padding: 8px 14px;">Tổng 35 điểm</span>
-                </div>
-              </div>
-              <input type="hidden" id="ex-meta-thresh-good" value="25">
-              <input type="hidden" id="ex-meta-thresh-verygood" value="31">
-            </div>
-
-            <!-- Thanh Chèn Nhanh Dạng Câu Hỏi (Quick Add Bar - Google Forms) -->
-            <div class="gform-quick-add-bar" style="margin-bottom: 20px;">
-              <div class="gform-quick-add-title">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                <span>Bấm chọn dạng bài để chèn ngay mẫu câu hỏi vào đề:</span>
-              </div>
-              <div class="gform-type-buttons">
-                <button type="button" class="gform-type-btn" data-quick-add-type="matching">
-                  <span>+ 1. Nối từ (matching)</span>
-                </button>
-                <button type="button" class="gform-type-btn" data-quick-add-type="multiple_choice">
-                  <span>+ 2. Trắc nghiệm (multiple choice)</span>
-                </button>
-                <button type="button" class="gform-type-btn" data-quick-add-type="fill_blank_wordbank">
-                  <span>+ 3. Điền từ (wordbank)</span>
-                </button>
-                <button type="button" class="gform-type-btn" data-quick-add-type="error_correction">
-                  <span>+ 4. Sửa câu sai (correction)</span>
-                </button>
-                <button type="button" class="gform-type-btn" data-quick-add-type="translation">
-                  <span>+ 5. Dịch câu (translation)</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Danh sách các câu hỏi hiển thị dạng Card trực quan -->
-            <div id="teacher-builder-sections-list"></div>
-
-            <!-- Nút Lưu Cuối Trang -->
-            <div class="banner-actions" style="margin-top: 24px; justify-content: center; gap: 14px;">
-              <button type="submit" class="btn btn-primary" id="btn-save-exercise-meta" style="min-width: 240px; font-size: 1rem; font-weight: 700; padding: 12px 24px;">
-                <span>💾 Lưu Toàn Bộ Bài Tập</span>
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <!-- ==================== VIEW 2: BẢNG BÀI NỘP & CHẤM ĐIỂM ==================== -->
-        <div id="teacher-practice-view-submissions" class="surface-panel" style="display:none;">
-          <div class="panel-header">
-            <div class="panel-title-row">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-              </svg>
-              <h2>Danh sách bài nộp &amp; Chấm câu Dịch</h2>
-            </div>
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <button type="button" class="btn btn-outline btn-sm" id="btn-export-practice-csv">
-                <span>Xuất điểm (CSV Excel)</span>
-              </button>
-              <span class="status-badge status-submitted" id="teacher-practice-sub-count">0 bài nộp</span>
-            </div>
-          </div>
-
-          <p style="color:var(--color-muted-foreground);font-size:0.875rem;">
-            Hệ thống tự động chấm điểm Phần 1–4. Giáo viên có thể bấm "Chấm câu Dịch" để cho điểm và gửi lời nhận xét cho học sinh.
-          </p>
-
-          <div style="overflow-x:auto;">
-            <table class="vocab-manage-table" aria-label="Bảng điểm bài tập luyện tập của học sinh">
-              <thead>
-                <tr>
-                  <th>Học sinh</th>
-                  <th>Điểm tổng</th>
-                  <th>Xếp loại</th>
-                  <th>Điểm các phần</th>
-                  <th>Trạng thái</th>
-                  <th>Hành động</th>
-                </tr>
-              </thead>
-              <tbody id="teacher-practice-submissions-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
 
     </main>
   </div>
@@ -828,10 +1106,88 @@
     </div>
   </div>
 
+  <!-- MODAL 4: NHẬP TỪ VỰNG TỪ EXCEL / CSV -->
+  <div class="modal-backdrop" id="modal-import-vocab-excel" role="dialog" aria-modal="true" aria-labelledby="modal-vocab-import-title">
+    <div class="modal-dialog modal-dialog-lg">
+      <div class="panel-header" style="margin-bottom: 16px;">
+        <div class="panel-title-row">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--color-primary-deep);">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <h2 id="modal-vocab-import-title">Nhập từ vựng hàng loạt từ Excel / CSV</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-vocab-modal">✕</button>
+      </div>
+
+      <div class="form-row-2" style="margin-bottom: 14px;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label" for="import-vocab-lesson-select" style="font-weight: 700;">Nạp vào Bài học:</label>
+          <select id="import-vocab-lesson-select" class="form-control"></select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label" for="import-vocab-file-input" style="font-weight: 700;">Chọn tệp (.csv, .tsv, .xlsx, .txt):</label>
+          <input type="file" id="import-vocab-file-input" accept=".csv, .tsv, .txt, .xlsx, .xls" class="form-control" style="padding: 6px;">
+        </div>
+      </div>
+
+      <!-- Drop zone & Paste text -->
+      <div class="excel-drop-zone" id="excel-drop-zone">
+        <div style="font-weight: 700; color: var(--color-primary-deep); margin-bottom: 4px;">
+          Kéo thả tệp vào đây hoặc sao chép và dán trực tiếp từ bảng tính Excel
+        </div>
+        <div style="font-size: 0.8125rem; color: var(--color-muted-foreground);">
+          Hỗ trợ định dạng bảng các cột: <strong>Chữ Hán | Pinyin | Từ loại | Nghĩa tiếng Việt | Câu ví dụ</strong>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+          <label class="form-label" for="excel-paste-text" style="margin: 0; font-weight: 700;">Hoặc dán trực tiếp dòng sao chép từ Excel / Google Sheets:</label>
+          <button type="button" class="btn btn-outline btn-sm" id="btn-paste-sample-vocab" style="font-size: 0.75rem; padding: 2px 8px;">Dán mẫu dữ liệu</button>
+        </div>
+        <textarea id="excel-paste-text" class="excel-paste-textarea" placeholder="Dán các hàng từ Excel vào đây (cách nhau bởi Tab hoặc dấu phẩy)..."></textarea>
+      </div>
+
+      <!-- Preview table -->
+      <div id="excel-preview-container" style="display: none; margin-top: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <strong style="font-size: 0.875rem; color: var(--color-primary-deep);">Xem trước dữ liệu (<span id="excel-preview-count">0</span> từ sẽ được thêm):</strong>
+          <span class="status-badge status-graded">Sẵn sàng nhập</span>
+        </div>
+        <div class="excel-preview-wrapper">
+          <table class="excel-preview-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Chữ Hán</th>
+                <th>Pinyin</th>
+                <th>Từ loại</th>
+                <th>Nghĩa tiếng Việt</th>
+                <th>Câu ví dụ</th>
+              </tr>
+            </thead>
+            <tbody id="excel-preview-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="banner-actions" style="margin-top: 18px; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-outline" id="btn-cancel-vocab-import">Hủy bỏ</button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-vocab-import" disabled style="font-weight: 700;">
+          <span>Lưu vào kho từ vựng</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast-banner" id="toast-banner" role="status" aria-live="polite">
     <span id="toast-message">Đã lưu thay đổi!</span>
   </div>
 
+  <script src="js/vocab_data.js"></script>
+  <script src="js/vocab_suite.js"></script>
   <script src="js/data.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/audio.js"></script>

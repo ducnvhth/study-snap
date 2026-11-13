@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cổng Học Sinh — StudySnap (Nộp BVN, Nghe Phản Hồi Voice, Luyện Tập &amp; Ôn Từ Vựng)</title>
   <meta name="description" content="Không gian học tập dành riêng cho Học sinh: nộp bài tập về nhà bằng ghi âm hoặc video, nghe giáo viên sửa bài bằng giọng nói, làm bài luyện tập cuối giờ và ôn từ vựng theo từng bài hoặc tổng hợp.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/main.css">
+  <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -25,16 +29,7 @@
       </div>
 
       <nav class="module-nav" aria-label="Chức năng học tập của Học sinh">
-        <button type="button" class="nav-tab is-active" data-student-tab="homework">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-            <line x1="12" x2="12" y1="19" y2="22"></line>
-          </svg>
-          <span>1. BVN &amp; Phản Hồi Giáo Viên</span>
-        </button>
-
-        <button type="button" class="nav-tab" data-student-tab="practice">
+        <button type="button" class="nav-tab is-active" data-student-tab="practice">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
@@ -42,7 +37,16 @@
             <line x1="16" y1="17" x2="8" y2="17"></line>
             <polyline points="10 9 9 9 8 9"></polyline>
           </svg>
-          <span>2. Luyện Tập Cuối Buổi</span>
+          <span>1. Luyện Tập Cuối Buổi</span>
+        </button>
+
+        <button type="button" class="nav-tab" data-student-tab="homework">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" x2="12" y1="19" y2="22"></line>
+          </svg>
+          <span>2. BVN &amp; Phản Hồi Giáo Viên</span>
         </button>
 
         <button type="button" class="nav-tab" data-student-tab="vocabulary">
@@ -99,9 +103,67 @@
 
     <main>
       <!-- ====================================================================
-           TAB 1: NỘP BÀI TẬP VỀ NHÀ & NGHE PHẢN HỒI VOICE TỪ GIÁO VIÊN
+           TAB 1: BÀI TẬP LUYỆN TẬP CUỐI BUỔI
            ==================================================================== -->
-      <section id="student-tab-homework" class="module-section is-active" aria-label="Nộp BVN và xem phản hồi của giáo viên">
+      <section id="student-tab-practice" class="module-section is-active" aria-label="Bài tập luyện tập cuối buổi">
+        <div class="surface-panel">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+              <h2 id="student-practice-title">Bài tập luyện tập cuối bài (HSK 1 – Bài 1, Tổng 35 điểm)</h2>
+            </div>
+            <div class="filter-pill-group" id="student-practice-exercise-selector" role="tablist" aria-label="Chọn bài tập cần làm">
+              <!-- Populated by js/student.js -->
+            </div>
+          </div>
+
+          <!-- Sticky / Top Progress & Auto-Save Draft Bar -->
+          <div class="practice-header-card">
+            <div class="practice-meta-row">
+              <span id="student-practice-progress-text" class="mono-text tabular-nums" style="font-weight:700;color:var(--color-primary-deep);">
+                Tiến độ làm bài: 0/35 câu (0%)
+              </span>
+              <span class="draft-saved-indicator" id="student-draft-status">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                <span id="student-draft-text">Sẵn sàng làm bài</span>
+              </span>
+            </div>
+            <div class="practice-progress-bar">
+              <div class="practice-progress-fill" id="student-practice-progress-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <!-- Vùng kết quả sau khi nộp bài -->
+          <div id="student-practice-results-box" style="display: none;"></div>
+
+          <!-- Vùng hiển thị câu hỏi -->
+          <form id="student-practice-form">
+            <div id="student-practice-sections-container">
+              <!-- Populated by js/student.js -->
+            </div>
+
+            <div class="banner-actions" style="margin-top: 24px; justify-content: flex-end;">
+              <button type="button" class="btn btn-outline" id="btn-reset-practice-draft">
+                <span>Làm lại từ đầu</span>
+              </button>
+              <button type="submit" class="btn btn-primary" id="btn-submit-practice">
+                <span>Nộp bài &amp; Chấm điểm toàn bộ</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           TAB 2: NỘP BÀI TẬP VỀ NHÀ & NGHE PHẢN HỒI VOICE TỪ GIÁO VIÊN
+           ==================================================================== -->
+      <section id="student-tab-homework" class="module-section" aria-label="Nộp BVN và xem phản hồi của giáo viên">
         <div class="bvn-workspace-grid">
           <!-- Cột Trái: Nộp BVN của Học sinh đang đăng nhập -->
           <div class="surface-panel">
@@ -118,6 +180,23 @@
             </div>
 
             <form id="student-submit-hw-form">
+              <!-- Thanh Phân Loại Buổi Học (Buổi 1, Buổi 2... giúp không bị rối khi có nhiều bài) -->
+              <div class="session-filter-container" id="student-session-filter-container">
+                <div class="session-filter-header">
+                  <span class="session-filter-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    <span>Chọn Buổi học:</span>
+                  </span>
+                  <span style="font-size:0.8125rem;color:var(--color-muted-foreground);" id="student-session-summary-text">Chọn buổi để xem bài tập tương ứng</span>
+                </div>
+                <div class="session-pills-row" id="student-session-pills-row" role="tablist" aria-label="Danh sách buổi học BVN">
+                  <!-- Dynamically populated by student.js -->
+                </div>
+                <div class="sub-asg-chips-row" id="student-subtask-chips-row">
+                  <!-- Dynamically populated sub-assignment chips -->
+                </div>
+              </div>
+
               <div class="form-group">
                 <label class="form-label" for="student-assignment-select">Chọn Bài tập về nhà cần làm / nộp</label>
                 <select id="student-assignment-select" class="form-control"></select>
@@ -227,157 +306,272 @@
       </section>
 
       <!-- ====================================================================
-           TAB 2: BÀI TẬP LUYỆN TẬP CUỐI BUỔI
-           ==================================================================== -->
-      <section id="student-tab-practice" class="module-section" aria-label="Bài tập luyện tập cuối buổi">
-        <div class="surface-panel">
-          <div class="panel-header">
-            <div class="panel-title-row">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-                <polyline points="10 9 9 9 8 9"></polyline>
-              </svg>
-              <h2 id="student-practice-title">Bài tập luyện tập cuối bài (HSK 1 – Bài 1, Tổng 35 điểm)</h2>
-            </div>
-            <div class="filter-pill-group" id="student-practice-exercise-selector" role="tablist" aria-label="Chọn bài tập cần làm">
-              <!-- Populated by js/student.js -->
-            </div>
-          </div>
-
-          <!-- Sticky / Top Progress & Auto-Save Draft Bar -->
-          <div class="practice-header-card">
-            <div class="practice-meta-row">
-              <span id="student-practice-progress-text" class="mono-text tabular-nums" style="font-weight:700;color:var(--color-primary-deep);">
-                Tiến độ làm bài: 0/35 câu (0%)
-              </span>
-              <span class="draft-saved-indicator" id="student-draft-status">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                <span id="student-draft-text">Sẵn sàng làm bài</span>
-              </span>
-            </div>
-            <div class="practice-progress-bar">
-              <div class="practice-progress-fill" id="student-practice-progress-fill" style="width: 0%;"></div>
-            </div>
-          </div>
-
-          <!-- Vùng kết quả sau khi nộp bài -->
-          <div id="student-practice-results-box" style="display: none;"></div>
-
-          <!-- Vùng hiển thị câu hỏi -->
-          <form id="student-practice-form">
-            <div id="student-practice-sections-container">
-              <!-- Populated by js/student.js -->
-            </div>
-
-            <div class="banner-actions" style="margin-top: 24px; justify-content: flex-end;">
-              <button type="button" class="btn btn-outline" id="btn-reset-practice-draft">
-                <span>Làm lại từ đầu</span>
-              </button>
-              <button type="submit" class="btn btn-primary" id="btn-submit-practice">
-                <span>Nộp bài &amp; Chấm điểm toàn bộ</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      </section>
-
-      <!-- ====================================================================
-           TAB 3: ÔN TỪ VỰNG THEO BÀI & TỔNG HỢP
+           TAB 3: ÔN TỪ VỰNG TIẾNG TRUNG ĐA NĂNG (FLASHCARD, TRẮC NGHIỆM, TẬP VIẾT NÉT, TRA CỨU)
            ==================================================================== -->
       <section id="student-tab-vocabulary" class="module-section" aria-label="Ôn tập từ vựng tương tác">
-        <div class="surface-panel">
+        <div class="vocab-workspace">
           <div class="panel-header">
             <div class="panel-title-row">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
                 <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
               </svg>
-              <h2>Ôn Từ Vựng Theo Bài Học</h2>
+              <h2>Luyện Tập &amp; Ôn Từ Vựng Tiếng Trung</h2>
             </div>
-            <span class="status-badge status-graded" id="student-vocab-scope-badge">Đang mở: Bài 1</span>
+            <span class="status-badge status-graded" id="vocab-total-badge">272 từ vựng</span>
           </div>
 
           <p style="margin-top: 0; margin-bottom: 16px; color: var(--color-muted-foreground);">
-            Chọn bài học để xem từ vựng tương ứng hoặc chọn <strong>Tổng hợp tất cả</strong> để ôn tập toàn khóa.
+            Ôn luyện từ vựng toàn diện với 4 chế độ: Thẻ lật 3D ghi nhớ, Luyện trắc nghiệm phản xạ, Tập viết từng nét chữ Hán chuẩn nét và Tra cứu phát âm toàn bộ từ vựng.
           </p>
 
-          <!-- Thanh chọn bài từ vựng và nút "Tổng hợp" -->
-          <div class="lesson-selector-bar" id="student-vocab-lesson-bar" role="tablist" aria-label="Chọn bài từ vựng cần ôn">
-            <!-- Populated by js/student.js -->
-          </div>
+          <!-- 4 Sub-Tabs Navigation -->
+          <nav class="vocab-subnav" aria-label="Các chế độ ôn tập từ vựng">
+            <button type="button" class="vocab-subtab is-active" data-vsub="flashcard">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 8 6 4-6 4Z"/></svg>
+              <span>Thẻ Flashcard 3D</span>
+            </button>
+            <button type="button" class="vocab-subtab" data-vsub="quiz">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>Luyện Trắc Nghiệm</span>
+            </button>
+            <button type="button" class="vocab-subtab" data-vsub="stroke">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
+              <span>Tập Viết Nét Chữ</span>
+            </button>
+            <button type="button" class="vocab-subtab" data-vsub="list">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <span>Bảng Tra Cứu Toàn Bộ</span>
+            </button>
+          </nav>
 
-          <div class="vocab-workspace-grid">
-            <!-- Cột Trái: Thẻ Flashcard tương tác lật & phát âm -->
-            <div>
-              <div class="flashcard-stage" id="student-flashcard-stage" tabindex="0" role="button" aria-label="Thẻ từ vựng tương tác. Nhấn để hiện hoặc ẩn nghĩa tiếng Việt">
-                <div>
-                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-                    <span class="status-badge status-submitted" id="fc-lesson-badge">Bài 1</span>
-                    <span class="mono-text tabular-nums" id="fc-index-counter" style="font-size: 0.875rem; color: var(--color-muted-foreground);">1 / 4</span>
-                  </div>
-
-                  <div class="flashcard-word" id="fc-word-text">你好</div>
-                  <div class="flashcard-ipa" id="fc-ipa-text">nǐ hǎo • Lời chào</div>
-
-                  <div class="flashcard-meaning-panel" id="fc-meaning-panel">
-                    <div style="font-weight: 700; font-size: 1.125rem; color: var(--color-foreground); margin-bottom: 6px;" id="fc-meaning-vi">
-                      Xin chào (biến điệu đọc là ní hǎo)
-                    </div>
-                    <p style="margin: 0 0 4px; font-size: 0.9375rem; color: var(--color-foreground);" id="fc-example-en">
-                      "你好，我是越南人。(Nǐ hǎo, wǒ shì Yuènán rén.)"
-                    </p>
-                    <p style="margin: 0; font-size: 0.875rem; color: var(--color-muted-foreground);" id="fc-example-vi">
-                      Xin chào, tôi là người Việt Nam.
-                    </p>
-                  </div>
+          <!-- SUB-PANEL 1: FLASHCARD 3D -->
+          <div id="vpanel-flashcard" class="vocab-panel is-active">
+            <div class="fc-stage-container">
+              <div class="fc-controls-bar">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <label for="fc-order-select" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-foreground);">Thứ tự:</label>
+                  <select id="fc-order-select" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8125rem;">
+                    <option value="seq">Tuần tự</option>
+                    <option value="rand">Ngẫu nhiên</option>
+                  </select>
                 </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <label for="fc-side-select" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-foreground);">Hiện trước:</label>
+                  <select id="fc-side-select" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8125rem;">
+                    <option value="zh">Chữ Hán</option>
+                    <option value="vi">Tiếng Việt</option>
+                  </select>
+                </div>
+                <button type="button" class="btn btn-outline btn-sm" id="btn-fc-reset">
+                  <span>Làm lại từ đầu</span>
+                </button>
+              </div>
 
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 16px;">
-                  <button type="button" class="btn btn-secondary btn-sm" id="btn-fc-speak">
-                    <span>Nghe phát âm mẫu</span>
-                  </button>
-                  <button type="button" class="btn btn-outline btn-sm" id="btn-fc-toggle-meaning">
-                    <span id="fc-toggle-meaning-label">Ẩn / Hiện nghĩa Tiếng Việt</span>
-                  </button>
+              <!-- Progress bar -->
+              <div class="practice-progress-bar-wrap" style="margin-bottom: 6px;">
+                <div class="practice-progress-bar" id="fc-progress-bar" style="width: 1%;"></div>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--color-muted-foreground); margin-bottom: 14px;">
+                <span>Tiến độ ghi nhớ</span>
+                <span id="fc-progress-label" class="tabular-nums font-bold">1 / 272</span>
+              </div>
+
+              <!-- 3D Card -->
+              <div class="flashcard-3d-wrap" id="fc-3d-card-wrap" role="button" tabindex="0" title="Nhấp vào thẻ để lật xem mặt sau">
+                <div class="flashcard-3d" id="fc-3d-card">
+                  <!-- Mặt trước -->
+                  <div class="fc-3d-face fc-3d-front">
+                    <span class="status-badge" style="background: #FFFFFF; color: var(--ink); font-weight: 800;" id="fc-front-stt">#1</span>
+                    <div class="fc-3d-hanzi" id="fc-front-main-text">老师</div>
+                    <span style="font-size: 0.8125rem; opacity: 0.85;">👆 Nhấp hoặc gõ phím cách để lật thẻ</span>
+                  </div>
+                  <!-- Mặt sau -->
+                  <div class="fc-3d-face fc-3d-back">
+                    <div class="fc-3d-hanzi" id="fc-back-hanzi-text" style="color: var(--color-primary-deep); font-size: 2rem;">老师</div>
+                    <div class="fc-3d-pinyin" id="fc-back-pinyin-text">lǎoshī</div>
+                    <div class="fc-3d-meaning" id="fc-back-meaning-text">Giáo viên</div>
+                  </div>
                 </div>
               </div>
 
-              <!-- Nút chuyển từ trước / đánh dấu đã thuộc / từ tiếp theo -->
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 14px;">
-                <button type="button" class="btn btn-outline btn-sm" id="btn-fc-prev">
+              <!-- Action buttons -->
+              <div class="fc-action-buttons">
+                <button type="button" class="btn btn-outline btn-sm" id="btn-fc-speak-word" title="Nghe phát âm chuẩn giọng Bắc Kinh">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                  <span>Phát âm (Speech)</span>
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" id="btn-fc-go-stroke" title="Xem thứ tự từng nét viết chữ này">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
+                  <span>Xem nét chữ</span>
+                </button>
+              </div>
+
+              <!-- Navigation Controls -->
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px;">
+                <button type="button" class="btn btn-outline" id="btn-fc-prev-card">
                   <span>← Từ trước</span>
                 </button>
-                <button type="button" class="btn btn-primary btn-sm" id="btn-fc-master-toggle">
-                  <span id="fc-master-btn-text">Đánh dấu: Đã thuộc từ này</span>
+                <button type="button" class="btn btn-primary" id="btn-fc-next-card">
+                  <span>Tiếp theo →</span>
                 </button>
-                <button type="button" class="btn btn-outline btn-sm" id="btn-fc-next">
-                  <span>Từ tiếp theo →</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Cột Phải: Bộ lọc tìm kiếm & Danh sách thẻ từ vựng trong bài đang chọn -->
-            <div>
-              <div class="matrix-toolbar" style="margin-bottom: 14px;">
-                <input type="search" id="student-vocab-search" class="form-control" style="max-width: 280px;" placeholder="Tìm chữ Hán, Pinyin hoặc nghĩa tiếng Việt...">
-                <div class="filter-pill-group">
-                  <button type="button" class="filter-pill is-active" data-vocab-filter="all">Tất cả</button>
-                  <button type="button" class="filter-pill" data-vocab-filter="unmastered">Chưa thuộc</button>
-                  <button type="button" class="filter-pill" data-vocab-filter="mastered">Đã thuộc</button>
-                </div>
-              </div>
-
-              <div class="vocab-list-grid" id="student-vocab-cards-grid">
-                <!-- Populated by js/student.js -->
               </div>
             </div>
           </div>
 
-          <!-- Thẻ hành động: Làm bài kiểm tra luyện tập cuối bài (Đồng bộ với bài đang học) -->
-          <div id="student-vocab-practice-cta" style="margin-top: 24px;"></div>
+          <!-- SUB-PANEL 2: TRẮC NGHIỆM (QUIZ) -->
+          <div id="vpanel-quiz" class="vocab-panel">
+            <div style="max-width: 640px; margin: 0 auto;">
+              <div class="fc-controls-bar" style="margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <label for="quiz-mode-select" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-foreground);">Kiểu hỏi:</label>
+                  <select id="quiz-mode-select" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8125rem;">
+                    <option value="zh2vi">Hán → Việt</option>
+                    <option value="vi2zh">Việt → Hán</option>
+                    <option value="mixed">Hỗn hợp</option>
+                  </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <label for="quiz-count-select" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-foreground);">Số câu:</label>
+                  <select id="quiz-count-select" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.8125rem;">
+                    <option value="20">20 câu</option>
+                    <option value="30">30 câu</option>
+                    <option value="50">50 câu</option>
+                    <option value="all">Tất cả</option>
+                  </select>
+                </div>
+                <button type="button" class="btn btn-outline btn-sm" id="btn-quiz-restart">
+                  <span>Bắt đầu lại</span>
+                </button>
+              </div>
+
+              <!-- Header điểm số -->
+              <div id="quiz-active-block">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
+                  <div style="display: flex; gap: 10px;">
+                    <span class="status-badge status-graded" id="quiz-stat-correct">Đúng: 0</span>
+                    <span class="status-badge" style="background: var(--color-destructive-bg); color: var(--color-destructive); border: 1px solid var(--color-destructive-border);" id="quiz-stat-wrong">Sai: 0</span>
+                    <span class="status-badge status-submitted" id="quiz-stat-total">Đã làm: 0</span>
+                  </div>
+                  <span id="quiz-counter-text" class="tabular-nums" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground);">1 / 20</span>
+                </div>
+
+                <div class="practice-progress-bar-wrap" style="margin-bottom: 16px;">
+                  <div class="practice-progress-bar" id="quiz-progress-bar" style="width: 5%;"></div>
+                </div>
+
+                <!-- Thẻ câu hỏi -->
+                <div style="text-align: center; padding: 28px 24px; margin-bottom: 16px; background: var(--grad-hero-bg); border-radius: var(--radius-xl);">
+                  <div id="quiz-main-question" style="font-family: var(--font-display); font-size: 2.5rem; font-weight: 800; color: var(--color-primary-deep); line-height: 1.2;">老师</div>
+                  <div id="quiz-pinyin-question" style="font-size: 1.125rem; color: var(--color-muted-foreground); margin-top: 4px;">lǎoshī</div>
+                  <div id="quiz-ask-direction" style="font-size: 0.875rem; font-weight: 600; color: var(--color-foreground); margin-top: 10px;">Chọn nghĩa tiếng Việt chính xác:</div>
+                </div>
+
+                <!-- 4 Options -->
+                <div id="quiz-options-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;">
+                  <!-- Options rendered by JS -->
+                </div>
+
+                <div id="quiz-feedback-box" style="min-height: 28px; text-align: center; font-weight: 700; font-size: 0.9375rem; margin-bottom: 14px;"></div>
+
+                <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
+                  <button type="button" class="btn btn-outline btn-sm" id="btn-quiz-speak-question">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                    <span>Nghe phát âm</span>
+                  </button>
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-quiz-next-question" style="display: none;">
+                    <span>Câu tiếp theo →</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Result Screen -->
+              <div id="quiz-result-view" style="display: none; text-align: center; padding: 32px 16px;">
+                <div style="display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 120px; height: 120px; border-radius: 50%; background-color: #FF99BE; background: var(--grad-pink-peach); color: var(--ink); padding: 12px; margin-bottom: 16px; border: 2px solid #FFFFFF; box-shadow: 0 8px 24px rgba(255, 107, 157, 0.24);">
+                  <span id="quiz-result-percent" style="font-family: var(--font-display); font-size: 1.75rem; font-weight: 800;">100%</span>
+                  <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">Chính xác</span>
+                </div>
+                <h3 id="quiz-result-title" style="font-size: 1.5rem; margin-bottom: 8px;">🎉 Xuất sắc!</h3>
+                <p id="quiz-result-desc" style="color: var(--color-muted-foreground); margin-bottom: 20px;">Bạn đã hoàn thành bài trắc nghiệm từ vựng một cách tuyệt vời!</p>
+                <button type="button" class="btn btn-primary" id="btn-quiz-try-again">
+                  <span>Làm lại bài trắc nghiệm</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-PANEL 3: TẬP VIẾT NÉT CHỮ (STROKE) -->
+          <div id="vpanel-stroke" class="vocab-panel">
+            <div style="margin-bottom: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+              <input type="search" id="stroke-search-input" class="form-control" style="flex: 1; min-width: 200px;" placeholder="Tìm chữ Hán hoặc Pinyin để xem nét viết...">
+              <button type="button" class="btn btn-primary btn-sm" id="btn-stroke-search-action">
+                <span>Xem chữ</span>
+              </button>
+            </div>
+
+            <div class="stroke-view-wrapper">
+              <div class="stroke-canvas-column">
+                <div id="hanzi-writer-canvas"></div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-stroke-animate">
+                    <span>▶ Xem viết</span>
+                  </button>
+                  <button type="button" class="btn btn-outline btn-sm" id="btn-stroke-quiz">
+                    <span>✏️ Luyện viết</span>
+                  </button>
+                  <button type="button" class="btn btn-outline btn-sm" id="btn-stroke-speak">
+                    <span>🔊 Nghe</span>
+                  </button>
+                </div>
+                <div id="stroke-feedback-status" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-primary-deep); min-height: 20px; text-align: center;"></div>
+              </div>
+
+              <div class="stroke-detail-column">
+                <div class="stroke-char-heading" id="stroke-active-char">学</div>
+                <div class="stroke-pinyin-text" id="stroke-active-pinyin">xué</div>
+                <div class="stroke-meaning-text" id="stroke-active-meaning">Học, học tập</div>
+
+                <p style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground); margin: 16px 0 8px;">
+                  Chọn nhanh chữ Hán từ kho từ vựng:
+                </p>
+                <div class="stroke-chips-scroll" id="stroke-quick-chips">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-PANEL 4: DANH SÁCH TRA CỨU TOÀN BỘ -->
+          <div id="vpanel-list" class="vocab-panel">
+            <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 14px;">
+              <input type="search" id="vlist-search-input" class="form-control" style="flex: 1; min-width: 220px;" placeholder="🔍 Tìm kiếm chữ Hán, Pinyin hoặc nghĩa tiếng Việt...">
+              <select id="vlist-range-select" class="form-control" style="width: auto; padding: 8px 12px;">
+                <option value="all">Tất cả các từ</option>
+                <option value="1-50">Từ 1 – 50</option>
+                <option value="51-100">Từ 51 – 100</option>
+                <option value="101-150">Từ 101 – 150</option>
+                <option value="151-200">Từ 151 – 200</option>
+                <option value="201-272">Từ 201 – 272</option>
+              </select>
+              <span id="vlist-count-badge" class="status-badge status-submitted">Hiển thị 272 từ</span>
+            </div>
+
+            <div class="matrix-scroll-wrapper">
+              <table class="progress-matrix-table" style="font-size: 0.875rem;">
+                <thead>
+                  <tr>
+                    <th style="width: 50px;">STT</th>
+                    <th style="width: 130px;">Chữ Hán</th>
+                    <th>Pinyin &amp; Nghĩa Tiếng Việt</th>
+                    <th style="width: 140px; text-align: center;">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="vlist-table-body">
+                  <!-- Populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
     </main>
@@ -386,6 +580,7 @@
   <!-- Toast Thông Báo -->
   <div class="toast-banner" id="app-toast" role="status" aria-live="polite"></div>
 
+  <script src="js/vocab_data.js"></script>
   <script src="js/data.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/audio.js"></script>

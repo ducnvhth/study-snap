@@ -39,8 +39,9 @@
   const MASTERY_KEY = 'studysnap_mastered_vocab_' + activeStudent.student_id;
 
   const ui = {
-    activeTab: 'homework',
-    selectedAssignmentId: state.assignments[0] ? state.assignments[0].assignment_id : 'BVN01',
+    activeTab: 'practice',
+    selectedHomeworkSession: 'all',
+    selectedAssignmentId: state.assignments[0] ? state.assignments[0].assignment_id : 'BVN01_1',
     pendingMedia: null,
 
     // Practice state
@@ -140,6 +141,8 @@
 
     if (tabName === 'practice') {
       renderPracticeSection();
+    } else if (tabName === 'vocabulary') {
+      if (typeof fcRender === 'function') fcRender();
     }
   }
 
@@ -249,13 +252,132 @@
     const selectEl = document.getElementById('student-assignment-select');
     const studentAssignments = getStudentAssignments(student);
 
-    if (studentAssignments.length > 0 && !studentAssignments.some(function (a) { return a.assignment_id === ui.selectedAssignmentId; })) {
-      ui.selectedAssignmentId = studentAssignments[0].assignment_id;
+    // Trích xuất toàn bộ các Buổi học có bài tập
+    const sessions = [];
+    studentAssignments.forEach(function (asg) {
+      const s = (asg.session_tag || 'Buổi 1').trim();
+      if (s && sessions.indexOf(s) === -1) {
+        sessions.push(s);
+      }
+    });
+
+    if (ui.selectedHomeworkSession !== 'all' && sessions.indexOf(ui.selectedHomeworkSession) === -1 && sessions.length > 0) {
+      ui.selectedHomeworkSession = 'all';
+    }
+
+    // Hiển thị thanh nút bấm chuyển Buổi học (Pills)
+    const sessionPillsRow = document.getElementById('student-session-pills-row');
+    if (sessionPillsRow) {
+      let pillsHtml =
+        '<button type="button" class="session-pill' +
+        (ui.selectedHomeworkSession === 'all' ? ' is-active' : '') +
+        '" data-hw-session="all">' +
+        '<span>Tất cả các buổi</span>' +
+        '<span class="pill-count">' + studentAssignments.length + '</span>' +
+        '</button>';
+
+      sessions.forEach(function (s) {
+        const countInSession = studentAssignments.filter(function (a) {
+          return (a.session_tag || 'Buổi 1').trim() === s;
+        }).length;
+        const isActive = ui.selectedHomeworkSession === s;
+        pillsHtml +=
+          '<button type="button" class="session-pill' +
+          (isActive ? ' is-active' : '') +
+          '" data-hw-session="' + escapeHtml(s) + '">' +
+          '<span>' + escapeHtml(s) + '</span>' +
+          '<span class="pill-count">' + countInSession + '</span>' +
+          '</button>';
+      });
+      sessionPillsRow.innerHTML = pillsHtml;
+
+      sessionPillsRow.querySelectorAll('[data-hw-session]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const s = btn.getAttribute('data-hw-session');
+          ui.selectedHomeworkSession = s;
+          const inSession = s === 'all'
+            ? studentAssignments
+            : studentAssignments.filter(function (a) { return (a.session_tag || 'Buổi 1').trim() === s; });
+          if (inSession.length > 0) {
+            ui.selectedAssignmentId = inSession[0].assignment_id;
+            ui.pendingMedia = null;
+            renderPendingMediaPreview();
+          }
+          renderHomeworkSection();
+        });
+      });
+    }
+
+    // Lọc bài tập theo Buổi học đã chọn
+    const filteredAssignments = ui.selectedHomeworkSession === 'all'
+      ? studentAssignments
+      : studentAssignments.filter(function (a) {
+          return (a.session_tag || 'Buổi 1').trim() === ui.selectedHomeworkSession;
+        });
+
+    if (filteredAssignments.length > 0 && !filteredAssignments.some(function (a) { return a.assignment_id === ui.selectedAssignmentId; })) {
+      ui.selectedAssignmentId = filteredAssignments[0].assignment_id;
+    }
+
+    // Hiển thị chip chọn nhanh các bài nhỏ trong buổi
+    const subtaskChipsRow = document.getElementById('student-subtask-chips-row');
+    if (subtaskChipsRow) {
+      if (filteredAssignments.length > 0) {
+        subtaskChipsRow.style.display = 'flex';
+        subtaskChipsRow.innerHTML = filteredAssignments.map(function (asg) {
+          const sub = findSubmission(asg.assignment_id, student.student_id);
+          const isSelected = asg.assignment_id === ui.selectedAssignmentId;
+          let badgeBg = 'var(--soft)';
+          let badgeFg = 'var(--muted)';
+          let badgeBorder = 'rgba(45, 27, 78, 0.14)';
+          let statusText = 'Chưa nộp';
+          if (sub && sub.status === 'graded') {
+            badgeBg = 'var(--mint-lt)';
+            badgeFg = 'var(--color-success-text)';
+            badgeBorder = 'var(--color-success-border)';
+            statusText = '✓ ' + sub.score + 'đ';
+          } else if (sub) {
+            badgeBg = 'var(--ylt)';
+            badgeFg = 'var(--color-warning-text)';
+            badgeBorder = 'var(--color-warning-border)';
+            statusText = 'Đã nộp';
+          }
+          return (
+            '<button type="button" class="sub-asg-chip' + (isSelected ? ' is-active' : '') + '" data-subtask-id="' + escapeHtml(asg.assignment_id) + '">' +
+            '<span>' + escapeHtml(asg.lesson_tag || asg.title) + '</span>' +
+            '<span style="font-size:0.75rem;padding:2px 8px;border-radius:var(--radius-full);background:' + badgeBg + ';color:' + badgeFg + ';border:1px solid ' + badgeBorder + ';font-weight:700;">' +
+            escapeHtml(statusText) +
+            '</span>' +
+            '</button>'
+          );
+        }).join('');
+
+        subtaskChipsRow.querySelectorAll('[data-subtask-id]').forEach(function (chip) {
+          chip.addEventListener('click', function () {
+            ui.selectedAssignmentId = chip.getAttribute('data-subtask-id');
+            ui.pendingMedia = null;
+            renderPendingMediaPreview();
+            renderHomeworkSection();
+          });
+        });
+      } else {
+        subtaskChipsRow.style.display = 'none';
+      }
+    }
+
+    // Cập nhật câu text tóm tắt
+    const summaryText = document.getElementById('student-session-summary-text');
+    if (summaryText) {
+      if (ui.selectedHomeworkSession === 'all') {
+        summaryText.textContent = 'Toàn bộ ' + studentAssignments.length + ' bài tập về nhà';
+      } else {
+        summaryText.textContent = 'Đang xem ' + ui.selectedHomeworkSession + ' (' + filteredAssignments.length + ' bài tập)';
+      }
     }
 
     if (selectEl) {
-      selectEl.innerHTML = studentAssignments.length > 0
-        ? studentAssignments
+      selectEl.innerHTML = filteredAssignments.length > 0
+        ? filteredAssignments
             .map(function (asg) {
               const sub = findSubmission(asg.assignment_id, student.student_id);
               let statusLabel = 'Chưa nộp';
@@ -271,18 +393,18 @@
                 '"' +
                 selected +
                 '>' +
-                escapeHtml(asg.title + ' (' + statusLabel + ')') +
+                escapeHtml('[' + (asg.session_tag || 'Buổi 1') + '] ' + asg.title + ' (' + statusLabel + ')') +
                 '</option>'
               );
             })
             .join('')
-        : '<option value="">-- Chưa có bài tập cho lớp của em --</option>';
+        : '<option value="">-- Chưa có bài tập cho buổi này --</option>';
     }
 
     const currentAsg =
-      studentAssignments.find(function (a) {
+      filteredAssignments.find(function (a) {
         return a.assignment_id === ui.selectedAssignmentId;
-      }) || studentAssignments[0] || state.assignments[0];
+      }) || filteredAssignments[0] || studentAssignments[0] || state.assignments[0];
 
     if (currentAsg) {
       const briefTitle = document.getElementById('student-brief-title');
@@ -519,10 +641,13 @@
         return (
           '<tr>' +
           '<td>' +
-          '<div style="font-weight: 700; color: var(--color-foreground);">' +
-          escapeHtml(asg.title) +
+          '<div style="font-weight: 700; color: var(--color-foreground); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
+          '<span class="status-badge" style="background: var(--color-surface-soft); color: var(--color-primary-deep); font-weight: 700; font-size: 0.75rem;">' +
+          escapeHtml(asg.session_tag || 'Buổi 1') +
+          '</span>' +
+          '<span>' + escapeHtml(asg.title) + '</span>' +
           '</div>' +
-          '<div style="font-size: 0.8125rem; color: var(--color-muted-foreground);">' +
+          '<div style="font-size: 0.8125rem; color: var(--color-muted-foreground); margin-top: 2px;">' +
           escapeHtml(asg.lesson_tag) +
           '</div>' +
           '</td>' +
@@ -558,6 +683,10 @@
       btn.addEventListener('click', function () {
         const asgId = btn.getAttribute('data-select-hw-row');
         if (!asgId) return;
+        const targetAsg = state.assignments.find(function (a) { return a.assignment_id === asgId; });
+        if (targetAsg && targetAsg.session_tag) {
+          ui.selectedHomeworkSession = targetAsg.session_tag;
+        }
         ui.selectedAssignmentId = asgId;
         renderHomeworkSection();
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2543,331 +2672,663 @@
     });
   }
 
-  function renderVocabularySection() {
-    const lessonGroups = getLessonGroups();
-    const totalCount = (state.vocabulary || []).length;
-    const lessonBar = document.getElementById('student-vocab-lesson-bar');
-    const scopeBadge = document.getElementById('student-vocab-scope-badge');
+  // =========================================================================
+  // 4. VOCABULARY SECTION (FLASHCARD 3D, TRẮC NGHIỆM, NÉT CHỮ, TRA CỨU 272 TỪ)
+  // =========================================================================
+  const VOCAB_DATA = (window.StudySnapVocabList && window.StudySnapVocabList.length > 0)
+    ? window.StudySnapVocabList
+    : [
+        ["老师","lǎoshī","Giáo viên"],
+        ["学生","xuésheng","Học sinh"],
+        ["留学","liúxué","Du học"],
+        ["留学生","liúxuéshēng","Du học sinh"],
+        ["同屋","tóng wū","Bạn cùng phòng"],
+        ["同事","tóngshì","Đồng nghiệp"],
+        ["什么","shénme","Cái gì"],
+        ["名字","míngzi","Tên"],
+        ["叫","jiào","Gọi, kêu"],
+        ["谁","shéi","Ai"],
+        ["学","xué","Học"],
+        ["汉语","Hànyǔ","Tiếng Trung (Hán ngữ)"]
+      ];
 
-    if (lessonBar) {
-      const lessonButtons = lessonGroups
-        .map(function (g) {
-          const isActive = ui.selectedVocabLessonId === g.lesson_id;
-          return (
-            '<button type="button" class="lesson-pill' +
-            (isActive ? ' is-active' : '') +
-            '" data-vocab-lesson="' +
-            escapeHtml(g.lesson_id) +
-            '">' +
-            '<span>' +
-            escapeHtml(g.lesson_title) +
-            '</span>' +
-            '<span class="lesson-count-badge">' +
-            g.count +
-            ' từ</span>' +
-            '</button>'
-          );
-        })
-        .join('');
+  const vocabState = {
+    activeSubTab: 'flashcard',
+    // Flashcard
+    fcIdx: 0,
+    fcOrder: [],
+    fcFlipped: false,
+    fcOrderMode: 'seq',
+    fcSideMode: 'zh',
+    // Quiz
+    quizList: [],
+    quizIdx: 0,
+    quizCorrect: 0,
+    quizWrong: 0,
+    quizAnswered: false,
+    quizCurr: null,
+    quizIsZH: true,
+    // Stroke
+    strokeInited: false,
+    hwInstance: null,
+    curChar: '学',
+    curPy: 'xué',
+    curMean: 'Học, học tập',
+    // List
+    listSearchQuery: '',
+    listRange: 'all'
+  };
 
-      const isMasterActive = ui.selectedVocabLessonId === 'all';
-      const masterButton =
-        '<button type="button" class="lesson-pill is-master-review' +
-        (isMasterActive ? ' is-active' : '') +
-        '" data-vocab-lesson="all">' +
-        '<span>Tổng hợp tất cả các bài</span>' +
-        '<span class="lesson-count-badge">' +
-        totalCount +
-        ' từ</span>' +
-        '</button>';
+  function shuffleArray(arr) {
+    const b = arr.slice();
+    for (let i = b.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const temp = b[i];
+      b[i] = b[j];
+      b[j] = temp;
+    }
+    return b;
+  }
 
-      lessonBar.innerHTML = lessonButtons + masterButton;
+  function speakChineseText(text) {
+    if (!text) return;
+    if (window.StudySnapAudio && typeof window.StudySnapAudio.speakText === 'function') {
+      window.StudySnapAudio.speakText(text, 'zh-CN');
+    } else if (window.speechSynthesis) {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-CN';
+      u.rate = 0.85;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    }
+  }
 
-      lessonBar.querySelectorAll('[data-vocab-lesson]').forEach(function (btn) {
+  // ===== SUBTAB SWITCHER =====
+  function switchVocabSubTab(targetId) {
+    vocabState.activeSubTab = targetId;
+    document.querySelectorAll('.vocab-subtab').forEach(function (btn) {
+      btn.classList.toggle('is-active', btn.getAttribute('data-vsub') === targetId);
+    });
+    document.querySelectorAll('.vocab-panel').forEach(function (p) {
+      p.classList.remove('is-active');
+    });
+    const activePanel = document.getElementById('vpanel-' + targetId);
+    if (activePanel) activePanel.classList.add('is-active');
+
+    if (targetId === 'stroke' && !vocabState.strokeInited) {
+      initStrokeWriter();
+    }
+    if (targetId === 'list') {
+      renderFullVocabList();
+    }
+  }
+
+  // ===== 1. FLASHCARD 3D =====
+  function fcReset() {
+    vocabState.fcIdx = 0;
+    vocabState.fcFlipped = false;
+    vocabState.fcOrder = VOCAB_DATA.map(function (_, i) { return i; });
+    const orderSelect = document.getElementById('fc-order-select');
+    if (orderSelect && orderSelect.value === 'rand') {
+      vocabState.fcOrder = shuffleArray(vocabState.fcOrder);
+    }
+    fcRender();
+  }
+
+  function fcRender() {
+    if (!VOCAB_DATA.length) return;
+    const v = VOCAB_DATA[vocabState.fcOrder[vocabState.fcIdx]] || VOCAB_DATA[0];
+    const cardEl = document.getElementById('fc-3d-card');
+    const barEl = document.getElementById('fc-progress-bar');
+    const labelEl = document.getElementById('fc-progress-label');
+    const frontStt = document.getElementById('fc-front-stt');
+    const frontMain = document.getElementById('fc-front-main-text');
+    const backHanzi = document.getElementById('fc-back-hanzi-text');
+    const backPinyin = document.getElementById('fc-back-pinyin-text');
+    const backMeaning = document.getElementById('fc-back-meaning-text');
+    const prevBtn = document.getElementById('btn-fc-prev-card');
+    const nextBtn = document.getElementById('btn-fc-next-card');
+    const sideSelect = document.getElementById('fc-side-select');
+    const side = sideSelect ? sideSelect.value : 'zh';
+
+    if (cardEl) {
+      cardEl.classList.toggle('is-flipped', vocabState.fcFlipped);
+    }
+    const pct = Math.round(((vocabState.fcIdx + 1) / VOCAB_DATA.length) * 100);
+    if (barEl) barEl.style.width = pct + '%';
+    if (labelEl) labelEl.textContent = (vocabState.fcIdx + 1) + ' / ' + VOCAB_DATA.length;
+    if (frontStt) frontStt.textContent = '#' + (vocabState.fcOrder[vocabState.fcIdx] + 1);
+
+    if (frontMain) {
+      if (side === 'zh') {
+        frontMain.textContent = v[0];
+        frontMain.style.fontSize = v[0].length > 3 ? '2.5rem' : '3.5rem';
+      } else {
+        frontMain.textContent = v[2];
+        frontMain.style.fontSize = '1.75rem';
+      }
+    }
+    if (backHanzi) backHanzi.textContent = v[0];
+    if (backPinyin) backPinyin.textContent = v[1];
+    if (backMeaning) backMeaning.textContent = v[2];
+
+    if (prevBtn) prevBtn.disabled = vocabState.fcIdx === 0;
+    if (nextBtn) {
+      nextBtn.textContent = vocabState.fcIdx === VOCAB_DATA.length - 1 ? '🎉 Hoàn thành' : 'Tiếp theo →';
+    }
+  }
+
+  function fcFlip() {
+    vocabState.fcFlipped = !vocabState.fcFlipped;
+    const cardEl = document.getElementById('fc-3d-card');
+    if (cardEl) cardEl.classList.toggle('is-flipped', vocabState.fcFlipped);
+  }
+
+  function fcNext() {
+    if (vocabState.fcIdx < VOCAB_DATA.length - 1) {
+      vocabState.fcIdx++;
+      vocabState.fcFlipped = false;
+      fcRender();
+    } else {
+      if (typeof showToast === 'function') showToast('🎉 Đã hoàn thành tất cả thẻ Flashcard!');
+    }
+  }
+
+  function fcPrev() {
+    if (vocabState.fcIdx > 0) {
+      vocabState.fcIdx--;
+      vocabState.fcFlipped = false;
+      fcRender();
+    }
+  }
+
+  function fcSpeakCurrent() {
+    const v = VOCAB_DATA[vocabState.fcOrder[vocabState.fcIdx]];
+    if (v) speakChineseText(v[0]);
+  }
+
+  function fcGoStroke() {
+    const v = VOCAB_DATA[vocabState.fcOrder[vocabState.fcIdx]];
+    if (!v) return;
+    switchVocabSubTab('stroke');
+    setTimeout(function () {
+      strokeSetChar(v[0], v[1], v[2]);
+    }, 120);
+  }
+
+  // ===== 2. QUIZ (TRẮC NGHIỆM) =====
+  function quizStartGame() {
+    const countSelect = document.getElementById('quiz-count-select');
+    const totalVal = countSelect ? countSelect.value : '20';
+    const total = totalVal === 'all' ? VOCAB_DATA.length : parseInt(totalVal, 10);
+    vocabState.quizList = shuffleArray(VOCAB_DATA).slice(0, Math.min(total, VOCAB_DATA.length));
+    vocabState.quizIdx = 0;
+    vocabState.quizCorrect = 0;
+    vocabState.quizWrong = 0;
+
+    const resultView = document.getElementById('quiz-result-view');
+    const activeBlock = document.getElementById('quiz-active-block');
+    if (resultView) resultView.style.display = 'none';
+    if (activeBlock) activeBlock.style.display = 'block';
+    quizRenderQuestion();
+  }
+
+  function quizRenderQuestion() {
+    if (vocabState.quizIdx >= vocabState.quizList.length) {
+      quizShowResult();
+      return;
+    }
+    vocabState.quizAnswered = false;
+    vocabState.quizCurr = vocabState.quizList[vocabState.quizIdx];
+    const modeSelect = document.getElementById('quiz-mode-select');
+    const mode = modeSelect ? modeSelect.value : 'zh2vi';
+    vocabState.quizIsZH = mode === 'zh2vi' || (mode === 'mixed' && Math.random() > 0.5);
+
+    const cEl = document.getElementById('quiz-stat-correct');
+    const wEl = document.getElementById('quiz-stat-wrong');
+    const tEl = document.getElementById('quiz-stat-total');
+    const counterText = document.getElementById('quiz-counter-text');
+    const barEl = document.getElementById('quiz-progress-bar');
+    const fb = document.getElementById('quiz-feedback-box');
+    const nextBtn = document.getElementById('btn-quiz-next-question');
+
+    if (cEl) cEl.textContent = 'Đúng: ' + vocabState.quizCorrect;
+    if (wEl) wEl.textContent = 'Sai: ' + vocabState.quizWrong;
+    if (tEl) tEl.textContent = 'Đã làm: ' + vocabState.quizIdx;
+    if (counterText) counterText.textContent = (vocabState.quizIdx + 1) + ' / ' + vocabState.quizList.length;
+    if (barEl) barEl.style.width = Math.round((vocabState.quizIdx / vocabState.quizList.length) * 100) + '%';
+    if (fb) { fb.textContent = ''; fb.style.color = 'inherit'; }
+    if (nextBtn) nextBtn.style.display = 'none';
+
+    const qMain = document.getElementById('quiz-main-question');
+    const qPinyin = document.getElementById('quiz-pinyin-question');
+    const qAsk = document.getElementById('quiz-ask-direction');
+
+    if (vocabState.quizIsZH) {
+      if (qMain) qMain.textContent = vocabState.quizCurr[0];
+      if (qPinyin) qPinyin.textContent = vocabState.quizCurr[1];
+      if (qAsk) qAsk.textContent = 'Chọn nghĩa tiếng Việt chính xác:';
+    } else {
+      if (qMain) qMain.textContent = vocabState.quizCurr[2];
+      if (qPinyin) qPinyin.textContent = vocabState.quizCurr[1];
+      if (qAsk) qAsk.textContent = 'Chọn chữ Hán tương ứng đúng:';
+    }
+
+    const others = shuffleArray(VOCAB_DATA.filter(function (v) { return v !== vocabState.quizCurr; })).slice(0, 3);
+    const opts = shuffleArray([vocabState.quizCurr].concat(others));
+    const letters = ['A', 'B', 'C', 'D'];
+    const container = document.getElementById('quiz-options-container');
+
+    if (container) {
+      container.innerHTML = opts.map(function (o, i) {
+        const val = vocabState.quizIsZH ? o[2] : o[0];
+        const isCor = o === vocabState.quizCurr;
+        return (
+          '<button type="button" class="option-card" data-quiz-opt="' + i + '" data-is-correct="' + isCor + '" style="padding:14px;border-radius:var(--radius-lg);">' +
+            '<span class="option-letter">' + letters[i] + '</span>' +
+            '<span class="option-text" style="font-weight:700;">' + escapeHtml(val) + '</span>' +
+          '</button>'
+        );
+      }).join('');
+
+      container.querySelectorAll('.option-card').forEach(function (btn) {
         btn.addEventListener('click', function () {
-          const targetLesson = btn.getAttribute('data-vocab-lesson');
-          if (!targetLesson) return;
-          ui.selectedVocabLessonId = targetLesson;
-          ui.flashcardIndex = 0;
-          renderVocabularySection();
+          const isCorrect = btn.getAttribute('data-is-correct') === 'true';
+          quizAnswerSelected(btn, isCorrect);
         });
       });
     }
+  }
 
-    const filteredVocab = getFilteredVocabularyList();
-    if (ui.flashcardIndex >= filteredVocab.length) {
-      ui.flashcardIndex = 0;
-    }
+  function quizAnswerSelected(btn, isCorrect) {
+    if (vocabState.quizAnswered) return;
+    vocabState.quizAnswered = true;
 
-    if (scopeBadge) {
-      if (ui.selectedVocabLessonId === 'all') {
-        scopeBadge.textContent = 'Đang mở: Tổng hợp tất cả (' + filteredVocab.length + ' từ)';
-      } else {
-        const g = lessonGroups.find(function (item) {
-          return item.lesson_id === ui.selectedVocabLessonId;
-        });
-        scopeBadge.textContent = 'Đang mở: ' + (g ? g.lesson_title : ui.selectedVocabLessonId) + ' (' + filteredVocab.length + ' từ)';
+    document.querySelectorAll('.option-card').forEach(function (b) {
+      b.disabled = true;
+      if (b.getAttribute('data-is-correct') === 'true') {
+        b.classList.add('is-selected');
+        b.style.borderColor = 'var(--color-success)';
+        b.style.background = 'var(--color-success-bg)';
       }
-    }
+    });
 
-    // Update Interactive Flashcard Stage
-    const currentWord = filteredVocab[ui.flashcardIndex] || null;
-    const fcLessonBadge = document.getElementById('fc-lesson-badge');
-    const fcCounter = document.getElementById('fc-index-counter');
-    const fcWord = document.getElementById('fc-word-text');
-    const fcIpa = document.getElementById('fc-ipa-text');
-    const fcMeaningPanel = document.getElementById('fc-meaning-panel');
-    const fcMeaningVi = document.getElementById('fc-meaning-vi');
-    const fcExampleEn = document.getElementById('fc-example-en');
-    const fcExampleVi = document.getElementById('fc-example-vi');
-    const fcMasterBtnText = document.getElementById('fc-master-btn-text');
+    const fb = document.getElementById('quiz-feedback-box');
+    const nextBtn = document.getElementById('btn-quiz-next-question');
 
-    if (currentWord) {
-      const isMastered = ui.masteredIds.indexOf(currentWord.vocab_id) !== -1;
-      if (fcLessonBadge) fcLessonBadge.textContent = currentWord.lesson_title;
-      if (fcCounter) fcCounter.textContent = ui.flashcardIndex + 1 + ' / ' + filteredVocab.length;
-      if (fcWord) fcWord.textContent = currentWord.word;
-      if (fcIpa) fcIpa.textContent = currentWord.ipa + ' • ' + currentWord.part_of_speech;
-      if (fcMeaningVi) fcMeaningVi.textContent = currentWord.meaning_vi;
-      if (fcExampleEn) fcExampleEn.textContent = '"' + currentWord.example_en + '"';
-      if (fcExampleVi) fcExampleVi.textContent = currentWord.example_vi || '';
-      if (fcMeaningPanel) {
-        fcMeaningPanel.style.display = ui.showMeaningOnCard ? 'block' : 'none';
-      }
-      if (fcMasterBtnText) {
-        fcMasterBtnText.textContent = isMastered ? 'Đã thuộc từ này (Bấm để bỏ)' : 'Đánh dấu: Đã thuộc từ này';
+    if (isCorrect) {
+      vocabState.quizCorrect++;
+      if (fb) {
+        fb.textContent = '✓ Chính xác! ' + vocabState.quizCurr[0] + ' (' + vocabState.quizCurr[1] + ') : ' + vocabState.quizCurr[2];
+        fb.style.color = 'var(--color-success)';
       }
     } else {
-      if (fcLessonBadge) fcLessonBadge.textContent = 'Trống';
-      if (fcCounter) fcCounter.textContent = '0 / 0';
-      if (fcWord) fcWord.textContent = 'Không có từ phù hợp';
-      if (fcIpa) fcIpa.textContent = 'Hãy đổi bộ lọc hoặc từ khóa tìm kiếm';
-      if (fcMeaningPanel) fcMeaningPanel.style.display = 'none';
-    }
-
-    // Render Vocabulary Grid List
-    const gridEl = document.getElementById('student-vocab-cards-grid');
-    if (gridEl) {
-      if (filteredVocab.length === 0) {
-        gridEl.innerHTML =
-          '<div class="assignment-brief-box">' +
-          '<div class="assignment-brief-title">Không tìm thấy từ vựng</div>' +
-          '<p class="assignment-brief-desc">Hãy chọn bộ lọc "Tất cả" hoặc xóa từ khóa tìm kiếm để xem toàn bộ từ vựng của bài học.</p>' +
-          '</div>';
-      } else {
-        gridEl.innerHTML = filteredVocab
-          .map(function (v) {
-            const isMastered = ui.masteredIds.indexOf(v.vocab_id) !== -1;
-            return (
-              '<div class="vocab-item-row' +
-              (isMastered ? ' is-mastered' : '') +
-              '">' +
-              '<div>' +
-              '<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px;">' +
-              '<strong style="font-family: var(--font-display); font-size: 1.25rem; color: var(--color-foreground);">' +
-              escapeHtml(v.word) +
-              '</strong>' +
-              '<span class="status-badge ' +
-              (isMastered ? 'status-graded' : 'status-submitted') +
-              '">' +
-              escapeHtml(v.lesson_title.split(':')[0]) +
-              '</span>' +
-              '</div>' +
-              '<div class="mono-text" style="font-size: 0.8125rem; color: var(--color-primary); margin-bottom: 6px;">' +
-              escapeHtml(v.ipa + ' • ' + v.part_of_speech) +
-              '</div>' +
-              '<div style="font-weight: 700; font-size: 0.9375rem; margin-bottom: 4px;">' +
-              escapeHtml(v.meaning_vi) +
-              '</div>' +
-              '<p style="margin: 0; font-size: 0.875rem; color: var(--color-muted-foreground);">"' +
-              escapeHtml(v.example_en) +
-              '"</p>' +
-              '</div>' +
-              '<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 8px;">' +
-              '<button type="button" class="btn btn-outline btn-sm" data-speak-vocab="' +
-              escapeHtml(v.word) +
-              '">Phát âm</button>' +
-              '<button type="button" class="btn ' +
-              (isMastered ? 'btn-secondary' : 'btn-primary') +
-              ' btn-sm" data-toggle-master-id="' +
-              escapeHtml(v.vocab_id) +
-              '">' +
-              (isMastered ? 'Đã thuộc ✓' : 'Đánh dấu thuộc') +
-              '</button>' +
-              '</div>' +
-              '</div>'
-            );
-          })
-          .join('');
-
-        gridEl.querySelectorAll('[data-speak-vocab]').forEach(function (btn) {
-          btn.addEventListener('click', function () {
-            const word = btn.getAttribute('data-speak-vocab');
-            if (word) window.StudySnapAudio.speakText(word, 'zh-CN');
-          });
-        });
-
-        gridEl.querySelectorAll('[data-toggle-master-id]').forEach(function (btn) {
-          btn.addEventListener('click', function () {
-            const vId = btn.getAttribute('data-toggle-master-id');
-            if (!vId) return;
-            toggleMasteredVocab(vId);
-          });
-        });
+      vocabState.quizWrong++;
+      btn.style.borderColor = 'var(--color-destructive)';
+      btn.style.background = 'var(--color-destructive-bg)';
+      if (fb) {
+        fb.textContent = '✗ Sai! Đáp án đúng: ' + vocabState.quizCurr[0] + ' (' + vocabState.quizCurr[1] + ') : ' + vocabState.quizCurr[2];
+        fb.style.color = 'var(--color-destructive)';
       }
     }
 
-    // Render Synced Practice CTA Banner under Vocabulary
-    const practiceCta = document.getElementById('student-vocab-practice-cta');
-    if (practiceCta) {
-      const activeLessonId = ui.selectedVocabLessonId;
-      let matchedEx = null;
-      if (activeLessonId && activeLessonId !== 'all') {
-        const g = lessonGroups.find(function (item) { return item.lesson_id === activeLessonId; });
-        const tag = g ? g.lesson_title.split(':')[0].trim() : '';
-        if (Array.isArray(state.practiceExercises)) {
-          matchedEx = state.practiceExercises.find(function (e) {
-            return (tag && e.lesson_tag && e.lesson_tag.toLowerCase() === tag.toLowerCase()) ||
-                   (e.exercise_id && e.exercise_id.toLowerCase().indexOf(activeLessonId.replace('-', '_')) >= 0);
-          });
-        }
-      } else if (Array.isArray(state.practiceExercises) && state.practiceExercises.length > 0) {
-        matchedEx = state.practiceExercises[0];
+    if (nextBtn) nextBtn.style.display = 'inline-flex';
+    speakChineseText(vocabState.quizCurr[0]);
+
+    setTimeout(function () {
+      if (vocabState.quizIdx < vocabState.quizList.length - 1) {
+        vocabState.quizIdx++;
+        quizRenderQuestion();
       }
+    }, 1800);
+  }
 
-      if (matchedEx) {
-        practiceCta.innerHTML =
-          '<div class="synced-practice-banner" style="display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--color-surface);border:1.5px solid var(--color-primary);border-radius:var(--radius-xl);padding:18px 24px;box-shadow:var(--shadow-sm);flex-wrap:wrap;">' +
-            '<div style="display:flex;align-items:center;gap:14px;">' +
-              '<div style="width:46px;height:46px;border-radius:12px;background:var(--color-primary-soft);color:var(--color-primary-deep);display:flex;align-items:center;justify-content:center;font-size:1.25rem;">' +
-                '🎯' +
-              '</div>' +
-              '<div>' +
-                '<div style="font-weight:800;color:var(--color-primary-deep);font-size:1rem;">' +
-                  'Đã ôn xong từ vựng? Thử sức với: ' + escapeHtml(matchedEx.title) +
-                '</div>' +
-                '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-top:2px;">' +
-                  'Đề gồm <strong>' + (matchedEx.sections || []).length + ' phần</strong> • Tổng điểm: <strong class="tabular-nums" style="color:var(--color-accent);">' + (matchedEx.total_score || 0) + 'đ</strong> • Tự động chấm điểm và xếp loại tức thì.' +
-                '</div>' +
-              '</div>' +
-            '</div>' +
-            '<button type="button" class="btn btn-primary" id="btn-jump-to-lesson-practice" data-ex-id="' + escapeHtml(matchedEx.exercise_id) + '" style="font-weight:700;">' +
-              '<span>🚀 Làm bài kiểm tra ' + escapeHtml(matchedEx.lesson_tag || '') + ' ngay ➔</span>' +
-            '</button>' +
-          '</div>';
+  function quizShowResult() {
+    const activeBlock = document.getElementById('quiz-active-block');
+    const resultView = document.getElementById('quiz-result-view');
+    if (activeBlock) activeBlock.style.display = 'none';
+    if (resultView) {
+      resultView.style.display = 'block';
+      const pct = Math.round((vocabState.quizCorrect / vocabState.quizList.length) * 100);
+      const pctEl = document.getElementById('quiz-result-percent');
+      const titleEl = document.getElementById('quiz-result-title');
+      const descEl = document.getElementById('quiz-result-desc');
 
-        const btnJump = practiceCta.querySelector('#btn-jump-to-lesson-practice');
-        if (btnJump) {
-          btnJump.addEventListener('click', function () {
-            const exId = btnJump.getAttribute('data-ex-id');
-            if (exId) ui.selectedExerciseId = exId;
-            switchTab('practice');
-            renderPracticeSection();
-          });
-        }
-      } else {
-        practiceCta.innerHTML = '';
+      if (pctEl) pctEl.textContent = pct + '%';
+      if (titleEl) {
+        titleEl.textContent = pct >= 80 ? '🎉 Xuất sắc!' : (pct >= 60 ? '👍 Khá tốt!' : '📚 Cần ôn luyện thêm!');
+      }
+      if (descEl) {
+        descEl.textContent = 'Bạn đã trả lời đúng ' + vocabState.quizCorrect + ' / ' + vocabState.quizList.length + ' câu (' + pct + '%). ' +
+          (pct >= 80 ? 'Bạn đã nắm rất vững từ vựng bài học này!' : 'Hãy lật lại thẻ Flashcard 3D và thử làm lại nhé!');
       }
     }
   }
 
-  function toggleMasteredVocab(vocabId) {
-    const idx = ui.masteredIds.indexOf(vocabId);
-    if (idx >= 0) {
-      ui.masteredIds.splice(idx, 1);
-    } else {
-      ui.masteredIds.push(vocabId);
+  // ===== 3. STROKE PRACTICE (HANZI WRITER) =====
+  function initStrokeWriter() {
+    vocabState.strokeInited = true;
+    const canvasWrap = document.getElementById('hanzi-writer-canvas');
+    if (canvasWrap && window.HanziWriter) {
+      try {
+        canvasWrap.innerHTML = '';
+        vocabState.hwInstance = window.HanziWriter.create('hanzi-writer-canvas', '学', {
+          width: 220,
+          height: 220,
+          padding: 10,
+          showOutline: true,
+          strokeColor: '#FF6B9D',
+          outlineColor: '#FFD6E5',
+          drawingColor: '#2D1B4E',
+          drawingWidth: 5,
+          strokeAnimationSpeed: 1,
+          delayBetweenStrokes: 60
+        });
+      } catch (err) {
+        console.warn('HanziWriter init error:', err);
+      }
     }
-    saveMasteredIds();
-    renderStudentHeaderAndStats();
-    renderVocabularySection();
+    renderStrokeGrid(VOCAB_DATA);
+    strokeSetChar('学', 'xué', 'Học, học tập');
   }
 
-  function initVocabularyEvents() {
-    const stageEl = document.getElementById('student-flashcard-stage');
-    const btnSpeak = document.getElementById('btn-fc-speak');
-    const btnToggleMeaning = document.getElementById('btn-fc-toggle-meaning');
-    const btnPrev = document.getElementById('btn-fc-prev');
-    const btnNext = document.getElementById('btn-fc-next');
-    const btnMaster = document.getElementById('btn-fc-master-toggle');
+  function strokeSetChar(zh, py, vi) {
+    vocabState.curChar = zh[0] || '学';
+    vocabState.curPy = py || '';
+    vocabState.curMean = vi || '';
 
-    if (stageEl) {
-      stageEl.addEventListener('click', function (e) {
-        if (e.target.closest('button')) return;
-        ui.showMeaningOnCard = !ui.showMeaningOnCard;
-        renderVocabularySection();
-      });
+    const charHeading = document.getElementById('stroke-active-char');
+    const pinyinText = document.getElementById('stroke-active-pinyin');
+    const meanText = document.getElementById('stroke-active-meaning');
+    const statusText = document.getElementById('stroke-feedback-status');
+
+    if (charHeading) charHeading.textContent = zh;
+    if (pinyinText) pinyinText.textContent = py;
+    if (meanText) meanText.textContent = vi;
+    if (statusText) statusText.textContent = '';
+
+    if (vocabState.hwInstance) {
+      try {
+        vocabState.hwInstance.setCharacter(vocabState.curChar);
+        vocabState.hwInstance.showCharacter();
+      } catch (e) {}
     }
+  }
 
-    if (btnToggleMeaning) {
-      btnToggleMeaning.addEventListener('click', function () {
-        ui.showMeaningOnCard = !ui.showMeaningOnCard;
-        renderVocabularySection();
-      });
-    }
+  function renderStrokeGrid(list) {
+    const grid = document.getElementById('stroke-quick-chips');
+    if (!grid) return;
+    grid.innerHTML = list.slice(0, 160).map(function (v) {
+      const zh = escapeHtml(v[0]);
+      const py = escapeHtml(v[1].split(' ')[0] || '');
+      const vi = escapeHtml(v[2]);
+      return (
+        '<button type="button" class="stroke-chip-btn" data-zh="' + zh + '" data-py="' + py + '" data-vi="' + vi + '">' +
+          '<span class="stroke-chip-zh">' + v[0][0] + '</span>' +
+          '<span class="stroke-chip-py">' + py + '</span>' +
+        '</button>'
+      );
+    }).join('');
 
-    if (btnSpeak) {
-      btnSpeak.addEventListener('click', function () {
-        const list = getFilteredVocabularyList();
-        const item = list[ui.flashcardIndex];
-        if (item) {
-          const cleanExample = String(item.example_en || '').split('(')[0].trim();
-          window.StudySnapAudio.speakText(item.word + '。' + cleanExample, 'zh-CN');
-        }
-      });
-    }
-
-    if (btnPrev) {
-      btnPrev.addEventListener('click', function () {
-        const list = getFilteredVocabularyList();
-        if (!list.length) return;
-        ui.flashcardIndex = (ui.flashcardIndex - 1 + list.length) % list.length;
-        renderVocabularySection();
-      });
-    }
-
-    if (btnNext) {
-      btnNext.addEventListener('click', function () {
-        const list = getFilteredVocabularyList();
-        if (!list.length) return;
-        ui.flashcardIndex = (ui.flashcardIndex + 1) % list.length;
-        renderVocabularySection();
-      });
-    }
-
-    if (btnMaster) {
-      btnMaster.addEventListener('click', function () {
-        const list = getFilteredVocabularyList();
-        const item = list[ui.flashcardIndex];
-        if (item) {
-          toggleMasteredVocab(item.vocab_id);
-        }
-      });
-    }
-
-    const searchInput = document.getElementById('student-vocab-search');
-    if (searchInput) {
-      searchInput.addEventListener('input', function () {
-        ui.vocabSearchQuery = searchInput.value;
-        ui.flashcardIndex = 0;
-        renderVocabularySection();
-      });
-    }
-
-    document.querySelectorAll('[data-vocab-filter]').forEach(function (pill) {
-      pill.addEventListener('click', function () {
-        const mode = pill.getAttribute('data-vocab-filter');
-        if (!mode) return;
-        ui.vocabFilterMode = mode;
-        ui.flashcardIndex = 0;
-        document.querySelectorAll('[data-vocab-filter]').forEach(function (p) {
-          p.classList.toggle('is-active', p.getAttribute('data-vocab-filter') === mode);
-        });
-        renderVocabularySection();
+    grid.querySelectorAll('.stroke-chip-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        grid.querySelectorAll('.stroke-chip-btn').forEach(function (b) { b.classList.remove('is-active'); });
+        btn.classList.add('is-active');
+        strokeSetChar(btn.getAttribute('data-zh'), btn.getAttribute('data-py'), btn.getAttribute('data-vi'));
       });
     });
   }
 
+  function filterStrokeGrid() {
+    const input = document.getElementById('stroke-search-input');
+    const q = input ? input.value.trim().toLowerCase() : '';
+    const filtered = q
+      ? VOCAB_DATA.filter(function (v) {
+          return v[0].includes(q) || v[1].toLowerCase().includes(q) || v[2].toLowerCase().includes(q);
+        })
+      : VOCAB_DATA;
+    renderStrokeGrid(filtered);
+  }
+
+  function strokeSearchAction() {
+    const input = document.getElementById('stroke-search-input');
+    const q = input ? input.value.trim() : '';
+    if (!q) return;
+    const v = VOCAB_DATA.find(function (x) {
+      return x[0].startsWith(q) || x[0] === q || x[1].toLowerCase().includes(q.toLowerCase()) || x[2].toLowerCase().includes(q.toLowerCase());
+    });
+    if (v) {
+      strokeSetChar(v[0], v[1], v[2]);
+    } else if (q.length > 0) {
+      strokeSetChar(q, '-', '-');
+    }
+  }
+
+  function strokeAnimateAction() {
+    if (!vocabState.hwInstance) return;
+    const st = document.getElementById('stroke-feedback-status');
+    if (st) st.textContent = 'Đang trình chiếu thứ tự các nét viết...';
+    try {
+      vocabState.hwInstance.animateCharacter({
+        onComplete: function () {
+          if (st) st.textContent = 'Hoàn thành xem nét!';
+        }
+      });
+    } catch (e) {}
+  }
+
+  function strokeQuizAction() {
+    if (!vocabState.hwInstance) return;
+    const st = document.getElementById('stroke-feedback-status');
+    if (st) st.textContent = 'Hãy dùng chuột hoặc ngón tay viết từng nét vào khung...';
+    try {
+      vocabState.hwInstance.quiz({
+        onMistake: function (d) {
+          if (st) st.textContent = '❌ Nét chưa đúng! Hãy thử lại nét ' + d.strokeNum + ' / ' + d.totalStrokes;
+        },
+        onCorrectStroke: function (d) {
+          if (st) st.textContent = '✓ Đúng nét ' + d.strokeNum + ' / ' + d.totalStrokes + '! Tiếp tục...';
+        },
+        onComplete: function () {
+          if (st) st.textContent = '🎉 Viết hoàn thành! Rất chuẩn xác!';
+        }
+      });
+    } catch (e) {
+      if (st) st.textContent = 'Ký tự này chưa có dữ liệu nét. Hãy thử ký tự khác!';
+    }
+  }
+
+  // ===== 4. LIST (TRA CỨU BẢNG 272 TỪ) =====
+  function renderFullVocabList() {
+    const input = document.getElementById('vlist-search-input');
+    const q = input ? input.value.trim().toLowerCase() : '';
+    const rangeSelect = document.getElementById('vlist-range-select');
+    const range = rangeSelect ? rangeSelect.value : 'all';
+
+    let list = VOCAB_DATA;
+    if (range !== 'all') {
+      const parts = range.split('-').map(Number);
+      list = VOCAB_DATA.slice(parts[0] - 1, parts[1]);
+    }
+    if (q) {
+      list = list.filter(function (v) {
+        return v[0].includes(q) || v[1].toLowerCase().includes(q) || v[2].toLowerCase().includes(q);
+      });
+    }
+
+    const countBadge = document.getElementById('vlist-count-badge');
+    if (countBadge) countBadge.textContent = 'Hiển thị ' + list.length + ' từ';
+
+    const tbody = document.getElementById('vlist-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = list.map(function (v, idx) {
+      const globalIdx = VOCAB_DATA.indexOf(v) + 1;
+      const zh = escapeHtml(v[0]);
+      const py = escapeHtml(v[1]);
+      const vi = escapeHtml(v[2]);
+      return (
+        '<tr>' +
+          '<td class="tabular-nums font-bold" style="color:var(--color-muted-foreground);">' + globalIdx + '</td>' +
+          '<td>' +
+            '<button type="button" class="btn-input-action" data-list-stroke="' + globalIdx + '" style="font-size:1.25rem;font-weight:700;color:var(--color-primary);border:none;background:transparent;cursor:pointer;" title="Nhấn để xem tập viết nét chữ">' +
+              zh +
+            '</button>' +
+          '</td>' +
+          '<td>' +
+            '<div style="font-weight:700;color:var(--color-foreground);">' + vi + '</div>' +
+            '<div class="tabular-nums" style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-top:2px;">' + py + '</div>' +
+          '</td>' +
+          '<td style="text-align:center;">' +
+            '<div style="display:inline-flex;gap:6px;">' +
+              '<button type="button" class="btn btn-outline btn-sm" data-list-speak="' + zh + '" title="Nghe phát âm" style="padding:4px 8px;">🔊</button>' +
+              '<button type="button" class="btn btn-outline btn-sm" data-list-goto-stroke="' + globalIdx + '" title="Tập viết" style="padding:4px 8px;">✍️</button>' +
+            '</div>' +
+          '</td>' +
+        '</tr>'
+      );
+    }).join('');
+
+    tbody.querySelectorAll('[data-list-speak]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        speakChineseText(btn.getAttribute('data-list-speak'));
+      });
+    });
+
+    tbody.querySelectorAll('[data-list-stroke], [data-list-goto-stroke]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const idx = parseInt(btn.getAttribute('data-list-stroke') || btn.getAttribute('data-list-goto-stroke'), 10) - 1;
+        const v = VOCAB_DATA[idx];
+        if (v) {
+          switchVocabSubTab('stroke');
+          setTimeout(function () {
+            strokeSetChar(v[0], v[1], v[2]);
+          }, 120);
+        }
+      });
+    });
+  }
+
+  function renderVocabularySection() {
+    const totalBadge = document.getElementById('vocab-total-badge');
+    if (totalBadge) totalBadge.textContent = VOCAB_DATA.length + ' từ vựng';
+
+    fcRender();
+    if (vocabState.activeSubTab === 'quiz') quizRenderQuestion();
+    if (vocabState.activeSubTab === 'stroke' && !vocabState.strokeInited) initStrokeWriter();
+    if (vocabState.activeSubTab === 'list') renderFullVocabList();
+  }
+
+  function initVocabularyEvents() {
+    // Subnav switching
+    document.querySelectorAll('.vocab-subtab').forEach(function (tabBtn) {
+      tabBtn.addEventListener('click', function () {
+        const sub = tabBtn.getAttribute('data-vsub');
+        if (sub) switchVocabSubTab(sub);
+      });
+    });
+
+    // 1. Flashcard events
+    const cardWrap = document.getElementById('fc-3d-card-wrap');
+    if (cardWrap) {
+      cardWrap.addEventListener('click', fcFlip);
+      cardWrap.addEventListener('keydown', function (e) {
+        if (e.code === 'Space') { e.preventDefault(); fcFlip(); }
+      });
+    }
+
+    const prevCard = document.getElementById('btn-fc-prev-card');
+    if (prevCard) prevCard.addEventListener('click', fcPrev);
+
+    const nextCard = document.getElementById('btn-fc-next-card');
+    if (nextCard) nextCard.addEventListener('click', fcNext);
+
+    const speakWord = document.getElementById('btn-fc-speak-word');
+    if (speakWord) speakWord.addEventListener('click', fcSpeakCurrent);
+
+    const goStroke = document.getElementById('btn-fc-go-stroke');
+    if (goStroke) goStroke.addEventListener('click', fcGoStroke);
+
+    const resetCard = document.getElementById('btn-fc-reset');
+    if (resetCard) resetCard.addEventListener('click', fcReset);
+
+    const orderSelect = document.getElementById('fc-order-select');
+    if (orderSelect) orderSelect.addEventListener('change', fcReset);
+
+    const sideSelect = document.getElementById('fc-side-select');
+    if (sideSelect) sideSelect.addEventListener('change', fcRender);
+
+    // 2. Quiz events
+    const restartQuiz = document.getElementById('btn-quiz-restart');
+    if (restartQuiz) restartQuiz.addEventListener('click', quizStartGame);
+
+    const tryAgainQuiz = document.getElementById('btn-quiz-try-again');
+    if (tryAgainQuiz) tryAgainQuiz.addEventListener('click', quizStartGame);
+
+    const nextQuiz = document.getElementById('btn-quiz-next-question');
+    if (nextQuiz) {
+      nextQuiz.addEventListener('click', function () {
+        vocabState.quizIdx++;
+        quizRenderQuestion();
+      });
+    }
+
+    const speakQuizQ = document.getElementById('btn-quiz-speak-question');
+    if (speakQuizQ) {
+      speakQuizQ.addEventListener('click', function () {
+        if (vocabState.quizCurr) speakChineseText(vocabState.quizCurr[0]);
+      });
+    }
+
+    const quizModeSelect = document.getElementById('quiz-mode-select');
+    if (quizModeSelect) quizModeSelect.addEventListener('change', quizStartGame);
+
+    const quizCountSelect = document.getElementById('quiz-count-select');
+    if (quizCountSelect) quizCountSelect.addEventListener('change', quizStartGame);
+
+    // 3. Stroke events
+    const strokeSearchActionBtn = document.getElementById('btn-stroke-search-action');
+    if (strokeSearchActionBtn) strokeSearchActionBtn.addEventListener('click', strokeSearchAction);
+
+    const strokeSearchInput = document.getElementById('stroke-search-input');
+    if (strokeSearchInput) {
+      strokeSearchInput.addEventListener('input', filterStrokeGrid);
+      strokeSearchInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') strokeSearchAction();
+      });
+    }
+
+    const strokeAnimBtn = document.getElementById('btn-stroke-animate');
+    if (strokeAnimBtn) strokeAnimBtn.addEventListener('click', strokeAnimateAction);
+
+    const strokeQuizBtn = document.getElementById('btn-stroke-quiz');
+    if (strokeQuizBtn) strokeQuizBtn.addEventListener('click', strokeQuizAction);
+
+    const strokeSpeakBtn = document.getElementById('btn-stroke-speak');
+    if (strokeSpeakBtn) strokeSpeakBtn.addEventListener('click', function () {
+      speakChineseText(vocabState.curChar);
+    });
+
+    // 4. List events
+    const vlistSearch = document.getElementById('vlist-search-input');
+    if (vlistSearch) vlistSearch.addEventListener('input', renderFullVocabList);
+
+    const vlistRange = document.getElementById('vlist-range-select');
+    if (vlistRange) vlistRange.addEventListener('change', renderFullVocabList);
+
+    // Keyboard navigation
+    window.addEventListener('keydown', function (e) {
+      if (ui.activeTab !== 'vocabulary') return;
+      if (vocabState.activeSubTab === 'flashcard') {
+        if (e.key === 'ArrowLeft') fcPrev();
+        if (e.key === 'ArrowRight') fcNext();
+      }
+    });
+
+    // Initial setups
+    fcReset();
+    quizStartGame();
+  }
   // =========================================================================
   // 5. GLOBAL NAVIGATION, SHORTCUTS & GOOGLE SHEETS MODAL
   // =========================================================================

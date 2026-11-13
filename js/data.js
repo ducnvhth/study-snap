@@ -31,7 +31,8 @@ window.STUDYSNAP_INITIAL_DATA = {
 
   assignments: [
     {
-      assignment_id: 'BVN01',
+      assignment_id: 'BVN01_1',
+      session_tag: 'Buổi 1',
       title: 'Bài 1: Thu âm giới thiệu bản thân bằng tiếng Trung & luyện 4 thanh điệu',
       lesson_tag: 'Bài 1',
       class_name: 'Lớp Tiếng Trung HSK 2',
@@ -40,17 +41,69 @@ window.STUDYSNAP_INITIAL_DATA = {
       require_media: 'audio_or_video'
     },
     {
-      assignment_id: 'BVN02',
-      title: 'Bài 2: Đọc đoạn hội thoại học tiếng Hán & phân biệt âm uốn lưỡi zh, ch, sh',
+      assignment_id: 'BVN01_2',
+      session_tag: 'Buổi 1',
+      title: 'Bài 2: Đọc thuộc 10 câu chào hỏi và làm quen cơ bản',
       lesson_tag: 'Bài 2',
       class_name: 'Lớp Tiếng Trung HSK 2',
-      due_date: '14/11/2026',
-      description: 'Thu âm đoạn hội thoại Bài 2 và đặt 3 câu hỏi với 吗 (ma) hoặc 呢 (ne). Chú ý biến điệu của chữ 不 (bù → bú khi đi trước thanh 4).',
+      due_date: '12/11/2026',
+      description: 'Thu âm đọc to rõ ràng 10 câu chào hỏi, hỏi thăm sức khỏe trong Bài 1. Chú ý ngữ điệu tự nhiên và tròn vành rõ chữ.',
       require_media: 'audio_or_video'
     },
     {
-      assignment_id: 'BVN03',
-      title: 'Bài 3: Quay video hỏi giá mua sắm & nói lịch trình một ngày bằng tiếng Trung',
+      assignment_id: 'BVN01_3',
+      session_tag: 'Buổi 1',
+      title: 'Bài 3: Luyện dịch và đọc 5 câu đàm thoại làm quen trong lớp',
+      lesson_tag: 'Bài 3',
+      class_name: 'Lớp Tiếng Trung HSK 2',
+      due_date: '12/11/2026',
+      description: 'Dịch và thu âm đọc 5 câu đối thoại hỏi họ tên, bạn học, thầy cô giáo. Phát âm dứt khoát thanh 4 và tự nhiên thanh nhẹ.',
+      require_media: 'audio_or_video'
+    },
+    {
+      assignment_id: 'BVN01_4',
+      session_tag: 'Buổi 1',
+      title: 'Bài 4: Quay video ngắn 1 phút tự giới thiệu bằng tiếng Hán',
+      lesson_tag: 'Bài 4',
+      class_name: 'Lớp Tiếng Trung HSK 2',
+      due_date: '13/11/2026',
+      description: 'Quay video giới thiệu ngắn gọn trước camera, nhìn thẳng tự tin, phát âm tròn tiếng các thanh mẫu và vận mẫu đã học.',
+      require_media: 'audio_or_video'
+    },
+    {
+      assignment_id: 'BVN02_1',
+      session_tag: 'Buổi 2',
+      title: 'Bài 1: Đọc đoạn hội thoại học tiếng Hán & phân biệt âm uốn lưỡi zh, ch, sh',
+      lesson_tag: 'Bài 1',
+      class_name: 'Lớp Tiếng Trung HSK 2',
+      due_date: '14/11/2026',
+      description: 'Thu âm đoạn hội thoại Bài 2. Chú ý biến điệu của chữ 不 (bù → bú khi đi trước thanh 4) và phát âm chuẩn các âm đầu lưỡi.',
+      require_media: 'audio_or_video'
+    },
+    {
+      assignment_id: 'BVN02_2',
+      session_tag: 'Buổi 2',
+      title: 'Bài 2: Đặt 3 câu hỏi với trợ từ nghi vấn 吗 (ma) hoặc 呢 (ne)',
+      lesson_tag: 'Bài 2',
+      class_name: 'Lớp Tiếng Trung HSK 2',
+      due_date: '14/11/2026',
+      description: 'Đặt và thu âm phát âm 3 câu hỏi tiếng Trung sử dụng 吗 hoặc 呢 kèm theo câu trả lời hoàn chỉnh tương ứng.',
+      require_media: 'audio_or_video'
+    },
+    {
+      assignment_id: 'BVN02_3',
+      session_tag: 'Buổi 2',
+      title: 'Bài 3: Luyện phát âm nhóm thanh mẫu cuốn lưỡi zh, ch, sh, r',
+      lesson_tag: 'Bài 3',
+      class_name: 'Lớp Tiếng Trung HSK 2',
+      due_date: '14/11/2026',
+      description: 'Thu âm đọc bảng từ vựng thanh mẫu uốn lưỡi. Giữ đầu lưỡi cong đúng vị trí và phát âm rõ ràng.',
+      require_media: 'audio_or_video'
+    },
+    {
+      assignment_id: 'BVN03_1',
+      session_tag: 'Buổi 3',
+      title: 'Bài 1: Quay video hỏi giá mua sắm & nói lịch trình một ngày bằng tiếng Trung',
       lesson_tag: 'Bài 3',
       class_name: 'all',
       due_date: '16/11/2026',
@@ -58,7 +111,8 @@ window.STUDYSNAP_INITIAL_DATA = {
       require_media: 'audio_or_video'
     },
     {
-      assignment_id: 'BVN04',
+      assignment_id: 'BVN04_1',
+      session_tag: 'Buổi 1',
       title: 'Bài 1: Phát âm thanh mẫu & vận mẫu tiếng Hán cơ bản',
       lesson_tag: 'Bài 1',
       class_name: 'Lớp Tiếng Trung HSK 1 - K24',
@@ -71,7 +125,7 @@ window.STUDYSNAP_INITIAL_DATA = {
   submissions: [
     {
       submission_id: 'SUB01',
-      assignment_id: 'BVN01',
+      assignment_id: 'BVN01_1',
       student_id: 'HS01',
       submitted_at: '10/11/2026 14:20',
       student_note: 'Em đã thu âm 2 lần để sửa biến điệu thanh 3 và âm mặt lưỡi j, q, x ạ.',
@@ -87,7 +141,7 @@ window.STUDYSNAP_INITIAL_DATA = {
     },
     {
       submission_id: 'SUB02',
-      assignment_id: 'BVN01',
+      assignment_id: 'BVN01_1',
       student_id: 'HS02',
       submitted_at: '10/11/2026 16:45',
       student_note: 'Em quay video tự giới thiệu bằng tiếng Trung không nhìn phiên âm Pinyin ạ.',
@@ -103,10 +157,10 @@ window.STUDYSNAP_INITIAL_DATA = {
     },
     {
       submission_id: 'SUB03',
-      assignment_id: 'BVN01',
+      assignment_id: 'BVN01_2',
       student_id: 'HS03',
       submitted_at: '10/11/2026 17:10',
-      student_note: 'Em nộp bản thu âm Bài 1 chào hỏi và giới thiệu bản thân ạ.',
+      student_note: 'Em nộp bản thu âm 10 câu chào hỏi và làm quen cơ bản ạ.',
       media_type: 'audio',
       media_url: 'demo:student-hs03-bvn01',
       media_duration: '01:05',
@@ -119,7 +173,7 @@ window.STUDYSNAP_INITIAL_DATA = {
     },
     {
       submission_id: 'SUB04',
-      assignment_id: 'BVN01',
+      assignment_id: 'BVN01_2',
       student_id: 'HS05',
       submitted_at: '10/11/2026 21:00',
       student_note: 'Em gửi bài thu âm giới thiệu bản thân bằng tiếng Trung ạ.',
@@ -135,7 +189,7 @@ window.STUDYSNAP_INITIAL_DATA = {
     },
     {
       submission_id: 'SUB05',
-      assignment_id: 'BVN02',
+      assignment_id: 'BVN02_1',
       student_id: 'HS01',
       submitted_at: '11/11/2026 08:30',
       student_note: 'Em gửi bài đọc hội thoại Bài 2 và 3 câu hỏi mở rộng bằng tiếng Trung ạ.',
@@ -151,7 +205,7 @@ window.STUDYSNAP_INITIAL_DATA = {
     },
     {
       submission_id: 'SUB06',
-      assignment_id: 'BVN02',
+      assignment_id: 'BVN02_2',
       student_id: 'HS03',
       submitted_at: '11/11/2026 09:15',
       student_note: 'Em nộp video đọc bài khóa chữ Hán Bài 2 ạ.',
@@ -167,7 +221,7 @@ window.STUDYSNAP_INITIAL_DATA = {
     },
     {
       submission_id: 'SUB07',
-      assignment_id: 'BVN03',
+      assignment_id: 'BVN03_1',
       student_id: 'HS01',
       submitted_at: '11/11/2026 09:50',
       student_note: 'Em quay video kể về lịch trình buổi sáng và hội thoại mua hàng bằng tiếng Trung ạ.',
@@ -315,6 +369,226 @@ window.STUDYSNAP_INITIAL_DATA = {
       meaning_vi: 'Kiên trì, bền bỉ',
       example_en: '坚持每天听汉语录音。(Jiānchí měitiān tīng Hànyǔ lùyīn.)',
       example_vi: 'Kiên trì nghe băng ghi âm tiếng Trung mỗi ngày.'
+    },
+    {
+      vocab_id: 'V13',
+      lesson_id: 'bai-4',
+      lesson_title: 'Bài 4: Đồ ăn & Nhà hàng',
+      word: '米饭',
+      ipa: 'mǐ fàn',
+      part_of_speech: 'Danh từ',
+      meaning_vi: 'Cơm trắng',
+      example_en: '我想吃一碗米饭。(Wǒ xiǎng chī yì wǎn mǐfàn.)',
+      example_vi: 'Tôi muốn ăn một bát cơm trắng.'
+    },
+    {
+      vocab_id: 'V14',
+      lesson_id: 'bai-4',
+      lesson_title: 'Bài 4: Đồ ăn & Nhà hàng',
+      word: '好吃',
+      ipa: 'hǎo chī',
+      part_of_speech: 'Tính từ',
+      meaning_vi: 'Ngon, thơm ngon',
+      example_en: '中国菜非常好吃。(Zhōngguó cài fēicháng hǎochī.)',
+      example_vi: 'Món ăn Trung Quốc vô cùng ngon.'
+    },
+    {
+      vocab_id: 'V15',
+      lesson_id: 'bai-4',
+      lesson_title: 'Bài 4: Đồ ăn & Nhà hàng',
+      word: '服务员',
+      ipa: 'fú wù yuán',
+      part_of_speech: 'Danh từ',
+      meaning_vi: 'Nhân viên phục vụ',
+      example_en: '服务员，请给我们菜单。(Fúwùyuán, qǐng gěi wǒmen càidān.)',
+      example_vi: 'Phục vụ ơi, vui lòng cho chúng tôi thực đơn.'
+    },
+    {
+      vocab_id: 'V16',
+      lesson_id: 'bai-4',
+      lesson_title: 'Bài 4: Đồ ăn & Nhà hàng',
+      word: '买单',
+      ipa: 'mǎi dān',
+      part_of_speech: 'Động từ',
+      meaning_vi: 'Thanh toán, tính tiền',
+      example_en: '你好，我们买单。(Nǐ hǎo, wǒmen mǎidān.)',
+      example_vi: 'Xin chào, chúng tôi thanh toán.'
+    },
+    {
+      vocab_id: 'V17',
+      lesson_id: 'bai-5',
+      lesson_title: 'Bài 5: Thời gian & Lịch trình',
+      word: '现在',
+      ipa: 'xiàn zài',
+      part_of_speech: 'Danh từ thời gian',
+      meaning_vi: 'Bây giờ, hiện tại',
+      example_en: '现在是上午九点整。(Xiànzài shì shàngwǔ jiǔ diǎn zhěng.)',
+      example_vi: 'Bây giờ là đúng 9 giờ sáng.'
+    },
+    {
+      vocab_id: 'V18',
+      lesson_id: 'bai-5',
+      lesson_title: 'Bài 5: Thời gian & Lịch trình',
+      word: '明天',
+      ipa: 'míng tiān',
+      part_of_speech: 'Danh từ thời gian',
+      meaning_vi: 'Ngày mai',
+      example_en: '明天早上我们一起去图书馆。(Míngtiān zǎoshang wǒmen yìqǐ qù túshūguǎn.)',
+      example_vi: 'Sáng mai chúng ta cùng đi thư viện nhé.'
+    },
+    {
+      vocab_id: 'V19',
+      lesson_id: 'bai-5',
+      lesson_title: 'Bài 5: Thời gian & Lịch trình',
+      word: '开始',
+      ipa: 'kāi shǐ',
+      part_of_speech: 'Động từ',
+      meaning_vi: 'Bắt đầu',
+      example_en: '汉语课八点开始。(Hànyǔ kè bā diǎn kāishǐ.)',
+      example_vi: 'Tiết học tiếng Trung bắt đầu lúc 8 giờ.'
+    },
+    {
+      vocab_id: 'V20',
+      lesson_id: 'bai-5',
+      lesson_title: 'Bài 5: Thời gian & Lịch trình',
+      word: '睡觉',
+      ipa: 'shuì jiào',
+      part_of_speech: 'Động từ',
+      meaning_vi: 'Đi ngủ',
+      example_en: '我通常晚上十一点睡觉。(Wǒ tōngcháng wǎnshang shíyī diǎn shuìjiào.)',
+      example_vi: 'Tôi thường đi ngủ lúc 11 giờ tối.'
+    },
+    {
+      vocab_id: 'V21',
+      lesson_id: 'bai-6',
+      lesson_title: 'Bài 6: Gia đình & Nghề nghiệp',
+      word: '爸爸',
+      ipa: 'bà ba',
+      part_of_speech: 'Danh từ',
+      meaning_vi: 'Bố, cha',
+      example_en: '我爸爸是一名医生。(Wǒ bàba shì yì míng yīshēng.)',
+      example_vi: 'Bố tôi là một bác sĩ.'
+    },
+    {
+      vocab_id: 'V22',
+      lesson_id: 'bai-6',
+      lesson_title: 'Bài 6: Gia đình & Nghề nghiệp',
+      word: '妈妈',
+      ipa: 'mā ma',
+      part_of_speech: 'Danh từ',
+      meaning_vi: 'Mẹ, má',
+      example_en: '我妈妈做菜非常好吃。(Wǒ māma zuò cài fēicháng hǎochī.)',
+      example_vi: 'Mẹ tôi nấu ăn rất ngon.'
+    },
+    {
+      vocab_id: 'V23',
+      lesson_id: 'bai-6',
+      lesson_title: 'Bài 6: Gia đình & Nghề nghiệp',
+      word: '工作',
+      ipa: 'gōng zuò',
+      part_of_speech: 'Danh từ / Động từ',
+      meaning_vi: 'Công việc, làm việc',
+      example_en: '你在哪儿工作？(Nǐ zài nǎr gōngzuò?)',
+      example_vi: 'Bạn làm việc ở đâu?'
+    },
+    {
+      vocab_id: 'V24',
+      lesson_id: 'bai-6',
+      lesson_title: 'Bài 6: Gia đình & Nghề nghiệp',
+      word: '医生',
+      ipa: 'yī shēng',
+      part_of_speech: 'Danh từ',
+      meaning_vi: 'Bác sĩ',
+      example_en: '李医生在医院工作。(Lǐ yīshēng zài yīyuàn gōngzuò.)',
+      example_vi: 'Bác sĩ Lý làm việc ở bệnh viện.'
+    },
+    {
+      vocab_id: 'V25',
+      lesson_id: 'bai-7',
+      lesson_title: 'Bài 7: Phương hướng & Giao thông',
+      word: '哪儿',
+      ipa: 'nǎr',
+      part_of_speech: 'Đại từ',
+      meaning_vi: 'Ở đâu, chỗ nào',
+      example_en: '请问，洗手间在哪儿？(Qǐngwèn, xǐshǒujiān zài nǎr?)',
+      example_vi: 'Xin hỏi, nhà vệ sinh ở đâu?'
+    },
+    {
+      vocab_id: 'V26',
+      lesson_id: 'bai-7',
+      lesson_title: 'Bài 7: Phương hướng & Giao thông',
+      word: '左边',
+      ipa: 'zuǒ biān',
+      part_of_speech: 'Danh từ vị trí',
+      meaning_vi: 'Bên trái',
+      example_en: '超市在学校的左边。(Chāoshì zài xuéxiào de zuǒbiān.)',
+      example_vi: 'Siêu thị nằm ở bên trái trường học.'
+    },
+    {
+      vocab_id: 'V27',
+      lesson_id: 'bai-7',
+      lesson_title: 'Bài 7: Phương hướng & Giao thông',
+      word: '右边',
+      ipa: 'yòu biān',
+      part_of_speech: 'Danh từ vị trí',
+      meaning_vi: 'Bên phải',
+      example_en: '银行在前面右边。(Yínháng zài qiánmiàn yòubiān.)',
+      example_vi: 'Ngân hàng ở phía trước bên tay phải.'
+    },
+    {
+      vocab_id: 'V28',
+      lesson_id: 'bai-7',
+      lesson_title: 'Bài 7: Phương hướng & Giao thông',
+      word: '公共汽车',
+      ipa: 'gōng gòng qì chē',
+      part_of_speech: 'Danh từ',
+      meaning_vi: 'Xe buýt',
+      example_en: '我每天坐公共汽车去上班。(Wǒ měitiān zuò gōnggòng qìchē qù shàngbān.)',
+      example_vi: 'Mỗi ngày tôi đều đi xe buýt đi làm.'
+    },
+    {
+      vocab_id: 'V29',
+      lesson_id: 'bai-8',
+      lesson_title: 'Bài 8: Thời tiết & Cảm xúc',
+      word: '天气',
+      ipa: 'tiān qì',
+      part_of_speech: 'Danh từ',
+      meaning_vi: 'Thời tiết',
+      example_en: '今天天气非常晴朗。(Jīntiān tiānqì fēicháng qínglǎng.)',
+      example_vi: 'Hôm nay thời tiết rất đẹp trời.'
+    },
+    {
+      vocab_id: 'V30',
+      lesson_id: 'bai-8',
+      lesson_title: 'Bài 8: Thời tiết & Cảm xúc',
+      word: '冷',
+      ipa: 'lěng',
+      part_of_speech: 'Tính từ',
+      meaning_vi: 'Lạnh, rét',
+      example_en: '冬天这里很冷。(Dōngtiān zhèlǐ hěn lěng.)',
+      example_vi: 'Mùa đông ở đây rất lạnh.'
+    },
+    {
+      vocab_id: 'V31',
+      lesson_id: 'bai-8',
+      lesson_title: 'Bài 8: Thời tiết & Cảm xúc',
+      word: '热',
+      ipa: 'rè',
+      part_of_speech: 'Tính từ',
+      meaning_vi: 'Nóng, ấm bức',
+      example_en: '夏天天气太热了。(Xiàtiān tiānqì tài rè le.)',
+      example_vi: 'Mùa hè thời tiết nóng quá.'
+    },
+    {
+      vocab_id: 'V32',
+      lesson_id: 'bai-8',
+      lesson_title: 'Bài 8: Thời tiết & Cảm xúc',
+      word: '舒服',
+      ipa: 'shū fu',
+      part_of_speech: 'Tính từ',
+      meaning_vi: 'Thoải mái, dễ chịu',
+      example_en: '秋天微风吹来很舒服。(Qiūtiān wēifēng chuī lái hěn shūfu.)',
+      example_vi: 'Mùa thu gió nhẹ thổi lại rất dễ chịu.'
     }
   ],
 
@@ -322,7 +596,11 @@ window.STUDYSNAP_INITIAL_DATA = {
     { lesson_id: 'bai-1', tag: 'Bài 1', title: 'Bài 1: Chào hỏi & Làm quen', desc: 'Luyện 4 thanh điệu, biến điệu thanh 3 và mẫu câu làm quen cơ bản' },
     { lesson_id: 'bai-2', tag: 'Bài 2', title: 'Bài 2: Học tập & Ngôn ngữ', desc: 'Phát âm thanh mẫu, vận mẫu và từ vựng học tiếng Hán' },
     { lesson_id: 'bai-3', tag: 'Bài 3', title: 'Bài 3: Mua sắm & Đời sống', desc: 'Hội thoại mua sắm, hỏi giá cả và đếm số lượng trong tiếng Trung' },
-    { lesson_id: 'bai-4', tag: 'Bài 4', title: 'Bài 4: Đồ ăn & Nhà hàng', desc: 'Gọi món ăn Trung Hoa, khẩu vị và giao tiếp khi đi ăn' }
+    { lesson_id: 'bai-4', tag: 'Bài 4', title: 'Bài 4: Đồ ăn & Nhà hàng', desc: 'Gọi món ăn Trung Hoa, khẩu vị và giao tiếp khi đi ăn' },
+    { lesson_id: 'bai-5', tag: 'Bài 5', title: 'Bài 5: Thời gian & Lịch trình', desc: 'Hỏi giờ giấc, ngày tháng và kể lịch trình hoạt động trong ngày' },
+    { lesson_id: 'bai-6', tag: 'Bài 6', title: 'Bài 6: Gia đình & Nghề nghiệp', desc: 'Giới thiệu thành viên gia đình, nghề nghiệp và tuổi tác' },
+    { lesson_id: 'bai-7', tag: 'Bài 7', title: 'Bài 7: Phương hướng & Giao thông', desc: 'Hỏi đường, chỉ hướng đi và các phương tiện giao thông phổ biến' },
+    { lesson_id: 'bai-8', tag: 'Bài 8', title: 'Bài 8: Thời tiết & Cảm xúc', desc: 'Miêu tả thời tiết các mùa, cảm xúc và trạng thái sức khỏe' }
   ],
 
   exitTickets: [
@@ -898,8 +1176,24 @@ window.StudySnapStore = (function () {
               });
             }
           });
-          if (!Array.isArray(parsed.lessons)) {
+          if (!Array.isArray(parsed.lessons) || parsed.lessons.length < 8) {
             parsed.lessons = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.lessons || []));
+          }
+          if (!Array.isArray(parsed.vocabulary) || parsed.vocabulary.length < 20) {
+            parsed.vocabulary = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.vocabulary || []));
+          }
+          if (!Array.isArray(parsed.assignments) || parsed.assignments.length === 0 || !parsed.assignments.some(function (a) { return a.assignment_id === 'BVN01_1'; })) {
+            parsed.assignments = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.assignments || []));
+            parsed.submissions = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.submissions || []));
+          } else {
+            parsed.assignments.forEach(function (a) {
+              if (!a.session_tag) {
+                a.session_tag = (a.lesson_tag && a.lesson_tag.replace('Bài', 'Buổi')) || 'Buổi 1';
+              }
+              if (!a.class_name) {
+                a.class_name = 'all';
+              }
+            });
           }
           if (!Array.isArray(parsed.practiceExercises)) {
             parsed.practiceExercises = JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.practiceExercises || []));
@@ -994,8 +1288,10 @@ window.StudySnapStore = (function () {
         }
         return {
           assignment_id: a.assignment_id,
+          session_tag: a.session_tag || (a.lesson_tag && a.lesson_tag.replace('Bài', 'Buổi')) || 'Buổi 1',
           title: a.title,
           lesson_tag: a.lesson_tag,
+          class_name: a.class_name || 'all',
           due_date: formatCleanDate(a.due_date),
           description: a.description,
           require_media: a.require_media || 'audio_or_video'
@@ -1321,6 +1617,52 @@ window.StudySnapStore = (function () {
     });
   }
 
+  async function deleteAssignment(stateObj, assignmentId) {
+    if (!stateObj.assignments) return;
+    stateObj.assignments = stateObj.assignments.filter(function (a) {
+      return a.assignment_id !== assignmentId;
+    });
+    if (stateObj.submissions) {
+      stateObj.submissions = stateObj.submissions.filter(function (s) {
+        return s.assignment_id !== assignmentId;
+      });
+    }
+    saveState(stateObj);
+    return await syncPostToGas(stateObj, {
+      action: 'deleteAssignment',
+      assignment_id: assignmentId
+    });
+  }
+
+  async function assignExercisesToClass(stateObj, assignmentIds, targetClass) {
+    if (!stateObj.assignments || !Array.isArray(assignmentIds)) return;
+    stateObj.assignments.forEach(function (a) {
+      if (assignmentIds.indexOf(a.assignment_id) !== -1) {
+        a.class_name = targetClass;
+      }
+    });
+    saveState(stateObj);
+    return await syncPostToGas(stateObj, {
+      action: 'assignExercisesToClass',
+      assignment_ids: assignmentIds,
+      target_class: targetClass
+    });
+  }
+
+  async function batchAddVocabulary(stateObj, vocabList) {
+    if (!stateObj.vocabulary) stateObj.vocabulary = [];
+    if (Array.isArray(vocabList) && vocabList.length > 0) {
+      vocabList.forEach(function (v) {
+        stateObj.vocabulary.push(v);
+      });
+      saveState(stateObj);
+      return await syncPostToGas(stateObj, {
+        action: 'batchAddVocabulary',
+        vocabulary: vocabList
+      });
+    }
+  }
+
   function getInitials(fullName) {
     const parts = String(fullName || '').trim().split(/\s+/);
     if (!parts.length || !parts[0]) return 'HS';
@@ -1343,6 +1685,9 @@ window.StudySnapStore = (function () {
     submitPracticeExercise: submitPracticeExercise,
     savePracticeExercise: savePracticeExercise,
     deletePracticeExercise: deletePracticeExercise,
+    deleteAssignment: deleteAssignment,
+    assignExercisesToClass: assignExercisesToClass,
+    batchAddVocabulary: batchAddVocabulary,
     gradeManualTranslation: gradeManualTranslation,
     getInitials: getInitials
   };

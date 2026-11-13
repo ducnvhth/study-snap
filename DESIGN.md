@@ -1,40 +1,116 @@
 ---
 name: StudySnap
-description: Tactile Claymorphism & Clean Bento EdTech system. Education Teal and Achievement Orange sit on soft Mint-White surfaces for joyful student learning and effortless teacher grading.
+description: 🌸 Lớp Mầm Tiếng Trung Uyển Nhi EdTech Design System — Hệ thống màu Pastel chuẩn nguyên bản từ index_.html (Pink, Peach, Mint, Lavender, Sky & Yellow) trên nền Soft Rose-White và chữ Midnight Ink sang trọng.
 colors:
-  primary: "#0F766E"
-  primary-bright: "#0D9488"
-  primary-deep: "#115E59"
-  on-primary: "#FFFFFF"
-  secondary: "#2DD4BF"
-  secondary-soft: "#CCFBF1"
-  on-secondary: "#134E4A"
-  accent: "#C2410C"
-  accent-bright: "#EA580C"
-  accent-soft: "#FFEDD5"
-  on-accent: "#FFFFFF"
-  background: "#F0FDFA"
+  pink: "#FF6B9D"
+  pink-soft: "#FF85B3"
+  pink-lt: "#FFE4F0"
+  pink-md: "#FFB3D1"
+  peach: "#FF9A6C"
+  peach-lt: "#FFF0E8"
+  yellow: "#FFD166"
+  ylt: "#FFF8E1"
+  mint: "#06D6A0"
+  mint-lt: "#E0FBF4"
+  sky: "#74C9F0"
+  sky-lt: "#E8F7FF"
+  purple: "#A78BFA"
+  purp-lt: "#F3EEFF"
+  ink: "#2D1B4E"
+  muted: "#5C4A6B"
+  white: "#FFFFFF"
+  bg: "#FFF9FB"
+  card: "#FFFFFF"
+  soft: "#F5EEF8"
+
+  primary: "#FF6B9D"
+  primary-gradient: "linear-gradient(135deg, #FF99BE 0%, #FFB596 100%)"
+  primary-bright: "#FF85B3"
+  primary-deep: "#2D1B4E"
+  primary-light: "#FFE4F0"
+  primary-soft: "#FFB3D1"
+  on-primary: "#2D1B4E"
+
+  secondary: "#FF9A6C"
+  secondary-soft: "#FFF0E8"
+  on-secondary: "#2D1B4E"
+
+  accent: "#FF9A6C"
+  accent-bright: "#FF85B3"
+  accent-soft: "#FFE4F0"
+  on-accent: "#2D1B4E"
+
+  background: "#FFF9FB"
   surface-card: "#FFFFFF"
-  surface-muted: "#E6F4F1"
-  surface-elevated: "#F8FAFC"
-  foreground: "#134E4A"
-  muted-foreground: "#334155"
-  border-soft: "#99F6E4"
-  border-strong: "#5EEAD4"
-  border-neutral: "#CBD5E1"
-  ring: "#0F766E"
-  success: "#15803D"
-  success-bg: "#DCFCE7"
-  success-border: "#86EFAC"
-  success-text: "#14532D"
-  warning: "#B45309"
-  warning-bg: "#FEF3C7"
-  warning-border: "#FCD34D"
-  warning-text: "#78350F"
-  destructive: "#B91C1C"
-  destructive-bg: "#FEE2E2"
-  destructive-border: "#FCA5A5"
-  destructive-text: "#7F1D1D"
+  surface-muted: "#F5EEF8"
+  surface-elevated: "#FFFFFF"
+  foreground: "#2D1B4E"
+  muted-foreground: "#5C4A6B"
+  border-soft: "#FFD6E5"
+  border-strong: "#FFB3D1"
+  border-neutral: "rgba(45, 27, 78, 0.1)"
+  ring: "#FF6B9D"
+
+  success: "#06D6A0"
+  success-bg: "#E0FBF4"
+  success-border: "#95EED6"
+  success-text: "#056B51"
+
+  warning: "#D97706"
+  warning-bg: "#FFF8E1"
+  warning-border: "#FFE082"
+  warning-text: "#8D6500"
+
+  destructive: "#BE123C"
+  destructive-bg: "#FFF1F2"
+  destructive-border: "#FECDD3"
+  destructive-text: "#9F1239"
+
+  # Các màu chuyển tiếp & viền pastel từ index_.html
+  pink-pastel-btn: "#FF99BE"
+  pink-tab: "#FFD6E5"
+  peach-glow: "#FFB596"
+  peach-soft: "#FFAE88"
+  peach-warm: "#FFA37D"
+  peach-border: "#FFCAAE"
+  peach-header: "#FFE4D6"
+  peach-tint: "#FFE0D1"
+  peach-cream-accent: "#FFE3CE"
+  mint-glow: "#5EEFC6"
+  mint-tab: "#B8F5E3"
+  mint-soft: "#D5FBF0"
+  mint-border: "#7CE8CB"
+  mint-btn: "#84E9CE"
+  mint-btn-hover: "#9CEFD8"
+  mint-hover: "#BFF8E7"
+  mint-tint-1: "#CCFBF1"
+  mint-tint-2: "#99F6E4"
+  mint-tint-3: "#CFF7EC"
+  mint-border-soft: "#8AEED2"
+  purple-glow: "#C4B5FD"
+  purple-tab: "#E3DAFF"
+  purple-soft: "#ECE5FF"
+  purple-border: "#D1C4FD"
+  sky-glow: "#A8E0F8"
+  sky-tab: "#DCEEFF"
+  sky-soft: "#D4EEFF"
+  sky-hover: "#B4E5FF"
+  sky-btn: "#CBEFFF"
+  sky-border: "#B0E1FA"
+  yellow-tab: "#FFEBB5"
+  yellow-soft: "#FFF3CC"
+  pink-rose-bg: "#FFF0F7"
+  peach-cream-bg: "#FFF8F0"
+  sky-light-bg: "#F0F4FF"
+  lavender-light-bg: "#F7F5FF"
+
+  # Màu tương phản cao cho text & viền
+  sky-dark: "#0369A1"
+  sky-blue: "#1E90FF"
+  peach-dark: "#9A3412"
+  purple-dark: "#5B21B6"
+  yellow-dark: "#854D0E"
+  pink-contrast: "#9E1650"
 typography:
   scale:
     "12": "0.75rem"
@@ -49,31 +125,30 @@ typography:
     "32": "2rem"
     "40": "2.5rem"
   display:
-    fontFamily: "'Nunito', 'Be Vietnam Pro', sans-serif"
+    fontFamily: "'Baloo 2', 'Nunito', sans-serif"
     fontSize: "2.5rem"
     fontWeight: 800
     lineHeight: 1.2
     letterSpacing: "-0.02em"
   headline:
-    fontFamily: "'Nunito', 'Be Vietnam Pro', sans-serif"
+    fontFamily: "'Baloo 2', 'Nunito', sans-serif"
     fontSize: "1.75rem"
     fontWeight: 800
     lineHeight: 1.25
-    letterSpacing: "-0.015em"
   title:
-    fontFamily: "'Nunito', 'Be Vietnam Pro', sans-serif"
+    fontFamily: "'Nunito', sans-serif"
     fontSize: "1.25rem"
     fontWeight: 700
     lineHeight: 1.35
   body:
-    fontFamily: "'Be Vietnam Pro', sans-serif"
+    fontFamily: "'Nunito', sans-serif"
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.6
   label:
-    fontFamily: "'Be Vietnam Pro', sans-serif"
+    fontFamily: "'Nunito', sans-serif"
     fontSize: "0.875rem"
-    fontWeight: 600
+    fontWeight: 700
     lineHeight: 1.4
   mono:
     fontFamily: "'JetBrains Mono', monospace"
@@ -81,77 +156,11 @@ typography:
     fontWeight: 500
     lineHeight: 1.5
 rounded:
-  none: "0px"
-  xs: "6px"
-  sm: "8px"
-  md: "12px"
-  lg: "16px"
-  xl: "20px"
-  2xl: "24px"
+  sm: "10px"
+  md: "14px"
+  16: "16px"
+  lg: "18px"
+  xl: "22px"
+  "2xl": "28px"
   pill: "9999px"
-spacing:
-  xs: "4px"
-  sm: "8px"
-  md: "16px"
-  lg: "24px"
-  xl: "32px"
-  2xl: "48px"
-components:
-  button-primary:
-    backgroundColor: "{colors.accent}"
-    textColor: "{colors.on-accent}"
-    rounded: "{rounded.md}"
-    padding: "12px 20px"
-  button-secondary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
-    rounded: "{rounded.md}"
-    padding: "12px 20px"
-  lesson-chip:
-    backgroundColor: "{colors.surface-card}"
-    textColor: "{colors.foreground}"
-    rounded: "{rounded.lg}"
-    padding: "12px 18px"
 ---
-
-## Overview
-
-**StudySnap** kết hợp ngôn ngữ thiết kế **Claymorphism + Micro-interactions** (do **UI UX Pro Max** lựa chọn cho không gian học tập của học sinh) với cấu trúc **Bento Box Grid & Clean Accessible Matrix** (cho bảng tổng hợp tiến độ và không gian chấm chữa bài bằng giọng nói của giáo viên), được tinh chỉnh và kiểm định chất lượng bởi **Impeccable**.
-
-## Colors
-
-Hệ màu lấy cảm hứng từ sự tập trung, tươi mới và cảm giác thành tựu khi hoàn thành bài học, đảm bảo tương phản chuẩn WCAG AA (≥ 4.5:1):
-- **Education Teal (`#0F766E` / `#0D9488`)** làm màu chủ đạo cho thanh điều hướng, tab chọn bài học (`Bài 1`, `Bài 2`, ...) và trạng thái đang chọn.
-- **Achievement Orange (`#C2410C` / `#EA580C`)** dành riêng cho các nút hành động quan trọng nhất: **Nộp BVN**, **Ghi âm phản hồi**, **Bắt đầu bài cuối giờ**, và nút **Tổng hợp** từ vựng toàn khóa.
-- **Deep Teal-Ink (`#134E4A`)** trên nền **Soft Mint-White (`#F0FDFA`)** và thẻ trắng (`#FFFFFF`) giúp mắt học sinh và giáo viên không bị mỏi khi sử dụng lâu dài.
-
-## Typography
-
-- **Heading (`Nunito` 700/800/900)**: Các nét bo tròn mềm mại tạo sự thân thiện, giảm áp lực kiểm tra bài, hỗ trợ đầy đủ dấu Tiếng Việt.
-- **Body & Bảng tổng hợp (`Be Vietnam Pro` 400/500/600/700)**: Phông chữ thiết kế chuyên biệt cho Tiếng Việt, đảm bảo độ rõ nét tối đa khi đọc nhận xét của giáo viên, danh sách học sinh trong bảng tổng hợp và nghĩa từ vựng.
-- **Phiên âm Pinyin tiếng Trung & Timers (`JetBrains Mono`)**: Hiển thị chuẩn xác phiên âm Pinyin có thanh điệu và thời lượng file ghi âm/video với `font-variant-numeric: tabular-nums`.
-
-## Layout
-
-- **Thanh chọn bài từ vựng (Lesson Selector Bar)**: Các thẻ chọn bài (`Bài 1`, `Bài 2`, `Bài 3`...) xếp dạng lưới hoặc thanh chọn ngang có nút **"Tổng hợp"** nổi bật để học sinh bấm 1 chạm là chuyển bài ngay.
-- **Bảng tự động tổng hợp BVN (Auto-Aggregated Progress Matrix)**: Bảng dữ liệu rộng với cột tên học sinh cố định bên trái (sticky column), hiển thị đồng thời trạng thái nộp bài (`Đã nộp`, `Chưa làm`, `Đã chữa`), trình phát nhanh file học sinh nộp và nội dung nhận xét (text + voice) của giáo viên ngay trong ô.
-
-## Elevation & Depth
-
-- Sử dụng bóng đổ mềm có độ sâu tự nhiên (`0 6px 16px -4px rgba(19, 78, 74, 0.08)`) kết hợp viền `2px` rõ ràng cho các thẻ từ vựng và câu hỏi cuối giờ theo phong cách Claymorphism hiện đại.
-
-## Shapes
-
-- Thẻ bài học, khung Flashcard và khung nộp BVN sử dụng bo góc `16px–24px` (`{rounded.lg}` – `{rounded.2xl}`).
-- Các nút bấm và nhãn trạng thái (status badges) sử dụng bo góc `12px` hoặc `pill` cho nút ghi âm giọng nói.
-
-## Components
-
-- **Thẻ Từ Vựng & Nút Chọn Bài (`Bài 1`, `Bài 2`, ..., `Tổng hợp`)**: Hiển thị số lượng từ vựng và tiến độ thuộc bài; nút **"Tổng hợp"** có màu nhấn `#C2410C` để phân biệt rõ với từng bài lẻ.
-- **Trình Thu Âm & Chữa Bài Voice (Voice Feedback Recorder & Player)**: Tích hợp sẵn cho cả học sinh (nộp file audio/video hoặc ghi âm tại chỗ) và giáo viên (bấm 1 nút để ghi âm nhận xét chữa bài và gắn trực tiếp vào bài nộp + bảng tổng hợp).
-- **Thẻ Câu Hỏi Cuối Giờ (Interactive Exit Ticket Card)**: Hiển thị từng câu hỏi sinh động kèm thanh tiến độ, hiệu ứng chọn đáp án rõ ràng và phản hồi kết quả tức thì.
-
-## Do's and Don'ts
-
-- **DO**: Sử dụng SVG icon đồng nhất (Lucide Icons), đảm bảo độ tương phản ≥ 4.5:1 và kiểm tra bằng `impeccable.cmd detect` sau mỗi lần chỉnh sửa UI.
-- **DON'T**: Không sử dụng màu tím-xanh AI đại trà, không dùng emoji làm icon chức năng, không bắt giáo viên phải mở nhiều cửa sổ rời rạc mới xem được nhận xét và tiến độ của học sinh.
