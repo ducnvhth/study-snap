@@ -722,6 +722,137 @@ async function handleDriveMediaProxy(request, url, ctx) {
   return jsonResponse({ ok: false, fallbackToGas: true, fileId: fileId }, 404);
 }
 
+function normalizeProxyTtsLang(rawLang) {
+  const clean = String(rawLang || 'zh-CN').trim();
+  if (/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/.test(clean)) {
+    return clean;
+  }
+  return 'zh-CN';
+}
+
+function isAudioPayloadValid(contentType, buffer) {
+  if (!buffer || buffer.byteLength <= 100) return false;
+  const ct = String(contentType || '').toLowerCase();
+  if (ct && (ct.includes('text/html') || ct.includes('application/json') || ct.includes('text/plain'))) {
+    return false;
+  }
+  if (ct && !ct.includes('audio/') && !ct.includes('application/octet-stream')) {
+    return false;
+  }
+  const bytes = new Uint8Array(buffer, 0, Math.min(16, buffer.byteLength));
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    if (b === 0x20 || b === 0x09 || b === 0x0a || b === 0x0d) continue;
+    // Reject HTML/XML ('<') or JSON ('{' / '[') masquerading as audio
+    if (b === 0x3c || b === 0x7b || b === 0x5b) return false;
+    break;
+  }
+  return true;
+}
+
+export async function handleTtsProxy(request, url, ctx) {
+  const rawQuery = url.searchParams.get('q');
+  const cleanText = String(rawQuery || '').replace(/\s+/g, ' ').trim();
+  if (!cleanText || cleanText.length > 240) {
+    return jsonResponse({
+      ok: false,
+      error: !cleanText ? 'Missing q parameter' : 'Text too long for TTS (max 240 characters)'
+    }, 400);
+  }
+
+  const lang = normalizeProxyTtsLang(url.searchParams.get('lang'));
+  const cache = (typeof caches !== 'undefined' && caches.default) ? caches.default : null;
+  const canonicalUrl = new URL(url.origin + '/api');
+  canonicalUrl.searchParams.set('action', 'tts');
+  canonicalUrl.searchParams.set('lang', lang);
+  canonicalUrl.searchParams.set('q', cleanText);
+  const cacheKey = new Request(canonicalUrl.toString(), { method: 'GET' });
+
+  if (cache) {
+    try {
+      const cached = await cache.match(cacheKey);
+      if (cached) {
+        if (request.method === 'HEAD') {
+          return new Response(null, { status: cached.status, headers: cached.headers });
+        }
+        return cached;
+      }
+    } catch (err) {
+      // Ignore cache lookup failure and fetch from upstream
+    }
+  }
+
+  const encodedQ = encodeURIComponent(cleanText);
+  const encodedLang = encodeURIComponent(lang);
+  const providers = [
+    {
+      name: 'google-gtx',
+      url: 'https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=' + encodedLang + '&ttsspeed=0.9&q=' + encodedQ
+    },
+    {
+      name: 'google-tw-ob',
+      url: 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=' + encodedLang + '&ttsspeed=0.9&q=' + encodedQ
+    }
+  ];
+  if (lang.toLowerCase().indexOf('zh') === 0 && cleanText.length <= 120) {
+    providers.push({
+      name: 'youdao',
+      url: 'https://dict.youdao.com/dictvoice?audio=' + encodedQ + '&le=zh&type=2'
+    });
+  }
+
+  for (let i = 0; i < providers.length; i++) {
+    const provider = providers[i];
+    try {
+      // Never forward client Referer/Origin so Google Translate TTS does not reject with 404/403
+      const upstream = await fetch(provider.url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Accept': 'audio/mpeg, audio/*;q=0.9, */*;q=0.5'
+        }
+      });
+      if (!upstream || !upstream.ok) continue;
+
+      const contentType = upstream.headers.get('content-type') || '';
+      const buffer = await upstream.arrayBuffer();
+      if (!isAudioPayloadValid(contentType, buffer)) continue;
+
+      const resolvedType = contentType.toLowerCase().includes('audio/')
+        ? contentType.split(';')[0].trim()
+        : 'audio/mpeg';
+
+      const headers = new Headers({
+        'Content-Type': resolvedType,
+        'Content-Length': String(buffer.byteLength),
+        'Cache-Control': 'public, max-age=2592000, immutable',
+        'Access-Control-Allow-Origin': '*',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
+        'X-TTS-Provider': provider.name
+      });
+
+      const responseToCache = new Response(buffer, { status: 200, headers: headers });
+      if (cache) {
+        const putPromise = cache.put(cacheKey, responseToCache.clone()).catch(function () {});
+        if (ctx && typeof ctx.waitUntil === 'function') {
+          ctx.waitUntil(putPromise);
+        } else {
+          await putPromise;
+        }
+      }
+
+      if (request.method === 'HEAD') {
+        return new Response(null, { status: 200, headers: headers });
+      }
+      return responseToCache;
+    } catch (err) {
+      // Try next TTS provider
+    }
+  }
+
+  return jsonResponse({ ok: false, error: 'TTS upstream unavailable' }, 502);
+}
+
 export async function handleApiRequest(request, env, ctx) {
   if (request.method === 'OPTIONS') {
     return new Response(null, {
@@ -738,6 +869,10 @@ export async function handleApiRequest(request, env, ctx) {
 
   if (request.method === 'GET' && url.searchParams.get('action') === 'media') {
     return await handleDriveMediaProxy(request, url, ctx);
+  }
+
+  if ((request.method === 'GET' || request.method === 'HEAD') && url.searchParams.get('action') === 'tts') {
+    return await handleTtsProxy(request, url, ctx);
   }
 
   const db = env && env.DB ? env.DB : null;

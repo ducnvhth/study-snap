@@ -39,12 +39,15 @@ window.StudySnapAudio = (function () {
     if (typeof document === 'undefined' || !msg) return;
     const toast = document.getElementById('toast-banner');
     const text = document.getElementById('toast-message');
-    if (toast && text) {
-      text.textContent = msg;
-      toast.classList.add('is-visible');
+    const appToast = !toast ? document.getElementById('app-toast') : null;
+    const targetToast = toast || appToast;
+    const targetText = (toast && text) ? text : appToast;
+    if (targetToast && targetText) {
+      targetText.textContent = msg;
+      targetToast.classList.add('is-visible');
       clearTimeout(window.__audioToastTimer);
       window.__audioToastTimer = setTimeout(function () {
-        toast.classList.remove('is-visible');
+        targetToast.classList.remove('is-visible');
       }, 4200);
     }
   }
@@ -1572,16 +1575,325 @@ window.StudySnapAudio = (function () {
     reader.readAsDataURL(file);
   }
 
+  let activeTtsAudio = null;
+  let activeTtsButton = null;
+  let activeTtsToken = 0;
+  let activeUtterance = null;
+  let activeWebSpeechTimer = null;
+  let apiTtsUnavailable = false;
+  let cachedVoices = [];
+  let voicesListenerBound = false;
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('online', function () {
+      apiTtsUnavailable = false;
+    });
+  }
+
+  function normalizeSpeechText(text) {
+    const raw = String(text || '').trim();
+    if (!raw) return '';
+    // Strip parenthetical annotations ("笔记本（电脑）") or trailing pinyin ("谢谢。(Xièxie.)")
+    let cleaned = raw
+      .replace(/（[^）]*）/g, ' ')
+      .replace(/\([^)]*\)/g, ' ')
+      .replace(/…+/g, ' ')
+      .replace(/\.{2,}/g, ' ')
+      .replace(/[\/｜|]+/g, '，')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!cleaned) {
+      cleaned = raw.replace(/[（）()]/g, '').replace(/\s+/g, ' ').trim();
+    }
+    return cleaned;
+  }
+
+  function setSpeakButtonState(btn, isSpeaking) {
+    if (activeTtsButton && activeTtsButton !== btn) {
+      activeTtsButton.classList.remove('is-speaking');
+      activeTtsButton.removeAttribute('aria-busy');
+    }
+    if (!btn || !btn.classList) {
+      activeTtsButton = null;
+      return;
+    }
+    if (isSpeaking) {
+      btn.classList.add('is-speaking');
+      btn.setAttribute('aria-busy', 'true');
+      activeTtsButton = btn;
+    } else {
+      btn.classList.remove('is-speaking');
+      btn.removeAttribute('aria-busy');
+      if (activeTtsButton === btn) {
+        activeTtsButton = null;
+      }
+    }
+  }
+
+  function stopSpeaking() {
+    activeTtsToken += 1;
+    if (activeWebSpeechTimer) {
+      clearTimeout(activeWebSpeechTimer);
+      activeWebSpeechTimer = null;
+    }
+    if (activeTtsAudio) {
+      try {
+        activeTtsAudio.pause();
+        activeTtsAudio.removeAttribute('src');
+        if (typeof activeTtsAudio.load === 'function') activeTtsAudio.load();
+      } catch (err) {
+        // Ignore cleanup errors
+      }
+      activeTtsAudio = null;
+    }
+    activeUtterance = null;
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (err) {
+        // Ignore cancel errors
+      }
+    }
+    if (activeTtsButton && activeTtsButton.classList) {
+      activeTtsButton.classList.remove('is-speaking');
+      activeTtsButton.removeAttribute('aria-busy');
+      activeTtsButton = null;
+    }
+  }
+
+  function refreshSpeechVoices() {
+    const synth = typeof window !== 'undefined' && 'speechSynthesis' in window
+      ? window.speechSynthesis
+      : null;
+    if (!synth || typeof synth.getVoices !== 'function') return [];
+    const list = synth.getVoices() || [];
+    if (list.length > 0) {
+      cachedVoices = Array.prototype.slice.call(list);
+    }
+    if (!voicesListenerBound) {
+      voicesListenerBound = true;
+      if (typeof synth.addEventListener === 'function') {
+        synth.addEventListener('voiceschanged', function () {
+          const updated = synth.getVoices() || [];
+          if (updated.length > 0) cachedVoices = Array.prototype.slice.call(updated);
+        });
+      }
+    }
+    return cachedVoices.length > 0 ? cachedVoices : Array.prototype.slice.call(list);
+  }
+
+  function selectBestSpeechVoice(targetLang) {
+    const voices = refreshSpeechVoices();
+    if (!voices.length) return null;
+    const norm = String(targetLang || 'zh-CN').trim().toLowerCase().replace('_', '-');
+    const base = norm.split('-')[0];
+    let bestVoice = null;
+    let bestScore = -1;
+
+    for (let i = 0; i < voices.length; i++) {
+      const v = voices[i];
+      if (!v) continue;
+      const vLang = String(v.lang || '').trim().toLowerCase().replace('_', '-');
+      const vName = String(v.name || '').trim().toLowerCase();
+      const matchesChineseHint = base === 'zh' && (
+        vLang.indexOf('zh') === 0 ||
+        vLang.indexOf('cmn') === 0 ||
+        vName.indexOf('chinese') !== -1 ||
+        vName.indexOf('mandarin') !== -1 ||
+        vName.indexOf('中文') !== -1 ||
+        vName.indexOf('普通话') !== -1
+      );
+      const matchesBase = vLang === norm || vLang.indexOf(base + '-') === 0 || vLang === base || matchesChineseHint;
+      if (!matchesBase) continue;
+
+      let score = 10;
+      if (vLang === norm) score += 100;
+      else if (base === 'zh' && (vLang === 'zh-cn' || vLang === 'zh-hans' || vLang.indexOf('cmn-hans') === 0)) score += 80;
+      else if (base === 'zh' && (vLang === 'zh-tw' || vLang === 'zh-sg')) score += 45;
+      else if (base === 'zh' && (vLang === 'zh-hk' || vLang.indexOf('yue') === 0)) score += 10;
+
+      if (vName.indexOf('natural') !== -1 || vName.indexOf('online') !== -1 || vName.indexOf('neural') !== -1 || vName.indexOf('xiaoxiao') !== -1 || vName.indexOf('yunxi') !== -1 || vName.indexOf('google') !== -1 || vName.indexOf('tingting') !== -1 || vName.indexOf('meijia') !== -1) {
+        score += 25;
+      }
+      if (v.localService) score += 5;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestVoice = v;
+      }
+    }
+
+    return bestVoice;
+  }
+
+  function speakViaWebSpeech(spokenText, targetLang, token, triggerBtn) {
+    if (token !== activeTtsToken) return false;
+    const synth = typeof window !== 'undefined' && 'speechSynthesis' in window
+      ? window.speechSynthesis
+      : null;
+
+    if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
+      setSpeakButtonState(triggerBtn, false);
+      showGlobalAudioToast('Thiết bị không hỗ trợ phát âm hoặc không tải được âm thanh tiếng Trung.');
+      return false;
+    }
+
+    const voices = refreshSpeechVoices();
+    const matchedVoice = selectBestSpeechVoice(targetLang);
+    if (voices.length > 0 && !matchedVoice && String(targetLang || '').toLowerCase().indexOf('zh') === 0) {
+      setSpeakButtonState(triggerBtn, false);
+      showGlobalAudioToast('Chưa tải được âm thanh mẫu và trình duyệt chưa có giọng đọc tiếng Trung.');
+      return false;
+    }
+
+    const runSpeak = function () {
+      if (token !== activeTtsToken) return;
+      const utter = new SpeechSynthesisUtterance(spokenText);
+      utter.lang = targetLang || 'zh-CN';
+      utter.rate = 0.88;
+      if (matchedVoice) {
+        utter.voice = matchedVoice;
+        if (matchedVoice.lang) utter.lang = matchedVoice.lang;
+      }
+
+      utter.onstart = function () {
+        if (token === activeTtsToken) {
+          setSpeakButtonState(triggerBtn, true);
+        }
+      };
+      utter.onend = function () {
+        if (activeUtterance === utter) activeUtterance = null;
+        if (token === activeTtsToken) {
+          setSpeakButtonState(triggerBtn, false);
+        }
+      };
+      utter.onerror = function (ev) {
+        if (activeUtterance === utter) activeUtterance = null;
+        if (token === activeTtsToken) {
+          setSpeakButtonState(triggerBtn, false);
+          const errCode = ev && ev.error ? String(ev.error) : '';
+          if (errCode !== 'canceled' && errCode !== 'interrupted') {
+            showGlobalAudioToast('Không phát được âm thanh tiếng Trung. Vui lòng kiểm tra kết nối mạng.');
+          }
+        }
+      };
+
+      activeUtterance = utter;
+      if (synth.paused && typeof synth.resume === 'function') {
+        try { synth.resume(); } catch (err) {}
+      }
+      try {
+        synth.speak(utter);
+      } catch (err) {
+        if (activeUtterance === utter) activeUtterance = null;
+        setSpeakButtonState(triggerBtn, false);
+        showGlobalAudioToast('Không phát được âm thanh tiếng Trung trên trình duyệt này.');
+      }
+    };
+
+    const wasBusy = Boolean(synth.speaking || synth.pending);
+    try {
+      synth.cancel();
+    } catch (err) {}
+
+    if (wasBusy) {
+      activeWebSpeechTimer = setTimeout(function () {
+        activeWebSpeechTimer = null;
+        runSpeak();
+      }, 50);
+    } else {
+      runSpeak();
+    }
+    return true;
+  }
+
   /**
-   * Phát âm từ vựng tiếng Trung (zh-CN) bằng Web Speech API
+   * Phát âm từ vựng / câu ví dụ (mặc định zh-CN) qua /api?action=tts proxy và tự động dự phòng Web Speech API
    */
-  function speakText(text, lang) {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = lang || 'zh-CN';
-    utter.rate = 0.92;
-    window.speechSynthesis.speak(utter);
+  function speakText(text, lang, opts) {
+    const spokenText = normalizeSpeechText(text);
+    if (!spokenText) return false;
+    const targetLang = lang || 'zh-CN';
+    const triggerBtn = opts && opts.button ? opts.button : null;
+
+    stopSpeaking();
+    const token = activeTtsToken;
+    setSpeakButtonState(triggerBtn, true);
+
+    const isFileProtocol = typeof window !== 'undefined' && window.location && window.location.protocol === 'file:';
+    const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    const canTryApiProxy = typeof Audio !== 'undefined' && !isFileProtocol && !isOffline && !apiTtsUnavailable;
+
+    if (!canTryApiProxy) {
+      return speakViaWebSpeech(spokenText, targetLang, token, triggerBtn);
+    }
+
+    const ttsUrl = '/api?action=tts&lang=' + encodeURIComponent(targetLang) + '&q=' + encodeURIComponent(spokenText);
+    let settled = false;
+    let stallTimer = null;
+    const audio = new Audio(ttsUrl);
+    audio.preload = 'auto';
+    activeTtsAudio = audio;
+
+    const clearStallTimer = function () {
+      if (stallTimer) {
+        clearTimeout(stallTimer);
+        stallTimer = null;
+      }
+    };
+
+    const fallbackOnce = function () {
+      if (settled || token !== activeTtsToken) return;
+      settled = true;
+      clearStallTimer();
+      if (activeTtsAudio === audio) {
+        try {
+          audio.pause();
+          audio.removeAttribute('src');
+        } catch (err) {}
+        activeTtsAudio = null;
+      }
+      speakViaWebSpeech(spokenText, targetLang, token, triggerBtn);
+    };
+
+    stallTimer = setTimeout(function () {
+      fallbackOnce();
+    }, 4500);
+
+    audio.onplaying = clearStallTimer;
+    audio.oncanplay = clearStallTimer;
+
+    audio.onended = function () {
+      clearStallTimer();
+      if (token !== activeTtsToken) return;
+      settled = true;
+      if (activeTtsAudio === audio) activeTtsAudio = null;
+      setSpeakButtonState(triggerBtn, false);
+    };
+
+    audio.onerror = function () {
+      if (typeof fetch === 'function') {
+        fetch(ttsUrl, { method: 'HEAD' }).then(function (res) {
+          if (res && (res.status === 404 || res.status === 405)) {
+            apiTtsUnavailable = true;
+          }
+        }).catch(function () {});
+      }
+      fallbackOnce();
+    };
+
+    try {
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(function (err) {
+          if (token !== activeTtsToken || (err && err.name === 'AbortError')) return;
+          fallbackOnce();
+        });
+      }
+    } catch (err) {
+      fallbackOnce();
+    }
+    return true;
   }
 
   /**
@@ -1613,12 +1925,17 @@ window.StudySnapAudio = (function () {
     stopRecording: stopRecording,
     readUploadedMediaFile: readUploadedMediaFile,
     speakText: speakText,
+    stopSpeaking: stopSpeaking,
+    normalizeSpeechText: normalizeSpeechText,
     playMediaOrDemo: playMediaOrDemo,
     renderVoicePlayer: renderVoicePlayer,
     cacheDriveMediaFromDataUrl: cacheDriveMediaFromDataUrl,
     extractDriveFileId: extractDriveFileId,
     cleanAndTrimMonoSamples: cleanAndTrimMonoSamples,
     encodeMonoWavBytes: encodeMonoWavBytes,
-    pauseAll: function () { pauseAllExcept(null); }
+    pauseAll: function () {
+      stopSpeaking();
+      pauseAllExcept(null);
+    }
   };
 })();

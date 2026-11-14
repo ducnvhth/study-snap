@@ -90,19 +90,53 @@
     return raw || String(lessonId || 'Bài học');
   }
 
-  function speakChineseWord(text) {
-    const clean = String(text || '').trim();
+  function normalizeSpokenChinese(text) {
+    if (window.StudySnapAudio && typeof window.StudySnapAudio.normalizeSpeechText === 'function') {
+      return window.StudySnapAudio.normalizeSpeechText(text);
+    }
+    const raw = String(text || '').trim();
+    if (!raw) return '';
+    const cleaned = raw
+      .replace(/（[^）]*）/g, ' ')
+      .replace(/\([^)]*\)/g, ' ')
+      .replace(/…+/g, ' ')
+      .replace(/\.{2,}/g, ' ')
+      .replace(/[\/｜|]+/g, '，')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return cleaned || raw.replace(/[（）()]/g, '').replace(/\s+/g, ' ').trim();
+  }
+
+  let standaloneUtterance = null;
+  function speakChineseWord(text, triggerBtn) {
+    const clean = normalizeSpokenChinese(text);
     if (!clean) return;
     if (window.StudySnapAudio && typeof window.StudySnapAudio.speakText === 'function') {
-      window.StudySnapAudio.speakText(clean, 'zh-CN');
+      window.StudySnapAudio.speakText(clean, 'zh-CN', { button: triggerBtn || null });
       return;
     }
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+    if ('speechSynthesis' in window && window.speechSynthesis && typeof SpeechSynthesisUtterance !== 'undefined') {
+      const synth = window.speechSynthesis;
+      synth.cancel();
+      if (synth.paused && typeof synth.resume === 'function') synth.resume();
       const u = new SpeechSynthesisUtterance(clean);
       u.lang = 'zh-CN';
-      u.rate = 0.85;
-      window.speechSynthesis.speak(u);
+      u.rate = 0.88;
+      if (typeof synth.getVoices === 'function') {
+        const voices = synth.getVoices() || [];
+        const zhVoice = voices.find(function (v) {
+          const l = String((v && v.lang) || '').toLowerCase();
+          return l === 'zh-cn' || l === 'zh_cn' || l.indexOf('zh') === 0;
+        });
+        if (zhVoice) u.voice = zhVoice;
+      }
+      if (triggerBtn && triggerBtn.classList) triggerBtn.classList.add('is-speaking');
+      u.onend = u.onerror = function () {
+        if (standaloneUtterance === u) standaloneUtterance = null;
+        if (triggerBtn && triggerBtn.classList) triggerBtn.classList.remove('is-speaking');
+      };
+      standaloneUtterance = u;
+      synth.speak(u);
     }
   }
 
@@ -1345,8 +1379,9 @@
       btnFcSpeak.addEventListener('click', function (ev) {
         ev.stopPropagation();
         const items = computeActiveItems(true).items;
-        const v = items[vs.fcOrder[vs.fcIdx]];
-        if (v) speakChineseWord(v.word);
+        const orderedIdx = vs.fcOrder[vs.fcIdx] !== undefined ? vs.fcOrder[vs.fcIdx] : 0;
+        const v = items[orderedIdx];
+        if (v) speakChineseWord(v.word, btnFcSpeak);
       });
     }
 
@@ -1374,7 +1409,7 @@
     const btnQuizSpeak = document.getElementById('btn-quiz-speak-question');
     if (btnQuizSpeak) {
       btnQuizSpeak.addEventListener('click', function () {
-        if (vs.quizCurr) speakChineseWord(vs.quizCurr.word);
+        if (vs.quizCurr) speakChineseWord(vs.quizCurr.word, btnQuizSpeak);
       });
     }
 
@@ -1543,7 +1578,7 @@
     if (btnStrokeSpeak) {
       btnStrokeSpeak.addEventListener('click', function () {
         const text = vs.strokeWordItem ? vs.strokeWordItem.word : vs.strokeChar;
-        if (text) speakChineseWord(text);
+        if (text) speakChineseWord(text, btnStrokeSpeak);
       });
     }
 
@@ -1557,7 +1592,7 @@
       vlistBody.addEventListener('click', function (ev) {
         const speakBtn = ev.target.closest('[data-vlist-speak]');
         if (speakBtn) {
-          speakChineseWord(speakBtn.getAttribute('data-vlist-speak'));
+          speakChineseWord(speakBtn.getAttribute('data-vlist-speak'), speakBtn);
           return;
         }
         const strokeBtn = ev.target.closest('[data-vlist-stroke]');

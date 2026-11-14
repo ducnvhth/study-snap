@@ -4350,6 +4350,26 @@ body.ss-sync-locked .ss-api-status-chip {
   background-color: var(--mint-md);
 }
 
+.btn.is-speaking,
+.btn-outline.is-speaking,
+.btn-vlist-speak.is-speaking {
+  background-color: var(--mint-lt);
+  border-color: var(--mint);
+  color: var(--ink);
+  box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.22);
+  transform: scale(0.98);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.btn.is-speaking svg {
+  animation: tts-speaking-pulse 0.85s ease-in-out infinite;
+}
+
+@keyframes tts-speaking-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.16); }
+}
+
 .fc-back-extra-info {
   display: flex;
   flex-direction: column;
