@@ -885,7 +885,7 @@ window.StudySnapLoading = (function () {
     bootstrap: 'Đang đồng bộ dữ liệu hệ thống...',
     setupDatabase: 'Đang khởi tạo dữ liệu ban đầu...',
     login: 'Đang xác thực tài khoản...',
-    submitHomework: 'Đang nộp bài luyện tập cuối buổi...',
+    submitHomework: 'Đang nộp BVN...',
     submitExitTicket: 'Đang lưu kết quả luyện tập...',
     submitPracticeExercise: 'Đang nộp bài luyện tập cuối buổi...',
     savePracticeExercise: 'Đang lưu đề luyện tập...',
@@ -924,8 +924,8 @@ window.StudySnapLoading = (function () {
       desc: 'Hệ thống đang kiểm tra thông tin đăng nhập. Vui lòng đợi hoàn tất.'
     },
     submitHomework: {
-      title: 'Đang nộp bài luyện tập cuối buổi...',
-      desc: 'Vui lòng giữ nguyên trang cho đến khi hệ thống xác nhận đã lưu bài nộp.'
+      title: 'Đang nộp BVN...',
+      desc: 'Vui lòng giữ nguyên trang cho đến khi hệ thống xác nhận đã lưu bài nộp BVN.'
     },
     submitExitTicket: {
       title: 'Đang lưu kết quả luyện tập...',

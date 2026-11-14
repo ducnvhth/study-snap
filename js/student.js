@@ -1,10 +1,9 @@
 /**
  * StudySnap — Logic Cổng Học Sinh (`student.html`)
  * - Bảo vệ trang theo vai trò `student` (`StudySnapAuth.enforceRole('student')`)
- * - Nộp bài luyện tập cuối buổi (Ghi âm trực tiếp hoặc tải file Audio/Video) cho đúng tài khoản học sinh đang đăng nhập
- * - Xem điểm số, nhận xét văn bản và bấm nghe trực tiếp Voice Feedback của Giáo viên
- * - Bảng theo dõi tiến độ & nhận xét của riêng học sinh đang đăng nhập
- * - Bài luyện tập cuối buổi tương tác & lưu lịch sử cá nhân
+ * - Nộp BVN đa phương tiện (Ghi âm trực tiếp hoặc tải file Audio/Video) và nghe phản hồi giáo viên (Nhận xét + Voice Feedback)
+ * - Bảng theo dõi tiến độ BVN & phản hồi giáo viên của riêng học sinh đang đăng nhập
+ * - Làm Bài luyện tập cuối buổi tương tác & lưu lịch sử cá nhân
  * - Web ôn từ vựng chia theo từng bài (`Bài 1`, `Bài 2`, `Bài 3`...) và chế độ `"Tổng hợp"` toàn khóa
  */
 
@@ -172,7 +171,7 @@
       welcomeDesc.textContent =
         'Lớp: ' +
         (student.class_name || 'Lớp Tiếng Trung HSK 2') +
-        '. Làm bài luyện tập cuối buổi có hệ thống tự chấm, nộp bài thu âm trực tiếp hoặc tải video để nghe giáo viên sửa phát âm bằng giọng nói (Voice Feedback) và ôn từ vựng theo từng bài hoặc tổng hợp.';
+        '. Làm bài luyện tập cuối buổi có hệ thống tự chấm, nộp BVN (thu âm trực tiếp hoặc tải video) để nghe phản hồi giáo viên bằng giọng nói (Voice Feedback) và ôn từ vựng theo từng bài hoặc tổng hợp.';
     }
     if (accountBadge) {
       accountBadge.textContent = student.student_id + ' • ' + student.full_name;
@@ -250,7 +249,7 @@
   }
 
   // =========================================================================
-  // 2. TAB 1: HOMEWORK SUBMISSION & TEACHER VOICE FEEDBACK VIEWER
+  // 2. TAB 2: BVN & PHẢN HỒI GIÁO VIÊN (NỘP AUDIO/VIDEO & XEM VOICE FEEDBACK)
   // =========================================================================
   function getStudentAssignments(student) {
     const activeList = (state.assignments || []).filter(function (asg) {
@@ -404,9 +403,9 @@
     const summaryText = document.getElementById('student-session-summary-text');
     if (summaryText) {
       if (ui.selectedHomeworkSession === 'all') {
-        summaryText.textContent = 'Toàn bộ ' + studentAssignments.length + ' bài luyện tập cuối buổi';
+        summaryText.textContent = 'Toàn bộ ' + studentAssignments.length + ' bài tập về nhà (BVN)';
       } else {
-        summaryText.textContent = 'Đang xem ' + ui.selectedHomeworkSession + ' (' + filteredAssignments.length + ' bài)';
+        summaryText.textContent = 'Đang xem ' + ui.selectedHomeworkSession + ' (' + filteredAssignments.length + ' BVN)';
       }
     }
 
@@ -419,7 +418,7 @@
               if (sub && sub.status === 'graded') {
                 statusLabel = 'Đã chấm: ' + sub.score + (asg.require_media === 'practice' ? 'đ' : '/10');
               } else if (sub) {
-                statusLabel = 'Đã nộp • Chờ chấm';
+                statusLabel = 'Đã nộp • Chờ phản hồi GV';
               }
               const selected = asg.assignment_id === ui.selectedAssignmentId ? ' selected' : '';
               return (
@@ -433,7 +432,7 @@
               );
             })
             .join('')
-        : '<option value="">-- Chưa có bài tập cho buổi này --</option>';
+        : '<option value="">-- Chưa có BVN cho buổi này --</option>';
     }
 
     const currentAsg =
@@ -494,10 +493,10 @@
       }
     } else {
       if (briefTitle) {
-        briefTitle.textContent = 'Chưa có bài tập nào được giao cho lớp của em';
+        briefTitle.textContent = 'Chưa có BVN nào được giao cho lớp của em';
       }
       if (briefDesc) {
-        briefDesc.textContent = 'Khi giáo viên giao bài tập mới cho lớp, hướng dẫn chi tiết và khung nộp bài sẽ hiển thị tại đây.';
+        briefDesc.textContent = 'Khi giáo viên giao bài tập về nhà (BVN) mới cho lớp, hướng dẫn chi tiết và khung nộp bài sẽ hiển thị tại đây.';
       }
       if (recorderZone) recorderZone.style.display = 'none';
       if (submitBtn) submitBtn.style.display = 'none';
@@ -521,12 +520,12 @@
     if (!assignment) {
       if (statusBadge) {
         statusBadge.className = 'status-badge status-submitted';
-        statusBadge.textContent = 'Chưa có bài';
+        statusBadge.textContent = 'Chưa có BVN';
       }
       bodyEl.innerHTML =
         '<div class="assignment-brief-box">' +
-        '<div class="assignment-brief-title">Chưa có bài tập cần nộp</div>' +
-        '<p class="assignment-brief-desc">Hiện lớp của em chưa có bài luyện tập cuối buổi nào đang mở. Hãy kiểm tra lại khi giáo viên giao bài nhé.</p>' +
+        '<div class="assignment-brief-title">Chưa có BVN cần nộp</div>' +
+        '<p class="assignment-brief-desc">Hiện lớp của em chưa có bài tập về nhà (BVN) nào đang mở. Hãy kiểm tra lại khi giáo viên giao bài nhé.</p>' +
         '</div>';
       return;
     }
@@ -534,14 +533,14 @@
     if (!submission) {
       if (statusBadge) {
         statusBadge.className = 'status-badge status-missing';
-        statusBadge.textContent = 'Chưa nộp bài';
+        statusBadge.textContent = 'Chưa nộp BVN';
       }
       bodyEl.innerHTML =
         '<div class="assignment-brief-box">' +
         '<div class="assignment-brief-title">Em chưa nộp ' +
         escapeHtml(assignment.lesson_tag || assignment.title) +
         '</div>' +
-        '<p class="assignment-brief-desc">Hãy thu âm trực tiếp hoặc tải file Audio/Video ở cột bên trái và bấm <strong>Nộp Bài Luyện Tập Cuối Buổi Ngay</strong>. Sau khi giáo viên chấm, điểm số cùng nhận xét và giọng nói sửa bài sẽ hiển thị tại đây.</p>' +
+        '<p class="assignment-brief-desc">Hãy thu âm trực tiếp hoặc tải file Audio/Video ở cột bên trái và bấm <strong>Nộp BVN Ngay</strong>. Sau khi giáo viên chấm, điểm số cùng phản hồi bằng chữ và giọng nói sẽ hiển thị tại đây.</p>' +
         '</div>';
       return;
     }
@@ -552,14 +551,14 @@
         statusBadge.textContent = 'Đã chấm • ' + submission.score + '/10 điểm';
       } else {
         statusBadge.className = 'status-badge status-submitted';
-        statusBadge.textContent = 'Đã nộp • Chờ giáo viên chấm';
+        statusBadge.textContent = 'Đã nộp BVN • Chờ giáo viên phản hồi';
       }
     }
 
     const mediaLabel =
       submission.media_type === 'video'
-        ? 'Video bài làm em đã nộp'
-        : 'Ghi âm bài làm em đã nộp';
+        ? 'Video BVN em đã nộp'
+        : 'Ghi âm BVN em đã nộp';
 
     let teacherReviewHtml = '';
     if (submission.status === 'graded' || submission.teacher_comment || submission.teacher_voice_url) {
@@ -586,13 +585,13 @@
       teacherReviewHtml =
         '<div class="voice-feedback-box">' +
         '<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px;">' +
-        '<strong style="font-size: 0.9375rem; color: var(--color-foreground);">Nhận xét chi tiết từ Giáo viên</strong>' +
+        '<strong style="font-size: 0.9375rem; color: var(--color-foreground);">Phản hồi chi tiết từ Giáo viên</strong>' +
         (submission.score !== '' && submission.score !== null
           ? '<span class="status-badge status-graded">Điểm: ' + escapeHtml(submission.score) + '/10</span>'
           : '') +
         '</div>' +
         '<p class="matrix-teacher-note">' +
-        escapeHtml(submission.teacher_comment || 'Giáo viên đã gửi phản hồi bằng giọng nói cho bài làm của em.') +
+        escapeHtml(submission.teacher_comment || 'Giáo viên đã gửi phản hồi bằng giọng nói cho BVN của em.') +
         '</p>' +
         voiceBtnHtml +
         '</div>';
@@ -601,7 +600,7 @@
         '<div class="voice-feedback-box">' +
         '<div style="font-weight: 700; font-size: 0.9375rem; color: var(--color-foreground); margin-bottom: 4px;">Đang chờ Giáo viên chấm &amp; phản hồi</div>' +
         '<p style="font-size: 0.875rem; color: var(--color-muted-foreground); margin: 0;">' +
-        'Bài làm của em đã được hệ thống lưu lúc ' +
+        'BVN của em đã được hệ thống lưu lúc ' +
         escapeHtml(submission.submitted_at) +
         '. Em vẫn có thể thu âm lại hoặc bổ sung ghi chú nếu muốn cập nhật bài nộp.' +
         '</p>' +
@@ -610,11 +609,11 @@
 
     bodyEl.innerHTML =
       '<div class="assignment-brief-box">' +
-      '<div class="assignment-brief-title">Bài nộp của em • ' +
+      '<div class="assignment-brief-title">BVN đã nộp của em • ' +
       escapeHtml(submission.submitted_at || 'Vừa nộp') +
       '</div>' +
       '<p class="assignment-brief-desc">Ghi chú của em: "' +
-      escapeHtml(submission.student_note || 'Em gửi bài luyện tập cuối buổi ạ.') +
+      escapeHtml(submission.student_note || 'Em gửi bài tập về nhà (BVN) ạ.') +
       '"</p>' +
       '<div class="media-player-box">' +
       window.StudySnapAudio.renderVoicePlayer({
@@ -641,9 +640,9 @@
     if (studentAssignments.length === 0) {
       tbody.innerHTML =
         '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--color-muted-foreground);">' +
-          'Hiện giáo viên chưa giao bài luyện tập cuối buổi nào cho lớp của em.' +
+          'Hiện giáo viên chưa giao bài tập về nhà (BVN) nào cho lớp của em.' +
         '</td></tr>';
-      if (summaryBadge) summaryBadge.textContent = '0/0 bài tập';
+      if (summaryBadge) summaryBadge.textContent = '0/0 BVN';
       return;
     }
 
@@ -651,18 +650,18 @@
     tbody.innerHTML = studentAssignments
       .map(function (asg) {
         const sub = findSubmission(asg.assignment_id, student.student_id);
-        let statusHtml = '<span class="status-badge status-missing">Chưa làm</span>';
+        let statusHtml = '<span class="status-badge status-missing">Chưa nộp BVN</span>';
         let scoreHtml = '<span class="mono-text tabular-nums" style="color: var(--color-muted-foreground);">—</span>';
         let feedbackHtml =
-          '<p class="matrix-teacher-note">Em chưa nộp bài này. Hãy hoàn thành trước hạn ' +
+          '<p class="matrix-teacher-note">Em chưa nộp BVN này. Hãy hoàn thành trước hạn ' +
           escapeHtml(asg.due_date) +
           '.</p>';
-        let btnText = asg.require_media === 'practice' ? 'Làm bài luyện tập' : 'Làm & Nộp bài';
+        let btnText = asg.require_media === 'practice' ? 'Làm bài luyện tập' : 'Làm & Nộp BVN';
 
         if (sub) {
           completed++;
           if (sub.status === 'graded') {
-            statusHtml = '<span class="status-badge status-graded">Đã chữa &amp; Có phản hồi</span>';
+            statusHtml = '<span class="status-badge status-graded">Đã chữa &amp; Có phản hồi GV</span>';
             scoreHtml = '<strong class="mono-text tabular-nums">' + escapeHtml(sub.score) + (asg.require_media === 'practice' ? 'đ' : ' / 10') + '</strong>';
             feedbackHtml =
               '<div class="matrix-cell-content">' +
@@ -682,15 +681,15 @@
                   })
                 : '') +
               '</div>';
-            btnText = 'Xem chi tiết';
+            btnText = 'Xem phản hồi';
           } else {
-            statusHtml = '<span class="status-badge status-submitted">Đã nộp • Chờ chấm</span>';
+            statusHtml = '<span class="status-badge status-submitted">Đã nộp BVN • Chờ phản hồi</span>';
             scoreHtml = '<span class="mono-text tabular-nums">Chờ chấm</span>';
             feedbackHtml =
               '<p class="matrix-teacher-note">Đã nộp lúc ' +
               escapeHtml(sub.submitted_at) +
-              '. Đang chờ giáo viên chấm và ghi âm nhận xét.</p>';
-            btnText = 'Cập nhật bài nộp';
+              '. Đang chờ giáo viên chấm và ghi âm phản hồi.</p>';
+            btnText = 'Cập nhật BVN';
           }
         }
 
@@ -732,7 +731,7 @@
       .join('');
 
     if (summaryBadge) {
-      summaryBadge.textContent = 'Đã hoàn thành ' + completed + '/' + studentAssignments.length + ' bài tập';
+      summaryBadge.textContent = 'Đã hoàn thành ' + completed + '/' + studentAssignments.length + ' BVN';
     }
 
     tbody.querySelectorAll('[data-select-hw-row]').forEach(function (btn) {
@@ -814,8 +813,8 @@
             renderPendingMediaPreview();
             showToast(
               result.trimmedSeconds >= 1
-                ? 'Đã thu âm, lọc tạp âm & cắt ' + result.trimmedSeconds + 's khoảng trống (' + result.duration + '). Em có thể nghe lại hoặc nộp bài!'
-                : 'Đã thu âm & lọc tạp âm xong (' + result.duration + '). Em có thể nghe lại hoặc bấm "Nộp Bài Luyện Tập Cuối Buổi Ngay".'
+                ? 'Đã thu âm, lọc tạp âm & cắt ' + result.trimmedSeconds + 's khoảng trống (' + result.duration + '). Em có thể nghe lại hoặc nộp BVN!'
+                : 'Đã thu âm & lọc tạp âm xong (' + result.duration + '). Em có thể nghe lại hoặc bấm "Nộp BVN Ngay".'
             );
           },
           function (errMsg) {
@@ -860,7 +859,7 @@
               'Đã chọn: ' + mediaInfo.fileName + ' (' + mediaInfo.duration + ')';
           }
           renderPendingMediaPreview();
-          showToast('Đã tải file "' + mediaInfo.fileName + '". Nhấn "Nộp Bài Luyện Tập Cuối Buổi Ngay" để gửi!');
+          showToast('Đã tải file "' + mediaInfo.fileName + '". Nhấn "Nộp BVN Ngay" để gửi!');
         });
       });
     }
@@ -901,7 +900,7 @@
           assignment_id: ui.selectedAssignmentId,
           student_id: student.student_id,
           submitted_at: timestamp,
-          student_note: noteText || 'Em nộp bản thu âm bài luyện tập cuối buổi ạ.',
+          student_note: noteText || 'Em nộp bản thu âm BVN ạ.',
           media_type: mediaData.media_type,
           media_url: mediaData.media_url,
           media_duration: mediaData.media_duration,
@@ -930,14 +929,14 @@
 
           const remoteRes = loading
             ? await loading.withOverlay(
-                hasBinaryMedia ? 'Đang tải tệp bài nộp lên hệ thống...' : 'Đang nộp bài luyện tập cuối buổi...',
-                'Vui lòng giữ nguyên trang cho đến khi hệ thống xác nhận đã nhận bài.',
+                hasBinaryMedia ? 'Đang tải tệp BVN lên hệ thống...' : 'Đang nộp BVN...',
+                'Vui lòng giữ nguyên trang cho đến khi hệ thống xác nhận đã nhận BVN.',
                 runSync
               )
             : await runSync();
 
           if (remoteRes && remoteRes.ok === false) {
-            showToast(remoteRes.error || 'Chưa thể nộp bài lúc này. Vui lòng thử lại sau.');
+            showToast(remoteRes.error || 'Chưa thể nộp BVN lúc này. Vui lòng thử lại sau.');
             return;
           }
 
@@ -967,22 +966,22 @@
           ui.pendingMedia = null;
           renderPendingMediaPreview();
           if (recStatusText) {
-            recStatusText.textContent = 'Đã nộp thành công lúc ' + timestamp;
+            recStatusText.textContent = 'Đã nộp BVN thành công lúc ' + timestamp;
           }
 
           renderStudentHeaderAndStats();
           renderHomeworkSection();
           showToast(
             remoteRes === null && window.StudySnapStore.getGasUrl()
-              ? 'Đã lưu bài nộp trên thiết bị (mất kết nối máy chủ).'
-              : 'Đã nộp Bài luyện tập cuối buổi thành công cho tài khoản ' + student.full_name + '!'
+              ? 'Đã lưu BVN trên thiết bị (mất kết nối máy chủ).'
+              : 'Đã nộp BVN thành công cho tài khoản ' + student.full_name + '!'
           );
         };
 
         if (loading && submitBtn) {
           await loading.withButtonLoading(
             submitBtn,
-            hasBinaryMedia ? 'Đang tải tệp bài nộp...' : 'Đang gửi bài nộp...',
+            hasBinaryMedia ? 'Đang tải tệp BVN...' : 'Đang gửi BVN...',
             runSubmit
           );
         } else {
@@ -1261,7 +1260,7 @@
   }
 
   // =========================================================================
-  // 3. TAB 2: BÀI TẬP LUYỆN TẬP CUỐI BUỔI (TỰ ĐỘNG CHẤM & ĐÁNH GIÁ)
+  // 3. TAB 1: BÀI TẬP LUYỆN TẬP CUỐI BUỔI (TỰ ĐỘNG CHẤM & ĐÁNH GIÁ)
   // =========================================================================
   function getPracticeDraftKey(exerciseId) {
     const student = getActiveStudent();
