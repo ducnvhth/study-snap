@@ -1152,6 +1152,17 @@
     showToast('Đã hủy giao bài ôn từ cho ' + clsText + '.');
   }
 
+  function updateExportVocabButtonHint(suiteState) {
+    const btn = document.getElementById('btn-export-vocab-excel');
+    if (!btn || !suiteState) return;
+    const count = Array.isArray(suiteState.activeItems) ? suiteState.activeItems.length : null;
+    const label = String(suiteState.sourceLabel || suiteState.sourceKey || 'Kho từ vựng').trim();
+    const countSuffix = (count === null || /\(\s*\d+\s*từ\s*\)/i.test(label)) ? '' : (' (' + count + ' từ)');
+    const hint = 'Xuất file Excel (.xlsx): ' + label + countSuffix;
+    btn.title = hint;
+    btn.setAttribute('aria-label', hint);
+  }
+
   function renderVocabDeliveryBar() {
     const bar = document.getElementById('teacher-vocab-delivery-bar');
     if (!bar) return;
@@ -1159,6 +1170,7 @@
     const suiteState = (window.StudySnapVocabSuite && typeof window.StudySnapVocabSuite.getState === 'function')
       ? window.StudySnapVocabSuite.getState()
       : { sourceKey: fallbackKey, sourceLabel: fallbackKey };
+    updateExportVocabButtonHint(suiteState);
     const sourceKey = suiteState.sourceKey || fallbackKey;
     const deliveries = getVocabDeliveries(sourceKey);
     const active = deliveries.active;
@@ -6214,6 +6226,7 @@
     // =========================================================================
     const modalVocabExcel = document.getElementById('modal-import-vocab-excel');
     const btnOpenVocabModal = document.getElementById('btn-open-import-vocab-modal');
+    const btnExportVocabExcel = document.getElementById('btn-export-vocab-excel');
     const btnCloseVocabModal = document.getElementById('btn-close-vocab-modal');
     const btnCancelVocabImport = document.getElementById('btn-cancel-vocab-import');
     const importVocabLessonSelect = document.getElementById('import-vocab-lesson-select');
@@ -6411,6 +6424,96 @@
       });
     }
 
+    function buildVocabExportSlug(snap) {
+      const key = String((snap && snap.sourceKey) || 'tu-vung').trim();
+      const hskLesson = snap && snap.hskLessonFilter && snap.hskLessonFilter !== 'all'
+        ? ('_Bai_' + String(snap.hskLessonFilter).trim())
+        : '';
+      if (key === 'all-lessons') return 'Tong_Hop_Theo_Bai';
+      if (key === 'hsk-1') return 'HSK_1_3.0' + hskLesson;
+      if (key === 'hsk-2') return 'HSK_2_3.0' + hskLesson;
+      if (key === 'hsk-3') return 'HSK_3_3.0' + hskLesson;
+      const rawTitle = String((snap && snap.sourceLabel) || key).replace(/\s*\(\s*\d+\s*từ\s*\)\s*$/i, '').trim();
+      const plain = normalizePlainKey(rawTitle)
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 48);
+      return plain || 'Tu_Vung';
+    }
+
+    function exportVocabToExcel() {
+      ensureVocabSuiteConfigured();
+      const snap = (window.StudySnapVocabSuite && typeof window.StudySnapVocabSuite.getState === 'function')
+        ? window.StudySnapVocabSuite.getState()
+        : null;
+      const items = snap && Array.isArray(snap.activeItems) ? snap.activeItems : [];
+      if (!items.length) {
+        showToast('Bộ từ vựng đang chọn chưa có từ nào để xuất Excel. Hãy chọn bài học có từ hoặc Kho HSK 1–3!');
+        return;
+      }
+
+      const headers = [
+        'Chữ Hán',
+        'Pinyin',
+        'Từ loại',
+        'Nghĩa tiếng Việt',
+        'Câu ví dụ',
+        'Nghĩa câu ví dụ',
+        'Thuộc bài'
+      ];
+      const rows = items.map(function (v) {
+        const lessonLabel = v.isHskLevel
+          ? (String(v.lesson_title || '').trim() + ' - Bài ' + (v.lesson_num || ''))
+          : String(v.lesson_title || v.lesson_short || v.lesson_id || '').trim();
+        return [
+          String(v.word || '').trim(),
+          String(v.pinyin || v.ipa || '').trim(),
+          String(v.part_of_speech || '').trim(),
+          String(v.meaning || v.meaning_vi || '').trim(),
+          String(v.example || v.example_en || '').trim(),
+          String(v.example_vi || '').trim(),
+          lessonLabel
+        ];
+      });
+
+      const slug = buildVocabExportSlug(snap);
+      const sourceLabel = String((snap && snap.sourceLabel) || 'Kho từ vựng StudySnap').trim();
+      const cleanLabel = sourceLabel.replace(/\s*\(\s*\d+\s*từ\s*\)\s*$/i, '').trim() || sourceLabel;
+      const exportedAt = new Date().toLocaleDateString('vi-VN');
+      const baseFilename = 'StudySnap_Tu_Vung_' + slug;
+
+      exportExcelTemplateWorkbook({
+        sheetName: 'Tu_Vung',
+        headers: headers,
+        rows: rows,
+        colWidths: [
+          { wch: 16 },
+          { wch: 22 },
+          { wch: 14 },
+          { wch: 30 },
+          { wch: 44 },
+          { wch: 34 },
+          { wch: 38 }
+        ],
+        guideSheetName: 'Thong_Tin',
+        guideRows: [
+          ['Thông tin tệp từ vựng StudySnap', 'Giá trị'],
+          ['Nguồn từ vựng', cleanLabel],
+          ['Tổng số từ xuất ra', String(rows.length)],
+          ['Ngày xuất file', exportedAt],
+          ['Ghi chú tương thích', 'File giữ nguyên cấu trúc 6 cột đầu chuẩn của StudySnap (Chữ Hán | Pinyin | Từ loại | Nghĩa tiếng Việt | Câu ví dụ | Nghĩa câu ví dụ). Cô giáo có thể chỉnh sửa hoặc bổ sung thêm từ rồi dùng nút "Nhập từ Excel / CSV" để nhập lại vào bất kỳ bài học nào.']
+        ],
+        guideColWidths: [
+          { wch: 28 },
+          { wch: 76 }
+        ],
+        xlsxFilename: baseFilename + '.xlsx',
+        csvFilename: baseFilename + '.csv',
+        xlsxToast: 'Đã xuất ' + rows.length + ' từ vựng (' + cleanLabel + ') ra file ' + baseFilename + '.xlsx!',
+        csvToast: 'Đã xuất ' + rows.length + ' từ vựng (' + cleanLabel + ') ra file CSV (mở trực tiếp bằng Excel)!'
+      });
+    }
+
     function fillVocabSampleIntoImport() {
       const sampleText = VOCAB_TEMPLATE_ROWS.map(function (r) {
         return r.join('\t');
@@ -6483,6 +6586,7 @@
     }
 
     if (btnDownloadVocabTpl) btnDownloadVocabTpl.addEventListener('click', downloadVocabTemplateExcel);
+    if (btnExportVocabExcel) btnExportVocabExcel.addEventListener('click', exportVocabToExcel);
     if (btnPasteSample) btnPasteSample.addEventListener('click', fillVocabSampleIntoImport);
     if (btnUseVocabTemplateInImport) btnUseVocabTemplateInImport.addEventListener('click', fillVocabSampleIntoImport);
 
