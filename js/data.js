@@ -1453,6 +1453,134 @@ window.StudySnapLoading = (function () {
 })();
 
 /**
+ * Shared Scroll-to-Top Floating Button Controller
+ */
+window.StudySnapScrollTop = (function () {
+  const SCROLL_THRESHOLD_PX = 260;
+  let initialized = false;
+  let rafScheduled = false;
+
+  function getScrollOffset() {
+    if (typeof window === 'undefined') return 0;
+    if (typeof window.pageYOffset === 'number') return window.pageYOffset;
+    if (typeof window.scrollY === 'number') return window.scrollY;
+    if (typeof document !== 'undefined') {
+      if (document.documentElement && typeof document.documentElement.scrollTop === 'number') {
+        return document.documentElement.scrollTop;
+      }
+      if (document.body && typeof document.body.scrollTop === 'number') {
+        return document.body.scrollTop;
+      }
+    }
+    return 0;
+  }
+
+  function ensureButton() {
+    if (typeof document === 'undefined' || !document.body || typeof document.createElement !== 'function') {
+      return null;
+    }
+    let btn = document.getElementById('ss-scroll-top-btn');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'ss-scroll-top-btn';
+      btn.type = 'button';
+      btn.className = 'ss-scroll-top-btn';
+      if (typeof btn.setAttribute === 'function') {
+        btn.setAttribute('aria-label', 'Cuộn lên đầu trang');
+        btn.setAttribute('title', 'Lên đầu trang');
+        btn.setAttribute('aria-hidden', 'true');
+      }
+      btn.tabIndex = -1;
+      btn.innerHTML =
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<line x1="12" y1="19" x2="12" y2="5"></line>' +
+          '<polyline points="5 12 12 5 19 12"></polyline>' +
+        '</svg>';
+      if (typeof document.body.appendChild === 'function') {
+        document.body.appendChild(btn);
+      }
+    }
+    return btn;
+  }
+
+  function syncVisibility() {
+    rafScheduled = false;
+    const btn = ensureButton();
+    if (!btn) return;
+    const isVisible = getScrollOffset() > SCROLL_THRESHOLD_PX;
+    if (btn.classList && typeof btn.classList.toggle === 'function') {
+      btn.classList.toggle('is-visible', isVisible);
+    }
+    if (typeof btn.setAttribute === 'function') {
+      btn.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+    }
+    btn.tabIndex = isVisible ? 0 : -1;
+  }
+
+  function scheduleSync() {
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      if (rafScheduled) return;
+      rafScheduled = true;
+      window.requestAnimationFrame(syncVisibility);
+    } else {
+      syncVisibility();
+    }
+  }
+
+  function scrollToTop() {
+    if (typeof window === 'undefined') return;
+    const prefersReduced =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (typeof window.scrollTo === 'function') {
+      try {
+        window.scrollTo({ top: 0, behavior: prefersReduced ? 'auto' : 'smooth' });
+      } catch (e) {
+        window.scrollTo(0, 0);
+      }
+    }
+    if (typeof document !== 'undefined') {
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+    }
+  }
+
+  function init() {
+    if (initialized) {
+      syncVisibility();
+      return ensureButton();
+    }
+    const btn = ensureButton();
+    if (!btn) return null;
+    initialized = true;
+
+    if (typeof btn.addEventListener === 'function') {
+      btn.addEventListener('click', scrollToTop);
+    }
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('scroll', scheduleSync, { passive: true });
+      window.addEventListener('resize', scheduleSync, { passive: true });
+    }
+    syncVisibility();
+    return btn;
+  }
+
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading' && typeof document.addEventListener === 'function') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  }
+
+  return {
+    init: init,
+    sync: syncVisibility,
+    scrollToTop: scrollToTop
+  };
+})();
+
+/**
  * Shared Store & Backend Sync Manager
  */
 window.StudySnapStore = (function () {
