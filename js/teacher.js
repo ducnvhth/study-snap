@@ -227,13 +227,13 @@
 
   function isBuiltInVocabBankKey(key) {
     const k = String(key || '').trim();
-    return k === 'hsk-272' || k === 'hsk-1' || k === 'hsk-2' || k === 'hsk-3';
+    return k === 'hsk-1' || k === 'hsk-2' || k === 'hsk-3';
   }
 
   function getDefaultVocabLessonKey() {
     const lessons = getLessons();
     if (lessons.length > 0) return lessons[0].lesson_id;
-    return 'hsk-272';
+    return 'hsk-1';
   }
 
   function renderPracticeLessonTagDatalist() {
@@ -1108,14 +1108,6 @@
       title: 'Tổng hợp từ vựng tất cả các bài',
       count: totalLessonWords
     });
-    const hskCount = Array.isArray(window.StudySnapVocabList) ? window.StudySnapVocabList.length : 272;
-    options.push({
-      key: 'hsk-272',
-      label: 'Kho 272 từ HSK chuẩn (' + hskCount + ' từ)',
-      shortTag: 'HSK 272',
-      title: 'Kho 272 từ vựng HSK chuẩn',
-      count: hskCount
-    });
     const hskBanks = (typeof window !== 'undefined' && window.StudySnapHskBanks) ? window.StudySnapHskBanks : {};
     [
       { key: 'hsk-1', label: 'Từ vựng HSK 1 (3.0)', shortTag: 'HSK 1', title: 'Từ vựng HSK 1 (Giáo trình 3.0)' },
@@ -1292,7 +1284,6 @@
 
   function formatVocabSourceLabelForTeacher(sourceKey, lessonsList) {
     const key = String(sourceKey || '').trim();
-    if (key === 'hsk-272') return 'Kho HSK 272';
     if (key === 'hsk-1') return 'HSK 1 (3.0)';
     if (key === 'hsk-2') return 'HSK 2 (3.0)';
     if (key === 'hsk-3') return 'HSK 3 (3.0)';

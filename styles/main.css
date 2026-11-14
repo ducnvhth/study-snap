@@ -4048,19 +4048,6 @@ body.ss-sync-locked .ss-api-status-chip {
   margin-bottom: 0;
 }
 
-.lesson-pill.is-hsk-bank {
-  background-color: var(--yellow-md);
-  border-color: var(--yellow);
-  color: var(--ink);
-}
-
-.lesson-pill.is-hsk-bank.is-active {
-  background-color: var(--yellow);
-  background-image: var(--grad-peach-yellow);
-  border-color: var(--peach);
-  color: var(--ink);
-}
-
 .lesson-pill.is-hsk-bank.is-hsk-level-1 {
   background-color: var(--mint-lt);
   border-color: var(--mint-md);

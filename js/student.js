@@ -2964,7 +2964,7 @@
 
   // =========================================================================
   // =========================================================================
-  // 4. TAB 3: ÔN TẬP TỪ VỰNG THEO BÀI, KHO 272 TỪ & NHIỆM VỤ ĐƯỢC GIAO
+  // 4. TAB 3: ÔN TẬP TỪ VỰNG THEO BÀI, HSK 1–3 & NHIỆM VỤ ĐƯỢC GIAO
   // =========================================================================
   function getStudentLessonsList() {
     if (window.StudySnapStore && typeof window.StudySnapStore.getSyncedLessons === 'function') {
@@ -2997,11 +2997,6 @@
 
   function computeMasteryStatsForLesson(lessonKey) {
     const vocabList = Array.isArray(state.vocabulary) ? state.vocabulary : [];
-    if (lessonKey === 'hsk-272') {
-      const total272 = (window.StudySnapVocabList && window.StudySnapVocabList.length) || 272;
-      const mastered272 = ui.masteredIds.filter(function (id) { return String(id).indexOf('HSK272_') === 0; }).length;
-      return { masteredCount: mastered272, total: total272 };
-    }
     const hskPrefixes = { 'hsk-1': 'HSK1_', 'hsk-2': 'HSK2_', 'hsk-3': 'HSK3_' };
     if (Object.prototype.hasOwnProperty.call(hskPrefixes, lessonKey)) {
       const bank = (window.StudySnapHskBanks && Array.isArray(window.StudySnapHskBanks[lessonKey]))
@@ -3022,7 +3017,7 @@
   async function recordStudentVocabPracticeEvent(eventInfo) {
     const student = getActiveStudent();
     if (!eventInfo || !student || !window.StudySnapStore) return;
-    const sourceKey = String(eventInfo.sourceKey || 'hsk-272').trim() || 'hsk-272';
+    const sourceKey = String(eventInfo.sourceKey || 'hsk-1').trim() || 'hsk-1';
     const sourceLabel = String(eventInfo.sourceLabel || sourceKey);
     const payloadScore = eventInfo.score !== undefined && eventInfo.score !== null ? String(eventInfo.score) : '';
     const mediaDur = String(eventInfo.media_duration || '');
@@ -3061,7 +3056,7 @@
     const student = getActiveStudent();
     if (!task || !student) return;
     const options = opts || {};
-    const stats = computeMasteryStatsForLesson(task.lesson_id || 'hsk-272');
+    const stats = computeMasteryStatsForLesson(task.lesson_id || 'hsk-1');
     const fallbackPct = stats.total > 0 ? Math.min(100, Math.round((stats.masteredCount / stats.total) * 100)) : 100;
     const existingSub = findVocabSubmissionForTask(task.assignment_id, student.student_id);
     const scoreStr = options.score !== undefined
@@ -3139,7 +3134,7 @@
         tasks.map(function (task) {
           const sub = findVocabSubmissionForTask(task.assignment_id, student.student_id);
           const isDone = Boolean(sub);
-          const lessonKey = task.lesson_id || 'hsk-272';
+          const lessonKey = task.lesson_id || 'hsk-1';
           const taskPracticeCount = Math.max(
             Number((vocabPracticeStats.byAssignment && vocabPracticeStats.byAssignment[task.assignment_id]) || 0) || 0,
             sub ? (Number(sub.practice_count || 0) || 1) : 0

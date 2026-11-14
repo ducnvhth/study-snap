@@ -3001,7 +3001,7 @@ window.StudySnapStore = (function () {
     if (!stateObj || !payload || !payload.student_id) {
       return { ok: false, error: 'Thiếu thông tin học sinh.' };
     }
-    const sourceKey = String(payload.sourceKey || payload.lesson_id || 'hsk-272').trim() || 'hsk-272';
+    const sourceKey = String(payload.sourceKey || payload.lesson_id || 'hsk-1').trim() || 'hsk-1';
     const assignmentId = 'VOCAB_SRC__' + sourceKey;
     return await submitVocabCompletion(stateObj, {
       assignment_id: assignmentId,
@@ -3043,7 +3043,7 @@ window.StudySnapStore = (function () {
       if (s.submitted_at) lastSubmittedAt = String(s.submitted_at);
 
       if (isLog) {
-        const srcKey = asgId.replace(/^VOCAB_SRC__/, '') || 'hsk-272';
+        const srcKey = asgId.replace(/^VOCAB_SRC__/, '') || 'hsk-1';
         if (!bySource[srcKey]) {
           bySource[srcKey] = { count: 0, lastSubmittedAt: '', note: '', score: '' };
         }
