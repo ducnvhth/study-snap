@@ -1,6 +1,6 @@
 /**
  * StudySnap — Logic Cổng Giáo Viên (`teacher.html`)
- * Bao gồm: Chữa bài Ghi âm / Video bằng Voice, Bảng tổng hợp tự động, Giao bài mới,
+ * Bao gồm: Chữa BVN Ghi âm / Video bằng Voice, Bảng tổng hợp tự động, Giao BVN mới,
  * Tạo & Quản lý Tài khoản Học sinh, Quản lý Kho từ vựng & Soạn bài luyện tập cuối buổi.
  */
 
@@ -482,7 +482,7 @@
     const newAsgClassSelect = document.getElementById('new-asg-class');
     const hiddenSessionInput = document.getElementById('new-asg-session');
 
-    // 1. Gather all unique sessions (chỉ lọc các bài Luyện tập cuối buổi / Ghi âm & Video, tách khỏi Ôn từ vựng)
+    // 1. Gather all unique sessions (chỉ lọc các BVN Ghi âm & Video, tách khỏi Ôn từ vựng)
     const nonVocabAsgs = (state.assignments || []).filter(isNonVocabAssignment);
     const sessions = [];
     nonVocabAsgs.forEach(function (a) {
@@ -500,7 +500,7 @@
       picker.innerHTML = sessions.map(function (s) {
         const count = nonVocabAsgs.filter(function (a) { return (a.session_tag || 'Buổi 1').trim() === s; }).length;
         const sel = s === ui.manageSelectedSession ? ' selected' : '';
-        return '<option value="' + escapeHtml(s) + '"' + sel + '>' + escapeHtml(s) + ' (' + count + ' bài)</option>';
+        return '<option value="' + escapeHtml(s) + '"' + sel + '>' + escapeHtml(s) + ' (' + count + ' BVN)</option>';
       }).join('');
     }
 
@@ -511,7 +511,7 @@
 
     if (checklist) {
       if (subtasks.length === 0) {
-        checklist.innerHTML = '<div style="padding:14px;text-align:center;color:var(--color-muted-foreground);font-size:0.875rem;">Buổi học này chưa có bài tập nhỏ nào. Hãy nhập ở form bên dưới để tạo bài tập!</div>';
+        checklist.innerHTML = '<div style="padding:14px;text-align:center;color:var(--color-muted-foreground);font-size:0.875rem;">Buổi học này chưa có BVN nào. Hãy nhập ở form bên dưới để tạo BVN mới!</div>';
       } else {
         checklist.innerHTML = subtasks.map(function (asg) {
           const clsRaw = String(asg.class_name || '').trim();
@@ -530,7 +530,7 @@
                 '<input type="checkbox" class="asg-subtask-check" data-asg-id="' + escapeHtml(asg.assignment_id) + '" checked>' +
                 '<div class="asg-check-info">' +
                   '<div class="asg-check-title">' +
-                    '<span style="color:var(--color-primary);">' + escapeHtml(asg.lesson_tag || 'Bài') + ':</span> ' +
+                    '<span style="color:var(--color-primary);">' + escapeHtml(asg.lesson_tag || 'BVN') + ':</span> ' +
                     escapeHtml(asg.title) +
                   '</div>' +
                   '<div class="asg-check-meta">' +
@@ -542,10 +542,10 @@
               '<div class="asg-item-actions">' +
                 (isUnassigned
                   ? ''
-                  : '<button type="button" class="btn btn-outline btn-sm" data-unassign-asg-item="' + escapeHtml(asg.assignment_id) + '" title="Hủy giao bài tập này khỏi lớp nhưng vẫn giữ bài">' +
+                  : '<button type="button" class="btn btn-outline btn-sm" data-unassign-asg-item="' + escapeHtml(asg.assignment_id) + '" title="Hủy giao BVN này khỏi lớp nhưng vẫn giữ BVN">' +
                       'Hủy giao' +
                     '</button>') +
-                '<button type="button" class="btn-danger-outline btn-sm" data-delete-asg-item="' + escapeHtml(asg.assignment_id) + '" title="Xóa bài tập này">' +
+                '<button type="button" class="btn-danger-outline btn-sm" data-delete-asg-item="' + escapeHtml(asg.assignment_id) + '" title="Xóa BVN này">' +
                   'Xóa' +
                 '</button>' +
               '</div>' +
@@ -561,17 +561,17 @@
             const clsName = targetAsg && targetAsg.class_name === 'all'
               ? 'Tất cả các lớp'
               : ((targetAsg && targetAsg.class_name) || 'lớp học');
-            if (!confirm('Hủy giao bài "' + title + '" khỏi "' + clsName + '"?\n(Nội dung bài tập và bài nộp cũ của học sinh vẫn được giữ lại.)')) {
+            if (!confirm('Hủy giao BVN "' + title + '" khỏi "' + clsName + '"?\n(Nội dung BVN và bài nộp cũ của học sinh vẫn được giữ lại.)')) {
               return;
             }
             const res = await runWithLoading(btn, 'Đang hủy...', async function () {
               return await window.StudySnapStore.unassignExercises(state, [asgId]);
             });
             if (!res || !res.ok) {
-              alert((res && res.error) || 'Không thể hủy giao bài lúc này. Vui lòng thử lại.');
+              alert((res && res.error) || 'Không thể hủy giao BVN lúc này. Vui lòng thử lại.');
               return;
             }
-            showToast('Đã hủy giao bài "' + title + '" khỏi ' + clsName + '!');
+            showToast('Đã hủy giao BVN "' + title + '" khỏi ' + clsName + '!');
             renderAll();
           });
         });
@@ -581,11 +581,11 @@
             const asgId = btn.getAttribute('data-delete-asg-item');
             const targetAsg = state.assignments.find(function (a) { return a.assignment_id === asgId; });
             const title = targetAsg ? targetAsg.title : asgId;
-            if (!confirm('Bạn có chắc chắn muốn xóa bài tập "' + title + '" không?')) return;
+            if (!confirm('Bạn có chắc chắn muốn xóa BVN "' + title + '" không?')) return;
             await runWithLoading(btn, 'Đang xóa...', async function () {
               await window.StudySnapStore.deleteAssignment(state, asgId);
             });
-            showToast('Đã xóa bài tập!');
+            showToast('Đã xóa BVN!');
             renderAll();
           });
         });
@@ -631,11 +631,11 @@
         const s = (asg.session_tag || 'Buổi 1').trim();
         if (s && sessions.indexOf(s) === -1) sessions.push(s);
       });
-      const opts = ['<option value="all">Tất cả các buổi (' + allClassAsgs.length + ' bài)</option>'];
+      const opts = ['<option value="all">Tất cả các buổi (' + allClassAsgs.length + ' BVN)</option>'];
       sessions.forEach(function (s) {
         const countInSession = allClassAsgs.filter(function (a) { return (a.session_tag || 'Buổi 1').trim() === s; }).length;
         const sel = s === ui.gradingSessionFilter ? ' selected' : '';
-        opts.push('<option value="' + escapeHtml(s) + '"' + sel + '>' + escapeHtml(s) + ' (' + countInSession + ' bài)</option>');
+        opts.push('<option value="' + escapeHtml(s) + '"' + sel + '>' + escapeHtml(s) + ' (' + countInSession + ' BVN)</option>');
       });
       sessionFilter.innerHTML = opts.join('');
       sessionFilter.value = ui.gradingSessionFilter;
@@ -674,7 +674,7 @@
             return '<option value="' + escapeHtml(asg.assignment_id) + '"' + sel + '>' +
               escapeHtml('[' + (asg.session_tag || 'Buổi 1') + '] ' + asg.title) + '</option>';
           }).join('')
-        : '<option value="">-- Không có bài tập nào --</option>';
+        : '<option value="">-- Không có BVN nào --</option>';
     }
 
     const asg = findAssignment(ui.gradingAssignmentId) || filteredAssignments[0];
@@ -695,7 +695,7 @@
       if (studentMediaBox) {
         studentMediaBox.innerHTML =
           '<div class="assignment-brief-box">' +
-            '<span class="status-badge status-missing">' + ICONS.alert + '<span>Lớp này chưa có học sinh hoặc bài tập nào. Hãy chọn lớp khác hoặc tạo tài khoản/bài tập mới.</span></span>' +
+            '<span class="status-badge status-missing">' + ICONS.alert + '<span>Lớp này chưa có học sinh hoặc BVN nào. Hãy chọn lớp khác hoặc tạo tài khoản/BVN mới.</span></span>' +
           '</div>';
       }
       if (scoreInput) scoreInput.value = '';
@@ -715,10 +715,10 @@
 
     if (studentMediaBox) {
       if (sub && (sub.status === 'submitted' || sub.status === 'graded') && sub.media_url) {
-        const typeText = sub.media_type === 'video' ? 'Video học sinh nộp' : 'Ghi âm học sinh nộp';
+        const typeText = sub.media_type === 'video' ? 'Video BVN học sinh nộp' : 'Ghi âm BVN học sinh nộp';
         studentMediaBox.innerHTML =
           '<div class="assignment-brief-box">' +
-            '<p class="assignment-brief-desc" style="margin-bottom:6px;">Lời nhắn của học sinh: "' + escapeHtml(sub.student_note || 'Em nộp bài tập ạ.') + '"</p>' +
+            '<p class="assignment-brief-desc" style="margin-bottom:6px;">Lời nhắn của học sinh: "' + escapeHtml(sub.student_note || 'Em nộp BVN ạ.') + '"</p>' +
             window.StudySnapAudio.renderVoicePlayer({
               id: 'grading-student-' + sub.submission_id,
               url: sub.media_url,
@@ -733,7 +733,7 @@
         studentMediaBox.innerHTML =
           '<div class="assignment-brief-box">' +
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">' +
-              '<span class="status-badge status-missing">' + ICONS.alert + '<span>Học sinh chưa nộp file ghi âm/video</span></span>' +
+              '<span class="status-badge status-missing">' + ICONS.alert + '<span>Học sinh chưa nộp file BVN (ghi âm/video)</span></span>' +
               '<span style="font-size:0.875rem;color:var(--color-muted-foreground);">Giáo viên vẫn có thể gửi nhận xét hoặc nhắc nhở bằng Voice/Text</span>' +
             '</div>' +
           '</div>';
@@ -847,7 +847,7 @@
             '<span>Đã nộp • Chờ chữa</span></span>';
         } else {
           badgeHtml = '<span class="status-badge status-missing">' + ICONS.alert +
-            '<span>Chưa làm bài</span></span>';
+            '<span>Chưa nộp BVN</span></span>';
         }
 
         const teacherCommentHtml = (sub && sub.teacher_comment)
@@ -887,7 +887,7 @@
         const gradeActionBtn =
           '<button type="button" class="btn btn-outline btn-sm" data-select-grade="' + escapeHtml(asg.assignment_id) + ':' + escapeHtml(st.student_id) + '">' +
             ICONS.edit +
-            '<span>' + (status === 'graded' ? 'Sửa nhận xét' : 'Chữa bài') + '</span>' +
+            '<span>' + (status === 'graded' ? 'Sửa nhận xét' : 'Chữa BVN') + '</span>' +
           '</button>';
 
         return '<td>' +
@@ -919,7 +919,7 @@
         '<td>' +
           '<span class="status-badge ' + (allDone ? 'status-graded' : 'status-submitted') + ' tabular-nums">' +
             (allDone ? ICONS.check : ICONS.clock) +
-            '<span>Hoàn thành ' + progressRatio + ' bài</span>' +
+            '<span>Hoàn thành ' + progressRatio + ' BVN</span>' +
           '</span>' +
         '</td>' +
       '</tr>';
@@ -1487,11 +1487,11 @@
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = 'StudySnap_Bang_Tong_Hop_Bai_Luyen_Tap_Cuoi_Buoi.csv';
+    link.download = 'StudySnap_Bang_Tong_Hop_BVN.csv';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast('Đã xuất file Excel (CSV) Bảng tổng hợp tiến độ & nhận xét!');
+    showToast('Đã xuất file Excel (CSV) Bảng tổng hợp tiến độ & nhận xét BVN!');
   }
 
   // =========================================================================
@@ -5008,25 +5008,25 @@
       });
     }
 
-    // Nút Xóa bài luyện tập cuối buổi
+    // Nút Xóa BVN
     const btnDeleteAsg = document.getElementById('btn-delete-current-asg');
     if (btnDeleteAsg) {
       btnDeleteAsg.addEventListener('click', async function () {
         const asgToDelete = findAssignment(ui.gradingAssignmentId);
         if (!asgToDelete) {
-          showToast('Chưa chọn bài tập nào để xóa!');
+          showToast('Chưa chọn BVN nào để xóa!');
           return;
         }
         const confirmDelete = window.confirm(
-          'Bạn có chắc chắn muốn xóa bài tập "' + asgToDelete.title + '" không?\n\n' +
-          'Lưu ý: Toàn bộ dữ liệu bài nộp của học sinh đối với bài tập này sẽ được gỡ bỏ khỏi hệ thống.'
+          'Bạn có chắc chắn muốn xóa BVN "' + asgToDelete.title + '" không?\n\n' +
+          'Lưu ý: Toàn bộ dữ liệu bài nộp của học sinh đối với BVN này sẽ được gỡ bỏ khỏi hệ thống.'
         );
         if (!confirmDelete) return;
 
         await runWithLoading(btnDeleteAsg, 'Đang xóa...', async function () {
           await window.StudySnapStore.deleteAssignment(state, asgToDelete.assignment_id);
         });
-        showToast('Đã xóa bài tập "' + asgToDelete.title + '"!');
+        showToast('Đã xóa BVN "' + asgToDelete.title + '"!');
         const remaining = getFilteredAssignments();
         ui.gradingAssignmentId = remaining[0] ? remaining[0].assignment_id : '';
         renderAll();
@@ -5280,7 +5280,7 @@
         if (sub) {
           sub.status = 'graded';
           sub.score = scoreVal || sub.score || 9.0;
-          sub.teacher_comment = commentVal || 'Giáo viên đã gửi phản hồi chữa bài.';
+          sub.teacher_comment = commentVal || 'Giáo viên đã gửi phản hồi chữa BVN.';
           sub.teacher_voice_url = voiceUrl;
           sub.teacher_voice_duration = voiceDur;
           sub.graded_at = nowStr;
@@ -5296,7 +5296,7 @@
             media_duration: '',
             status: 'graded',
             score: scoreVal || '',
-            teacher_comment: commentVal || 'Nhắc nhở học sinh hoàn thành bài tập.',
+            teacher_comment: commentVal || 'Nhắc nhở học sinh hoàn thành BVN.',
             teacher_voice_url: voiceUrl,
             teacher_voice_duration: voiceDur,
             graded_at: nowStr
@@ -5338,7 +5338,7 @@
       });
     }
 
-    // Giáo viên Giao bài luyện tập cuối buổi mới
+    // Giáo viên Giao BVN mới
     const createAsgForm = document.getElementById('create-assignment-form');
     if (createAsgForm) {
       createAsgForm.addEventListener('submit', async function (ev) {
@@ -5372,7 +5372,7 @@
         }
         window.StudySnapStore.saveState(state);
 
-        await runWithLoading(submitBtn, 'Đang giao bài tập...', async function () {
+        await runWithLoading(submitBtn, 'Đang giao BVN...', async function () {
           await window.StudySnapStore.syncPostToGas(state, {
             action: 'addAssignment',
             assignment_id: newAsg.assignment_id,
@@ -5388,14 +5388,14 @@
         createAsgForm.reset();
         renderAll();
         if (newAsg.class_name === 'unassigned') {
-          showToast('Đã lưu bài tập nháp "' + newAsg.title + '" (' + newAsg.session_tag + ') — chưa giao cho lớp nào.');
+          showToast('Đã lưu BVN nháp "' + newAsg.title + '" (' + newAsg.session_tag + ') — chưa giao cho lớp nào.');
         } else {
-          showToast('Đã giao bài tập mới "' + newAsg.title + '" (' + newAsg.session_tag + ')!');
+          showToast('Đã giao BVN mới "' + newAsg.title + '" (' + newAsg.session_tag + ')!');
         }
       });
     }
 
-    // Quản lý Buổi học & Giao bài theo Buổi
+    // Quản lý Buổi học & Giao BVN theo Buổi
     const manageSessionPicker = document.getElementById('manage-session-picker');
     if (manageSessionPicker) {
       manageSessionPicker.addEventListener('change', function () {
@@ -5428,7 +5428,7 @@
         ui.manageSelectedSession = val;
         if (quickAddSessionRow) quickAddSessionRow.style.display = 'none';
         if (input) input.value = '';
-        showToast('Đã tạo và chuyển sang buổi học mới "' + val + '". Hãy nhập bài tập nhỏ để bắt đầu!');
+        showToast('Đã tạo và chuyển sang buổi học mới "' + val + '". Hãy nhập BVN mới để bắt đầu!');
         renderSessionManager();
       });
     }
@@ -5452,7 +5452,7 @@
       btnAssignSelected.addEventListener('click', async function () {
         const checkedBoxes = Array.from(document.querySelectorAll('.asg-subtask-check:checked'));
         if (checkedBoxes.length === 0) {
-          alert('Vui lòng tích chọn ít nhất 1 bài tập nhỏ để giao cho lớp!');
+          alert('Vui lòng tích chọn ít nhất 1 BVN để giao cho lớp!');
           return;
         }
         const selectedIds = checkedBoxes.map(function (c) { return c.getAttribute('data-asg-id'); });
@@ -5460,14 +5460,14 @@
         const targetClass = targetClassSelect ? targetClassSelect.value : 'all';
         const classNameLabel = targetClass === 'all' ? 'Tất cả các lớp' : targetClass;
 
-        const res = await runWithLoading(btnAssignSelected, 'Đang giao bài...', async function () {
+        const res = await runWithLoading(btnAssignSelected, 'Đang giao BVN...', async function () {
           return await window.StudySnapStore.assignExercisesToClass(state, selectedIds, targetClass);
         });
         if (!res || !res.ok) {
-          alert((res && res.error) || 'Không thể giao bài lúc này. Vui lòng thử lại.');
+          alert((res && res.error) || 'Không thể giao BVN lúc này. Vui lòng thử lại.');
           return;
         }
-        showToast('Đã giao thành công ' + selectedIds.length + ' bài tập nhỏ cho ' + classNameLabel + '!');
+        showToast('Đã giao thành công ' + selectedIds.length + ' BVN cho ' + classNameLabel + '!');
         renderAll();
       });
     }
@@ -5477,7 +5477,7 @@
       btnUnassignSelected.addEventListener('click', async function () {
         const checkedBoxes = Array.from(document.querySelectorAll('.asg-subtask-check:checked'));
         if (checkedBoxes.length === 0) {
-          alert('Vui lòng tích chọn ít nhất 1 bài tập nhỏ để hủy giao!');
+          alert('Vui lòng tích chọn ít nhất 1 BVN để hủy giao!');
           return;
         }
         const selectedIds = checkedBoxes.map(function (c) { return c.getAttribute('data-asg-id'); });
@@ -5487,10 +5487,10 @@
           return Boolean(cls && cls !== 'unassigned');
         });
         if (activeIds.length === 0) {
-          showToast('Các bài đang chọn hiện đều ở trạng thái chưa giao!');
+          showToast('Các BVN đang chọn hiện đều ở trạng thái chưa giao!');
           return;
         }
-        if (!confirm('Hủy giao ' + activeIds.length + ' bài tập đang chọn khỏi các lớp?\n(Nội dung bài tập và bài nộp cũ vẫn được giữ lại.)')) {
+        if (!confirm('Hủy giao ' + activeIds.length + ' BVN đang chọn khỏi các lớp?\n(Nội dung BVN và bài nộp cũ vẫn được giữ lại.)')) {
           return;
         }
 
@@ -5498,10 +5498,10 @@
           return await window.StudySnapStore.unassignExercises(state, activeIds);
         });
         if (!res || !res.ok) {
-          alert((res && res.error) || 'Không thể hủy giao bài lúc này. Vui lòng thử lại.');
+          alert((res && res.error) || 'Không thể hủy giao BVN lúc này. Vui lòng thử lại.');
           return;
         }
-        showToast('Đã hủy giao ' + activeIds.length + ' bài tập khỏi lớp!');
+        showToast('Đã hủy giao ' + activeIds.length + ' BVN khỏi lớp!');
         renderAll();
       });
     }
@@ -7369,7 +7369,7 @@
             '</div>' +
             '<div class="tabular-nums" style="font-size: 0.8125rem; color: var(--color-muted-foreground); margin-top: 4px;">' +
               'Tên đăng nhập: <strong>' + escapeHtml(uname) + '</strong> • ' +
-              subCount + ' bài nộp ghi âm/video • ' + pracCount + ' bài luyện tập cuối buổi' +
+              subCount + ' bài nộp BVN • ' + pracCount + ' bài luyện tập cuối buổi' +
             '</div>' +
           '</div>';
       }
