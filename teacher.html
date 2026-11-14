@@ -1209,10 +1209,10 @@
     </div>
   </div>
 
-  <!-- MODAL 4: NHẬP TỪ VỰNG TỪ EXCEL / CSV -->
+  <!-- MODAL 4: NHẬP TỪ VỰNG TỪ EXCEL / CSV & XEM FILE TEMPLATE -->
   <div class="modal-backdrop" id="modal-import-vocab-excel" role="dialog" aria-modal="true" aria-labelledby="modal-vocab-import-title">
-    <div class="modal-dialog modal-dialog-lg">
-      <div class="panel-header" style="margin-bottom: 16px;">
+    <div class="modal-dialog modal-dialog-xl">
+      <div class="panel-header" style="margin-bottom: 14px;">
         <div class="panel-title-row">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--color-primary-deep);">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -1221,61 +1221,115 @@
           </svg>
           <h2 id="modal-vocab-import-title">Nhập từ vựng hàng loạt từ Excel / CSV</h2>
         </div>
-        <button type="button" class="btn btn-outline btn-sm" id="btn-close-vocab-modal">✕</button>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-vocab-modal" aria-label="Đóng hộp thoại">✕</button>
       </div>
 
-      <div class="form-row-2" style="margin-bottom: 14px;">
-        <div class="form-group" style="margin-bottom: 0;">
-          <label class="form-label" for="import-vocab-lesson-select" style="font-weight: 700;">Nạp vào Bài học:</label>
-          <select id="import-vocab-lesson-select" class="form-control"></select>
-          <div id="import-vocab-custom-lesson-wrap" style="display: none; margin-top: 8px;">
-            <input type="text" id="import-vocab-custom-lesson-title" class="form-control" placeholder="Nhập tên bài học mới (VD: Ngữ âm Bài 1)">
+      <!-- Chuyển tab Nhập file / Xem file Template + Tải Template -->
+      <div class="practice-import-topbar">
+        <div class="filter-pill-group" role="tablist" aria-label="Chế độ nhập từ vựng từ Excel">
+          <button type="button" class="filter-pill is-active" id="tab-btn-vocab-upload" data-vocab-import-tab="upload">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <span>Nhập từ File / Dán Excel</span>
+          </button>
+          <button type="button" class="filter-pill" id="tab-btn-vocab-template" data-vocab-import-tab="template">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18"></path><path d="M9 21V9"></path></svg>
+            <span>Xem file Template mẫu</span>
+          </button>
+        </div>
+
+        <div class="practice-import-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-download-vocab-template">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Tải file Template (.xlsx)</span>
+          </button>
+          <button type="button" class="btn btn-outline btn-sm" id="btn-paste-sample-vocab">
+            <span>Dùng thử dữ liệu mẫu</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- VIEW A: NHẬP FILE EXCEL / DÁN DỮ LIỆU -->
+      <div id="vocab-import-view-upload">
+        <div class="form-row-2" style="margin-bottom: 14px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="import-vocab-lesson-select" style="font-weight: 700;">Nạp vào Bài học:</label>
+            <select id="import-vocab-lesson-select" class="form-control"></select>
+            <div id="import-vocab-custom-lesson-wrap" style="display: none; margin-top: 8px;">
+              <input type="text" id="import-vocab-custom-lesson-title" class="form-control" placeholder="Nhập tên bài học mới (VD: Ngữ âm Bài 1)">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="import-vocab-file-input" style="font-weight: 700;">Chọn tệp Excel / CSV (.xlsx, .xls, .csv):</label>
+            <input type="file" id="import-vocab-file-input" accept=".xlsx, .xls, .csv, .tsv, .txt" class="form-control" style="padding: 6px;">
           </div>
         </div>
-        <div class="form-group" style="margin-bottom: 0;">
-          <label class="form-label" for="import-vocab-file-input" style="font-weight: 700;">Chọn tệp (.csv, .tsv, .xlsx, .txt):</label>
-          <input type="file" id="import-vocab-file-input" accept=".csv, .tsv, .txt, .xlsx, .xls" class="form-control" style="padding: 6px;">
+
+        <!-- Drop zone & Paste text -->
+        <div class="excel-drop-zone" id="excel-drop-zone" role="button" tabindex="0" aria-label="Chọn hoặc kéo thả file Excel từ vựng">
+          <div style="font-weight: 700; color: var(--color-primary-deep); margin-bottom: 4px;">
+            Kéo thả tệp Excel (.xlsx / .xls / .csv) vào đây hoặc bấm để chọn tệp
+          </div>
+          <div style="font-size: 0.8125rem; color: var(--color-muted-foreground);">
+            Hỗ trợ chuẩn 5 cột: <strong>Chữ Hán | Pinyin | Từ loại | Nghĩa tiếng Việt | Câu ví dụ</strong>. Chưa có file mẫu? Bấm <strong>Tải file Template (.xlsx)</strong> hoặc tab <strong>Xem file Template mẫu</strong> ở trên.
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 8px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+            <label class="form-label" for="excel-paste-text" style="margin: 0; font-weight: 700;">Hoặc copy vùng bảng từ Excel / bảng tính rồi dán trực tiếp vào đây:</label>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-jump-to-vocab-template-view" style="font-size: 0.75rem; padding: 3px 10px;">Xem cấu trúc cột mẫu</button>
+          </div>
+          <textarea id="excel-paste-text" class="excel-paste-textarea" placeholder="Dán các hàng từ file Excel mẫu (Chữ Hán | Pinyin | Từ loại | Nghĩa tiếng Việt | Câu ví dụ)..."></textarea>
+        </div>
+
+        <!-- Preview table -->
+        <div id="excel-preview-container" style="display: none; margin-top: 14px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <strong style="font-size: 0.875rem; color: var(--color-primary-deep);">Xem trước dữ liệu (<span id="excel-preview-count">0</span> từ sẽ được thêm):</strong>
+            <span class="status-badge status-graded">Sẵn sàng nhập</span>
+          </div>
+          <div class="excel-preview-wrapper">
+            <table class="excel-preview-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Chữ Hán</th>
+                  <th>Pinyin</th>
+                  <th>Từ loại</th>
+                  <th>Nghĩa tiếng Việt</th>
+                  <th>Câu ví dụ</th>
+                </tr>
+              </thead>
+              <tbody id="excel-preview-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      <!-- Drop zone & Paste text -->
-      <div class="excel-drop-zone" id="excel-drop-zone">
-        <div style="font-weight: 700; color: var(--color-primary-deep); margin-bottom: 4px;">
-          Kéo thả tệp vào đây hoặc sao chép và dán trực tiếp từ bảng tính Excel
+      <!-- VIEW B: XEM FILE TEMPLATE MẪU -->
+      <div id="vocab-import-view-template" style="display: none;">
+        <div class="template-filter-bar">
+          <div style="font-size: 0.875rem; font-weight: 700; color: var(--color-primary-deep);">
+            Bảng mẫu chuẩn 5 cột (A–E) tương thích khi tải lên <code>.xlsx</code>, <code>.csv</code> hoặc copy-paste từ Excel:
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-use-vocab-template-in-import">
+            <span>Nạp mẫu này vào khung Nhập</span>
+          </button>
         </div>
-        <div style="font-size: 0.8125rem; color: var(--color-muted-foreground);">
-          Hỗ trợ định dạng bảng các cột: <strong>Chữ Hán | Pinyin | Từ loại | Nghĩa tiếng Việt | Câu ví dụ</strong>
-        </div>
-      </div>
 
-      <div class="form-group">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-          <label class="form-label" for="excel-paste-text" style="margin: 0; font-weight: 700;">Hoặc dán trực tiếp dòng sao chép từ Excel / bảng tính:</label>
-          <button type="button" class="btn btn-outline btn-sm" id="btn-paste-sample-vocab" style="font-size: 0.75rem; padding: 2px 8px;">Dán mẫu dữ liệu</button>
-        </div>
-        <textarea id="excel-paste-text" class="excel-paste-textarea" placeholder="Dán các hàng từ Excel vào đây (cách nhau bởi Tab hoặc dấu phẩy)..."></textarea>
-      </div>
-
-      <!-- Preview table -->
-      <div id="excel-preview-container" style="display: none; margin-top: 14px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-          <strong style="font-size: 0.875rem; color: var(--color-primary-deep);">Xem trước dữ liệu (<span id="excel-preview-count">0</span> từ sẽ được thêm):</strong>
-          <span class="status-badge status-graded">Sẵn sàng nhập</span>
-        </div>
-        <div class="excel-preview-wrapper">
-          <table class="excel-preview-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Chữ Hán</th>
-                <th>Pinyin</th>
-                <th>Từ loại</th>
-                <th>Nghĩa tiếng Việt</th>
-                <th>Câu ví dụ</th>
-              </tr>
-            </thead>
-            <tbody id="excel-preview-tbody"></tbody>
+        <div class="template-sheet-scroll">
+          <table class="template-sheet-table" id="vocab-template-sheet-table" style="min-width: 680px;">
+            <thead id="vocab-template-sheet-thead"></thead>
+            <tbody id="vocab-template-sheet-tbody"></tbody>
           </table>
+        </div>
+
+        <div class="template-guide-strip">
+          <strong>Quy tắc nhập file Excel từ vựng:</strong>
+          Cột <strong>A (Chữ Hán)</strong> và <strong>D (Nghĩa tiếng Việt)</strong> là nội dung chính;
+          Cột <strong>B (Pinyin)</strong> nên điền kèm dấu thanh để hiển thị chuẩn trên thẻ Flashcard;
+          Cột <strong>C (Từ loại)</strong> và <strong>E (Câu ví dụ)</strong> là tùy chọn (có thể để trống, hệ thống tự điền mặc định); có thể giữ nguyên dòng tiêu đề <code>Chữ Hán | Pinyin | ...</code> khi tải file lên hoặc dán bảng, hệ thống sẽ tự động bỏ qua dòng tiêu đề.
+          Nếu chỉ copy nhanh 2 cột (<em>Chữ Hán | Nghĩa</em>) hoặc 3 cột (<em>Chữ Hán | Pinyin | Nghĩa</em>), hệ thống vẫn tự nhận diện chính xác.
         </div>
       </div>
 
@@ -1547,6 +1601,6 @@
   <script src="js/data.js?v=20261114c"></script>
   <script src="js/auth.js?v=20261114c"></script>
   <script src="js/audio.js?v=20261114c"></script>
-  <script src="js/teacher.js?v=20261114c"></script>
+  <script src="js/teacher.js?v=20261114d"></script>
 </body>
 </html>

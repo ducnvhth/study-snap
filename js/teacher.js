@@ -6043,7 +6043,61 @@
     }
 
     // =========================================================================
-    // XỬ LÝ NHẬP TỪ VỰNG TỪ EXCEL / CSV / COPY-PASTE BẢNG
+    // DÙNG CHUNG XUẤT FILE EXCEL MẪU & HIỂN THỊ BẢNG TEMPLATE (TỪ VỰNG + ĐỀ)
+    // =========================================================================
+    function buildTemplateSheetHeaderHtml(headers) {
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+      return (
+        '<tr>' +
+          '<th class="col-idx-head">#</th>' +
+          (headers || []).map(function (h, i) {
+            const colLetter = letters[i] || String(i + 1);
+            return '<th><span class="template-col-letter">' + colLetter + '</span>' + escapeHtml(h) + '</th>';
+          }).join('') +
+        '</tr>'
+      );
+    }
+
+    function exportExcelTemplateWorkbook(options) {
+      const allRows = [options.headers].concat(options.rows);
+      if (typeof window.XLSX !== 'undefined' && window.XLSX && window.XLSX.utils) {
+        const wb = window.XLSX.utils.book_new();
+        const ws1 = window.XLSX.utils.aoa_to_sheet(allRows);
+        if (options.colWidths) ws1['!cols'] = options.colWidths;
+        window.XLSX.utils.book_append_sheet(wb, ws1, options.sheetName || 'Template');
+
+        if (options.guideRows && options.guideRows.length) {
+          const ws2 = window.XLSX.utils.aoa_to_sheet(options.guideRows);
+          if (options.guideColWidths) ws2['!cols'] = options.guideColWidths;
+          window.XLSX.utils.book_append_sheet(wb, ws2, options.guideSheetName || 'Huong_Dan_Cot');
+        }
+
+        window.XLSX.writeFile(wb, options.xlsxFilename);
+        if (options.xlsxToast) showToast(options.xlsxToast);
+        return;
+      }
+
+      // Fallback UTF-8 BOM CSV nếu đang ngoại tuyến
+      const csvLines = allRows.map(function (row) {
+        return row.map(function (cell) {
+          const v = String(cell || '').replace(/"/g, '""');
+          return /[",\n\r]/.test(v) ? '"' + v + '"' : v;
+        }).join(',');
+      }).join('\r\n');
+      const blob = new Blob(['\uFEFF' + csvLines], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = options.csvFilename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      if (options.csvToast) showToast(options.csvToast);
+    }
+
+    // =========================================================================
+    // XỬ LÝ NHẬP TỪ VỰNG TỪ EXCEL / CSV / COPY-PASTE BẢNG & XEM TEMPLATE
     // =========================================================================
     const modalVocabExcel = document.getElementById('modal-import-vocab-excel');
     const btnOpenVocabModal = document.getElementById('btn-open-import-vocab-modal');
@@ -6054,25 +6108,63 @@
     const excelPasteText = document.getElementById('excel-paste-text');
     const excelDropZone = document.getElementById('excel-drop-zone');
     const btnPasteSample = document.getElementById('btn-paste-sample-vocab');
+    const btnDownloadVocabTpl = document.getElementById('btn-download-vocab-template');
+    const btnJumpVocabTemplateView = document.getElementById('btn-jump-to-vocab-template-view');
+    const btnUseVocabTemplateInImport = document.getElementById('btn-use-vocab-template-in-import');
+    const vocabTplSheetThead = document.getElementById('vocab-template-sheet-thead');
+    const vocabTplSheetTbody = document.getElementById('vocab-template-sheet-tbody');
     const excelPreviewContainer = document.getElementById('excel-preview-container');
     const excelPreviewCount = document.getElementById('excel-preview-count');
     const excelPreviewTbody = document.getElementById('excel-preview-tbody');
     const btnConfirmVocabImport = document.getElementById('btn-confirm-vocab-import');
+
+    const VOCAB_TEMPLATE_HEADERS = [
+      'Chữ Hán',
+      'Pinyin',
+      'Từ loại',
+      'Nghĩa tiếng Việt',
+      'Câu ví dụ'
+    ];
+
+    const VOCAB_TEMPLATE_ROWS = [
+      ['你好', 'nǐ hǎo', 'Chào hỏi', 'Xin chào', '你好！很高兴认识你。(Nǐ hǎo! Hěn gāoxìng rènshi nǐ.)'],
+      ['谢谢', 'xièxie', 'Động từ', 'Cảm ơn', '谢谢你的帮助。(Xièxie nǐ de bāngzhù.)'],
+      ['图书馆', 'tú shū guǎn', 'Danh từ', 'Thư viện', '我想去图书馆看书。(Wǒ xiǎng qù túshūguǎn kàn shū.)'],
+      ['运动', 'yùn dòng', 'Động từ', 'Vận động, thể thao', '我每天下午都去运动。(Wǒ měitiān xiàwǔ dōu qù yùndòng.)'],
+      ['咖啡', 'kā fēi', 'Danh từ', 'Cà phê', '请给我一杯热咖啡。(Qǐng gěi wǒ yì bēi rè kāfēi.)'],
+      ['帮助', 'bāng zhù', 'Động từ', 'Giúp đỡ, tương trợ', '谢谢你的热情帮助。(Xièxie nǐ de rèqíng bāngzhù.)'],
+      ['高兴', 'gāo xìng', 'Tính từ', 'Vui vẻ, phấn khởi', '今天认识你我很高兴。(Jīntiān rènshi nǐ wǒ hěn gāoxìng.)'],
+      ['音乐', 'yīn yuè', 'Danh từ', 'Âm nhạc', '你喜欢听中国音乐吗？(Nǐ xǐhuan tīng Zhōngguó yīnyuè ma?)']
+    ];
+
+    const VOCAB_POS_BADGE_MAP = {
+      'danh tu': 'status-mint',
+      'dong tu': 'status-pink',
+      'tinh tu': 'status-purple',
+      'chao hoi': 'status-peach'
+    };
 
     let parsedImportRows = [];
 
     function parseVocabRows(rawText) {
       const matrix = parseRawTextToMatrix(rawText);
       const rows = [];
-      matrix.forEach(function (cols, idx) {
-        const joinedLower = cols.join(' ').toLowerCase();
-        // Bỏ qua dòng tiêu đề nếu có
+      matrix.forEach(function (rawCols, idx) {
+        const cols = rawCols.slice();
+        while (cols.length > 0 && !cols[cols.length - 1]) {
+          cols.pop();
+        }
+        const joinedNorm = normalizePlainKey(cols.join(' '));
+        // Bỏ qua dòng tiêu đề nếu có (hỗ trợ cả tiếng Việt có dấu, không dấu và tiếng Anh)
         if (idx === 0) {
           if (
-            joinedLower.indexOf('chữ hán') >= 0 ||
-            joinedLower.indexOf('pinyin') >= 0 ||
-            joinedLower.indexOf('phiên âm') >= 0 ||
-            (joinedLower.indexOf('word') >= 0 && joinedLower.indexOf('meaning') >= 0)
+            joinedNorm.indexOf('chu han') >= 0 ||
+            joinedNorm.indexOf('han tu') >= 0 ||
+            joinedNorm.indexOf('hanzi') >= 0 ||
+            joinedNorm.indexOf('pinyin') >= 0 ||
+            joinedNorm.indexOf('phien am') >= 0 ||
+            (joinedNorm.indexOf('word') >= 0 && joinedNorm.indexOf('meaning') >= 0) ||
+            (joinedNorm.indexOf('tu vung') >= 0 && joinedNorm.indexOf('nghia') >= 0)
           ) {
             return;
           }
@@ -6091,20 +6183,20 @@
         if (cols.length === 2) {
           meaning = cols[1];
         } else if (cols.length === 3) {
-          ipa = cols[1];
+          ipa = cols[1] || 'pinyin';
           meaning = cols[2];
         } else if (cols.length === 4) {
-          ipa = cols[1];
-          pos = cols[2];
+          ipa = cols[1] || 'pinyin';
+          pos = cols[2] || 'Danh từ';
           meaning = cols[3];
         } else if (cols.length === 5) {
-          ipa = cols[1];
-          pos = cols[2];
+          ipa = cols[1] || 'pinyin';
+          pos = cols[2] || 'Danh từ';
           meaning = cols[3];
           exampleEn = cols[4];
         } else if (cols.length >= 6) {
-          ipa = cols[1];
-          pos = cols[2];
+          ipa = cols[1] || 'pinyin';
+          pos = cols[2] || 'Danh từ';
           meaning = cols[3];
           exampleEn = cols[4];
           exampleVi = cols[5];
@@ -6148,6 +6240,79 @@
       }).join('');
     }
 
+    function renderVocabTemplateTable() {
+      if (!vocabTplSheetThead || !vocabTplSheetTbody) return;
+      vocabTplSheetThead.innerHTML = buildTemplateSheetHeaderHtml(VOCAB_TEMPLATE_HEADERS);
+      vocabTplSheetTbody.innerHTML = VOCAB_TEMPLATE_ROWS.map(function (row, idx) {
+        const posNorm = normalizePlainKey(row[2]);
+        const posCls = VOCAB_POS_BADGE_MAP[posNorm] || 'status-sky';
+        return (
+          '<tr>' +
+            '<td class="col-idx-cell">' + (idx + 1) + '</td>' +
+            '<td><strong>' + escapeHtml(row[0]) + '</strong></td>' +
+            '<td class="tabular-nums" style="color:var(--color-primary-deep);">' + escapeHtml(row[1]) + '</td>' +
+            '<td><span class="status-badge ' + posCls + '" style="font-size:0.75rem;">' + escapeHtml(row[2]) + '</span></td>' +
+            '<td>' + escapeHtml(row[3]) + '</td>' +
+            '<td style="color:var(--color-muted-foreground);">' + escapeHtml(row[4]) + '</td>' +
+          '</tr>'
+        );
+      }).join('');
+    }
+
+    function switchVocabImportTab(tabName) {
+      const uploadView = document.getElementById('vocab-import-view-upload');
+      const tplView = document.getElementById('vocab-import-view-template');
+      document.querySelectorAll('[data-vocab-import-tab]').forEach(function (btn) {
+        btn.classList.toggle('is-active', btn.getAttribute('data-vocab-import-tab') === tabName);
+      });
+      if (uploadView) uploadView.style.display = tabName === 'upload' ? 'block' : 'none';
+      if (tplView) tplView.style.display = tabName === 'template' ? 'block' : 'none';
+      if (tabName === 'template') renderVocabTemplateTable();
+    }
+
+    function downloadVocabTemplateExcel() {
+      exportExcelTemplateWorkbook({
+        sheetName: 'Tu_Vung_Mau',
+        headers: VOCAB_TEMPLATE_HEADERS,
+        rows: VOCAB_TEMPLATE_ROWS,
+        colWidths: [
+          { wch: 16 }, { wch: 20 }, { wch: 14 }, { wch: 26 }, { wch: 48 }
+        ],
+        guideSheetName: 'Huong_Dan_Cot',
+        guideRows: [
+          ['Cột Excel', 'Tên cột', 'Bắt buộc?', 'Mô tả & Ví dụ nhập đúng'],
+          ['Cột A', 'Chữ Hán', 'Bắt buộc', 'Từ hoặc cụm từ tiếng Trung (VD: 图书馆, 谢谢)'],
+          ['Cột B', 'Pinyin', 'Khuyên nhập', 'Phiên âm Pinyin kèm dấu thanh (VD: tú shū guǎn). Có thể bỏ trống nếu chỉ nhập 2 cột (A: Chữ Hán, B: Nghĩa).'],
+          ['Cột C', 'Từ loại', 'Tùy chọn', 'Danh từ, Động từ, Tính từ, Chào hỏi, Phó từ... (mặc định: Danh từ nếu bỏ trống).'],
+          ['Cột D', 'Nghĩa tiếng Việt', 'Bắt buộc', 'Nghĩa tiếng Việt ngắn gọn, dễ hiểu (VD: Thư viện).'],
+          ['Cột E', 'Câu ví dụ', 'Tùy chọn', 'Câu ví dụ minh họa tiếng Trung (có thể kèm Pinyin trong ngoặc). Bỏ trống hệ thống tự tạo câu mẫu.'],
+          ['Cột F', 'Nghĩa câu ví dụ', 'Tùy chọn', 'Nghĩa tiếng Việt của câu ví dụ (có thể thêm nếu muốn hiển thị chi tiết).']
+        ],
+        guideColWidths: [
+          { wch: 14 }, { wch: 22 }, { wch: 14 }, { wch: 62 }
+        ],
+        xlsxFilename: 'StudySnap_Template_Tu_Vung.xlsx',
+        csvFilename: 'StudySnap_Template_Tu_Vung.csv',
+        xlsxToast: 'Đã tải xuống file Excel mẫu StudySnap_Template_Tu_Vung.xlsx!',
+        csvToast: 'Đã tải xuống file template CSV từ vựng (mở trực tiếp bằng Excel)!'
+      });
+    }
+
+    function fillVocabSampleIntoImport() {
+      const sampleText = VOCAB_TEMPLATE_ROWS.map(function (r) {
+        return r.join('\t');
+      }).join('\n');
+      if (excelPasteText) excelPasteText.value = sampleText;
+      const rows = parseVocabRows(sampleText);
+      updateImportPreview(rows);
+      switchVocabImportTab('upload');
+      showToast('Đã nạp ' + rows.length + ' từ vựng mẫu chuẩn 5 cột vào khung xem trước!');
+    }
+
+    function closeVocabExcelModal() {
+      if (modalVocabExcel) modalVocabExcel.classList.remove('is-open', 'is-visible');
+    }
+
     const importVocabCustomWrap = document.getElementById('import-vocab-custom-lesson-wrap');
     const importVocabCustomTitleInp = document.getElementById('import-vocab-custom-lesson-title');
     if (importVocabLessonSelect && importVocabCustomWrap) {
@@ -6172,43 +6337,46 @@
               importVocabCustomWrap.style.display = importVocabLessonSelect.value === '__new__' ? 'block' : 'none';
             }
           }
+          renderVocabTemplateTable();
+          switchVocabImportTab('upload');
           modalVocabExcel.classList.add('is-open', 'is-visible');
         }
       });
     }
 
-    if (btnCloseVocabModal) {
-      btnCloseVocabModal.addEventListener('click', function () {
-        if (modalVocabExcel) modalVocabExcel.classList.remove('is-open', 'is-visible');
+    if (btnCloseVocabModal) btnCloseVocabModal.addEventListener('click', closeVocabExcelModal);
+    if (btnCancelVocabImport) btnCancelVocabImport.addEventListener('click', closeVocabExcelModal);
+    if (modalVocabExcel) {
+      modalVocabExcel.addEventListener('click', function (ev) {
+        if (ev.target === modalVocabExcel) closeVocabExcelModal();
+      });
+    }
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && modalVocabExcel && modalVocabExcel.classList.contains('is-open')) {
+        closeVocabExcelModal();
+      }
+    });
+
+    document.querySelectorAll('[data-vocab-import-tab]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        switchVocabImportTab(btn.getAttribute('data-vocab-import-tab'));
+      });
+    });
+
+    if (btnJumpVocabTemplateView) {
+      btnJumpVocabTemplateView.addEventListener('click', function () {
+        switchVocabImportTab('template');
       });
     }
 
-    if (btnCancelVocabImport) {
-      btnCancelVocabImport.addEventListener('click', function () {
-        if (modalVocabExcel) modalVocabExcel.classList.remove('is-open', 'is-visible');
-      });
-    }
+    if (btnDownloadVocabTpl) btnDownloadVocabTpl.addEventListener('click', downloadVocabTemplateExcel);
+    if (btnPasteSample) btnPasteSample.addEventListener('click', fillVocabSampleIntoImport);
+    if (btnUseVocabTemplateInImport) btnUseVocabTemplateInImport.addEventListener('click', fillVocabSampleIntoImport);
 
     if (excelPasteText) {
       excelPasteText.addEventListener('input', function () {
         const rows = parseVocabRows(excelPasteText.value);
         updateImportPreview(rows);
-      });
-    }
-
-    if (btnPasteSample) {
-      btnPasteSample.addEventListener('click', function () {
-        const sampleText =
-          '图书馆\ttú shū guǎn\tDanh từ\tThư viện\t我想去图书馆看书。\n' +
-          '运动\tyùn dòng\tĐộng từ\tVận động, thể thao\t我每天下午都去运动。\n' +
-          '咖啡\tkā fēi\tDanh từ\tCà phê\t请给我一杯热咖啡。\n' +
-          '帮助\tbāng zhù\tĐộng từ\tGiúp đỡ, tương trợ\t谢谢你的热情帮助。\n' +
-          '音乐\tyīn yuè\tDanh từ\tÂm nhạc\t你喜欢听中国音乐吗？';
-        if (excelPasteText) {
-          excelPasteText.value = sampleText;
-          const rows = parseVocabRows(sampleText);
-          updateImportPreview(rows);
-        }
       });
     }
 
@@ -6239,6 +6407,15 @@
     }
 
     if (excelDropZone) {
+      excelDropZone.addEventListener('click', function () {
+        if (importVocabFileInput) importVocabFileInput.click();
+      });
+      excelDropZone.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          if (importVocabFileInput) importVocabFileInput.click();
+        }
+      });
       excelDropZone.addEventListener('dragover', function (e) {
         e.preventDefault();
         excelDropZone.classList.add('is-dragover');
@@ -6772,14 +6949,7 @@
 
     function renderPracticeTemplateTable() {
       if (!tplSheetThead || !tplSheetTbody) return;
-      const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
-      tplSheetThead.innerHTML =
-        '<tr>' +
-          '<th class="col-idx-head">#</th>' +
-          PRACTICE_TEMPLATE_HEADERS.map(function (h, i) {
-            return '<th><span class="template-col-letter">' + letters[i] + '</span>' + escapeHtml(h) + '</th>';
-          }).join('') +
-        '</tr>';
+      tplSheetThead.innerHTML = buildTemplateSheetHeaderHtml(PRACTICE_TEMPLATE_HEADERS);
 
       const filteredRows = PRACTICE_TEMPLATE_ROWS.filter(function (row) {
         if (activeTemplateFilter === 'all') return true;
@@ -6923,18 +7093,17 @@
     }
 
     function downloadPracticeTemplateExcel() {
-      const allRows = [PRACTICE_TEMPLATE_HEADERS].concat(PRACTICE_TEMPLATE_ROWS);
-      if (typeof window.XLSX !== 'undefined' && window.XLSX && window.XLSX.utils) {
-        const wb = window.XLSX.utils.book_new();
-        const ws1 = window.XLSX.utils.aoa_to_sheet(allRows);
-        ws1['!cols'] = [
+      exportExcelTemplateWorkbook({
+        sheetName: 'De_Luyen_Tap',
+        headers: PRACTICE_TEMPLATE_HEADERS,
+        rows: PRACTICE_TEMPLATE_ROWS,
+        colWidths: [
           { wch: 15 }, { wch: 24 }, { wch: 36 }, { wch: 28 },
           { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
           { wch: 22 }, { wch: 38 }, { wch: 24 }
-        ];
-        window.XLSX.utils.book_append_sheet(wb, ws1, 'De_Luyen_Tap');
-
-        const guideRows = [
+        ],
+        guideSheetName: 'Huong_Dan_Cot',
+        guideRows: [
           ['Dạng bài (Cột A)', 'Cột C (Câu hỏi / Đề bài)', 'Cột D (Pinyin / Ngữ cảnh / Gợi ý)', 'Cột E–H (Đáp án A–D)', 'Cột I (Đáp án đúng)', 'Cột J (Giải thích / Ghi chú)', 'Cột K (Link Audio)'],
           ['Nối từ', 'Chữ Hán', 'Phiên âm Pinyin', 'Bỏ trống', 'Nghĩa Tiếng Việt', 'Tùy chọn', 'Bỏ trống'],
           ['Trắc nghiệm', 'Nội dung câu hỏi', 'Từ phát âm mẫu (tùy chọn)', '4 lựa chọn A, B, C, D', 'Ghi A, B, C hoặc D', 'Giải thích đáp án sau nộp', 'Bỏ trống'],
@@ -6942,34 +7111,15 @@
           ['Sửa câu sai', 'Câu sai đề bài', 'Tình huống giao tiếp', 'Bỏ trống', 'Các câu đúng ngăn cách dấu /', 'Giải thích lỗi sai', 'Bỏ trống'],
           ['Dịch câu', 'Câu cần dịch', 'vi->zh hoặc zh->vi', 'Bỏ trống', 'Đáp án mẫu (hoặc ghi thu_cong để chấm tay)', 'Gợi ý chấm / Giải thích', 'Bỏ trống'],
           ['Nghe hiểu', 'Câu hỏi nghe (1), (2)...', 'Tiêu đề ngữ cảnh bài nghe', '3 đáp án A–C (hoặc thêm D)', 'Ghi A, B, C hoặc D', 'Giải thích đáp án (tùy chọn)', 'Đường dẫn file âm thanh (URL)']
-        ];
-        const ws2 = window.XLSX.utils.aoa_to_sheet(guideRows);
-        ws2['!cols'] = [
+        ],
+        guideColWidths: [
           { wch: 18 }, { wch: 26 }, { wch: 28 }, { wch: 24 }, { wch: 34 }, { wch: 34 }, { wch: 26 }
-        ];
-        window.XLSX.utils.book_append_sheet(wb, ws2, 'Huong_Dan_Cot');
-        window.XLSX.writeFile(wb, 'StudySnap_Template_De_Luyen_Tap.xlsx');
-        showToast('Đã tải xuống file Excel mẫu StudySnap_Template_De_Luyen_Tap.xlsx!');
-        return;
-      }
-
-      // Fallback UTF-8 BOM CSV nếu đang ngoại tuyến
-      const csvLines = allRows.map(function (row) {
-        return row.map(function (cell) {
-          const v = String(cell || '').replace(/"/g, '""');
-          return /[",\n\r]/.test(v) ? '"' + v + '"' : v;
-        }).join(',');
-      }).join('\r\n');
-      const blob = new Blob(['\uFEFF' + csvLines], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'StudySnap_Template_De_Luyen_Tap.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showToast('Đã tải xuống file template CSV (mở trực tiếp bằng Excel)!');
+        ],
+        xlsxFilename: 'StudySnap_Template_De_Luyen_Tap.xlsx',
+        csvFilename: 'StudySnap_Template_De_Luyen_Tap.csv',
+        xlsxToast: 'Đã tải xuống file Excel mẫu StudySnap_Template_De_Luyen_Tap.xlsx!',
+        csvToast: 'Đã tải xuống file template CSV (mở trực tiếp bằng Excel)!'
+      });
     }
 
     function handlePracticeExcelFile(file) {
