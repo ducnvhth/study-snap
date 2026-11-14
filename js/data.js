@@ -3159,7 +3159,7 @@ window.StudySnapStore = (function () {
       const keyBase = rawTag || cleanTopic || ex.exercise_id;
       if (!keyBase) return;
       const lid = slugifyLessonId(keyBase);
-      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272') return;
+      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272' || lid === 'hsk-1' || lid === 'hsk-2' || lid === 'hsk-3') return;
 
       if (!map[lid]) {
         map[lid] = {
@@ -3188,7 +3188,7 @@ window.StudySnapStore = (function () {
       const cls = String(asg.class_name || '').trim().toLowerCase();
       if (!cls || cls === 'unassigned') return;
       const lid = String(asg.lesson_id || '').trim();
-      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272') return;
+      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272' || lid === 'hsk-1' || lid === 'hsk-2' || lid === 'hsk-3') return;
       if (!map[lid]) {
         const fallbackTitle = String(asg.lesson_tag || lid).trim();
         map[lid] = {
@@ -3207,7 +3207,7 @@ window.StudySnapStore = (function () {
     vocabList.forEach(function (v) {
       if (!v || !v.lesson_id) return;
       const lid = String(v.lesson_id).trim();
-      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272') return;
+      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272' || lid === 'hsk-1' || lid === 'hsk-2' || lid === 'hsk-3') return;
       const vTitle = String(v.lesson_title || lid).trim();
       if (!map[lid]) {
         map[lid] = {
@@ -3228,7 +3228,7 @@ window.StudySnapStore = (function () {
     customLessons.forEach(function (cl) {
       if (!cl || cl.isCustom !== true || !cl.lesson_id) return;
       const lid = String(cl.lesson_id).trim();
-      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272') return;
+      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272' || lid === 'hsk-1' || lid === 'hsk-2' || lid === 'hsk-3') return;
       if (!map[lid]) {
         const cTitle = String(cl.title || cl.lesson_title || lid).trim();
         map[lid] = {

@@ -2997,17 +2997,25 @@
 
   function computeMasteryStatsForLesson(lessonKey) {
     const vocabList = Array.isArray(state.vocabulary) ? state.vocabulary : [];
+    if (lessonKey === 'hsk-272') {
+      const total272 = (window.StudySnapVocabList && window.StudySnapVocabList.length) || 272;
+      const mastered272 = ui.masteredIds.filter(function (id) { return String(id).indexOf('HSK272_') === 0; }).length;
+      return { masteredCount: mastered272, total: total272 };
+    }
+    const hskPrefixes = { 'hsk-1': 'HSK1_', 'hsk-2': 'HSK2_', 'hsk-3': 'HSK3_' };
+    if (Object.prototype.hasOwnProperty.call(hskPrefixes, lessonKey)) {
+      const bank = (window.StudySnapHskBanks && Array.isArray(window.StudySnapHskBanks[lessonKey]))
+        ? window.StudySnapHskBanks[lessonKey]
+        : [];
+      const prefix = hskPrefixes[lessonKey];
+      const masteredLevel = ui.masteredIds.filter(function (id) { return String(id).indexOf(prefix) === 0; }).length;
+      return { masteredCount: masteredLevel, total: bank.length };
+    }
     const targetList = lessonKey === 'all-lessons'
       ? vocabList
-      : (lessonKey === 'hsk-272'
-        ? []
-        : vocabList.filter(function (v) { return String(v.lesson_id || '') === lessonKey; }));
-    const total = lessonKey === 'hsk-272'
-      ? ((window.StudySnapVocabList && window.StudySnapVocabList.length) || 272)
-      : targetList.length;
-    const masteredCount = lessonKey === 'hsk-272'
-      ? ui.masteredIds.filter(function (id) { return String(id).indexOf('HSK272_') === 0; }).length
-      : targetList.filter(function (v) { return ui.masteredIds.indexOf(v.vocab_id) !== -1; }).length;
+      : vocabList.filter(function (v) { return String(v.lesson_id || '') === lessonKey; });
+    const total = targetList.length;
+    const masteredCount = targetList.filter(function (v) { return ui.masteredIds.indexOf(v.vocab_id) !== -1; }).length;
     return { masteredCount: masteredCount, total: total };
   }
 

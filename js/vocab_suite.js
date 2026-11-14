@@ -1,13 +1,60 @@
 /* ==========================================================================
    StudySnap — Shared 4-Mode Interactive Vocabulary Engine
-   Supports: Lesson Vocabulary (state.vocabulary), "Tổng hợp theo bài", and
-   Built-in "Kho 272 từ HSK" (StudySnapVocabList) across Teacher & Student portals.
+   Supports: Lesson Vocabulary (state.vocabulary), "Tổng hợp theo bài",
+   "Kho 272 từ HSK" (StudySnapVocabList), and "HSK 1-3 (3.0)" (StudySnapHskBanks).
    ========================================================================== */
 
 (function () {
+  const HSK_LEVEL_KEYS = ['hsk-1', 'hsk-2', 'hsk-3'];
+  const HSK_LEVEL_META = {
+    'hsk-1': {
+      key: 'hsk-1',
+      label: 'HSK 1 (3.0)',
+      title: 'Từ vựng HSK 1 (Giáo trình 3.0)',
+      badgeLabel: 'HSK 1',
+      prefix: 'HSK1_',
+      pillClass: 'is-hsk-bank is-hsk-level-1'
+    },
+    'hsk-2': {
+      key: 'hsk-2',
+      label: 'HSK 2 (3.0)',
+      title: 'Từ vựng HSK 2 (Giáo trình 3.0)',
+      badgeLabel: 'HSK 2',
+      prefix: 'HSK2_',
+      pillClass: 'is-hsk-bank is-hsk-level-2'
+    },
+    'hsk-3': {
+      key: 'hsk-3',
+      label: 'HSK 3 (3.0)',
+      title: 'Từ vựng HSK 3 (Giáo trình 3.0)',
+      badgeLabel: 'HSK 3',
+      prefix: 'HSK3_',
+      pillClass: 'is-hsk-bank is-hsk-level-3'
+    }
+  };
+
+  function isHskLevelKey(key) {
+    return Object.prototype.hasOwnProperty.call(HSK_LEVEL_META, String(key || '').trim());
+  }
+
+  function isBuiltInBankKey(key) {
+    const k = String(key || '').trim();
+    return k === 'hsk-272' || isHskLevelKey(k);
+  }
+
   function defaultGetHskRawList() {
     return (typeof window !== 'undefined' && Array.isArray(window.StudySnapVocabList))
       ? window.StudySnapVocabList
+      : [];
+  }
+
+  function defaultGetHskLevelRawList(levelKey) {
+    return (
+      typeof window !== 'undefined' &&
+      window.StudySnapHskBanks &&
+      Array.isArray(window.StudySnapHskBanks[levelKey])
+    )
+      ? window.StudySnapHskBanks[levelKey]
       : [];
   }
 
@@ -95,6 +142,7 @@
 
   const vs = {
     sourceKey: '',
+    hskLessonFilter: 'all',
     masteryFilter: 'all',
     subTab: 'flashcard',
     fcOrder: [],
@@ -191,6 +239,47 @@
     });
   }
 
+  function getHskLevelItemsNormalized(levelKey) {
+    const meta = HSK_LEVEL_META[levelKey];
+    if (!meta) return [];
+    const raw = defaultGetHskLevelRawList(levelKey);
+    const wordCounts = {};
+    raw.forEach(function (row) {
+      const w = Array.isArray(row) ? String(row[0] || '').trim() : String((row && (row.word || row[0])) || '').trim();
+      if (w) wordCounts[w] = (wordCounts[w] || 0) + 1;
+    });
+    return raw.map(function (row, idx) {
+      const isArr = Array.isArray(row);
+      const w = isArr ? String(row[0] || '').trim() : String((row && (row.word || row[0])) || '').trim();
+      const pinyin = isArr ? String(row[1] || '').trim() : String((row && (row.ipa || row.pinyin || row[1])) || '').trim();
+      const meaning = isArr ? String(row[2] || '').trim() : String((row && (row.meaning_vi || row.meaning || row[2])) || '').trim();
+      const pos = isArr ? String(row[3] || '').trim() : String((row && (row.part_of_speech || row[3])) || '').trim();
+      const rawLesson = isArr ? row[4] : (row && (row.lesson || row.lesson_num || row[4]));
+      const lessonNum = parseInt(rawLesson, 10) || 1;
+      const isDupWord = (wordCounts[w] || 0) > 1;
+      const mKey = isDupWord ? (meta.prefix + w + '_L' + lessonNum) : (meta.prefix + w);
+      return {
+        vocab_id: meta.prefix + (idx + 1),
+        mastery_key: mKey,
+        lesson_id: levelKey,
+        lesson_title: meta.title,
+        lesson_num: lessonNum,
+        lesson_short: 'Bài ' + lessonNum,
+        word: w,
+        pinyin: pinyin,
+        part_of_speech: pos,
+        meaning: meaning,
+        example: '',
+        example_vi: '',
+        isCustom: false,
+        isHskLevel: true,
+        sourceIndex: idx + 1
+      };
+    }).filter(function (item) {
+      return item.word && item.meaning;
+    });
+  }
+
   function buildLessonBuckets(lessonItems) {
     const map = {};
     const defined = typeof adapter.getLessons === 'function' ? (adapter.getLessons() || []) : [];
@@ -259,8 +348,11 @@
     return Boolean(masteredMap[item.mastery_key] || masteredMap[item.vocab_id]);
   }
 
-  function ensureValidSourceKey(lessonItems, hskItems, buckets) {
+  function ensureValidSourceKey(lessonItems, hskItems, buckets, levelBanks) {
     if (vs.sourceKey === 'hsk-272' && hskItems.length > 0) return 'hsk-272';
+    if (isHskLevelKey(vs.sourceKey) && levelBanks && (levelBanks[vs.sourceKey] || []).length > 0) {
+      return vs.sourceKey;
+    }
     if (vs.sourceKey === 'all-lessons' && (lessonItems.length > 0 || adapter.isTeacher)) return 'all-lessons';
     if (vs.sourceKey && buckets.some(function (b) { return b.lesson_id === vs.sourceKey; })) {
       return vs.sourceKey;
@@ -269,11 +361,39 @@
     if (firstNonEmpty) return firstNonEmpty.lesson_id;
     if (adapter.isTeacher && buckets.length > 0) return buckets[0].lesson_id;
     if (lessonItems.length > 0) return 'all-lessons';
+    if (hskItems.length > 0) return 'hsk-272';
+    for (let i = 0; i < HSK_LEVEL_KEYS.length; i++) {
+      const k = HSK_LEVEL_KEYS[i];
+      if (levelBanks && (levelBanks[k] || []).length > 0) return k;
+    }
     return 'hsk-272';
   }
 
-  function getSourceLabel(sourceKey, buckets, lessonItems, hskItems) {
+  function buildHskLessonOptions(levelList) {
+    const counts = {};
+    (levelList || []).forEach(function (item) {
+      const n = Number(item.lesson_num) || 1;
+      counts[n] = (counts[n] || 0) + 1;
+    });
+    return Object.keys(counts).map(function (k) {
+      const n = parseInt(k, 10);
+      return { lessonNum: n, key: String(n), label: 'Bài ' + n, count: counts[k] };
+    }).sort(function (a, b) {
+      return a.lessonNum - b.lessonNum;
+    });
+  }
+
+  function getSourceLabel(sourceKey, buckets, lessonItems, hskItems, levelBanks, activeCount) {
     if (sourceKey === 'hsk-272') return 'Kho 272 từ HSK (' + hskItems.length + ' từ)';
+    if (isHskLevelKey(sourceKey)) {
+      const meta = HSK_LEVEL_META[sourceKey];
+      const fullCount = (levelBanks && levelBanks[sourceKey] && levelBanks[sourceKey].length) || 0;
+      if (vs.hskLessonFilter && vs.hskLessonFilter !== 'all') {
+        const shown = typeof activeCount === 'number' ? activeCount : fullCount;
+        return meta.label + ' • Bài ' + vs.hskLessonFilter + ' (' + shown + ' từ)';
+      }
+      return meta.label + ' (' + fullCount + ' từ)';
+    }
     if (sourceKey === 'all-lessons') return 'Tổng hợp theo bài (' + lessonItems.length + ' từ)';
     const bucket = buckets.find(function (b) { return b.lesson_id === sourceKey; });
     return bucket ? bucket.title : sourceKey;
@@ -282,12 +402,34 @@
   function computeActiveItems(applyMasteryFilter) {
     const lessonItems = getLessonVocabItemsNormalized();
     const hskItems = getHskItemsNormalized();
+    const levelBanks = {
+      'hsk-1': getHskLevelItemsNormalized('hsk-1'),
+      'hsk-2': getHskLevelItemsNormalized('hsk-2'),
+      'hsk-3': getHskLevelItemsNormalized('hsk-3')
+    };
     const buckets = buildLessonBuckets(lessonItems);
-    vs.sourceKey = ensureValidSourceKey(lessonItems, hskItems, buckets);
+    vs.sourceKey = ensureValidSourceKey(lessonItems, hskItems, buckets, levelBanks);
 
     let baseList = [];
+    let hskLessonOptions = [];
     if (vs.sourceKey === 'hsk-272') {
       baseList = hskItems;
+    } else if (isHskLevelKey(vs.sourceKey)) {
+      const fullLevelList = levelBanks[vs.sourceKey] || [];
+      hskLessonOptions = buildHskLessonOptions(fullLevelList);
+      if (vs.hskLessonFilter && vs.hskLessonFilter !== 'all') {
+        const hasLesson = hskLessonOptions.some(function (opt) { return opt.key === String(vs.hskLessonFilter); });
+        if (!hasLesson) {
+          vs.hskLessonFilter = 'all';
+        }
+      }
+      if (vs.hskLessonFilter && vs.hskLessonFilter !== 'all') {
+        baseList = fullLevelList.filter(function (v) {
+          return String(v.lesson_num) === String(vs.hskLessonFilter);
+        });
+      } else {
+        baseList = fullLevelList;
+      }
     } else if (vs.sourceKey === 'all-lessons') {
       baseList = lessonItems;
     } else {
@@ -307,11 +449,13 @@
     return {
       lessonItems: lessonItems,
       hskItems: hskItems,
+      levelBanks: levelBanks,
+      hskLessonOptions: hskLessonOptions,
       buckets: buckets,
       baseList: baseList,
       items: filtered,
       masteredMap: masteredMap,
-      sourceLabel: getSourceLabel(vs.sourceKey, buckets, lessonItems, hskItems)
+      sourceLabel: getSourceLabel(vs.sourceKey, buckets, lessonItems, hskItems, levelBanks, baseList.length)
     };
   }
 
@@ -343,6 +487,40 @@
 
     const allLessonsCls = vs.sourceKey === 'all-lessons' ? ' is-active' : '';
     const hskCls = vs.sourceKey === 'hsk-272' ? ' is-active' : '';
+
+    const hskLevelPillsHtml = HSK_LEVEL_KEYS.map(function (lvlKey) {
+      const meta = HSK_LEVEL_META[lvlKey];
+      const list = (ctx.levelBanks && ctx.levelBanks[lvlKey]) || [];
+      if (!list.length) return '';
+      const activeCls = vs.sourceKey === lvlKey ? ' is-active' : '';
+      return (
+        '<button type="button" class="lesson-pill ' + meta.pillClass + activeCls + '" data-vocab-source="' + escapeHtml(lvlKey) + '" title="' + escapeHtml(meta.title) + '">' +
+          '<span>' + escapeHtml(meta.label) + '</span>' +
+          '<span class="lesson-count-badge tabular-nums">' + list.length + '</span>' +
+        '</button>'
+      );
+    }).join('');
+
+    let hskLessonRowHtml = '';
+    if (isHskLevelKey(vs.sourceKey) && ctx.hskLessonOptions && ctx.hskLessonOptions.length > 0) {
+      const meta = HSK_LEVEL_META[vs.sourceKey];
+      const fullCount = (ctx.levelBanks[vs.sourceKey] || []).length;
+      const allActive = (!vs.hskLessonFilter || vs.hskLessonFilter === 'all') ? ' is-active' : '';
+      const chipsHtml = ctx.hskLessonOptions.map(function (opt) {
+        const cls = String(vs.hskLessonFilter) === opt.key ? ' is-active' : '';
+        return (
+          '<button type="button" class="vocab-hsk-lesson-chip tabular-nums' + cls + '" data-vocab-hsk-lesson="' + escapeHtml(opt.key) + '">' +
+            escapeHtml(opt.label) + ' (' + opt.count + ')' +
+          '</button>'
+        );
+      }).join('');
+      hskLessonRowHtml =
+        '<div class="vocab-hsk-lesson-row" role="group" aria-label="Lọc theo bài trong giáo trình HSK">' +
+          '<span class="vocab-strip-caption">Lọc bài ' + escapeHtml(meta.badgeLabel) + ':</span>' +
+          '<button type="button" class="vocab-hsk-lesson-chip tabular-nums' + allActive + '" data-vocab-hsk-lesson="all">Tất cả (' + fullCount + ')</button>' +
+          chipsHtml +
+        '</div>';
+    }
 
     let masteryBarHtml = '';
     if (!adapter.isTeacher && typeof adapter.getMasteredIds === 'function') {
@@ -394,16 +572,26 @@
           '<span>Kho 272 từ HSK</span>' +
           '<span class="lesson-count-badge tabular-nums">' + ctx.hskItems.length + '</span>' +
         '</button>' +
+        hskLevelPillsHtml +
       '</div>' +
+      hskLessonRowHtml +
       masteryBarHtml;
   }
 
   function updateVocabBadge(ctx) {
     const totalBadge = document.getElementById('vocab-total-badge');
     if (totalBadge) {
-      const shortName = vs.sourceKey === 'hsk-272'
-        ? 'Kho HSK'
-        : (vs.sourceKey === 'all-lessons' ? 'Tổng hợp theo bài' : formatShortLessonLabel(vs.sourceKey, ctx.sourceLabel));
+      let shortName = '';
+      if (vs.sourceKey === 'hsk-272') {
+        shortName = 'Kho HSK';
+      } else if (isHskLevelKey(vs.sourceKey)) {
+        shortName = HSK_LEVEL_META[vs.sourceKey].badgeLabel +
+          (vs.hskLessonFilter && vs.hskLessonFilter !== 'all' ? ' · Bài ' + vs.hskLessonFilter : '');
+      } else if (vs.sourceKey === 'all-lessons') {
+        shortName = 'Tổng hợp theo bài';
+      } else {
+        shortName = formatShortLessonLabel(vs.sourceKey, ctx.sourceLabel);
+      }
       totalBadge.textContent = ctx.items.length + ' từ • ' + shortName;
     }
   }
@@ -421,10 +609,13 @@
     return node;
   }
 
-  function renderEmptyStateHtml(title, desc) {
-    const actionBtn = adapter.isTeacher && vs.sourceKey !== 'hsk-272' && vs.sourceKey !== 'all-lessons'
-      ? '<button type="button" class="btn btn-primary btn-sm" data-vocab-empty-add="1" style="margin-top:14px;">+ Thêm từ vào bài này</button>'
-      : '<button type="button" class="btn btn-outline btn-sm" data-vocab-empty-hsk="1" style="margin-top:14px;">Mở Kho 272 từ HSK</button>';
+  function renderEmptyStateHtml(title, desc, isFilterEmpty) {
+    let actionBtn = '<button type="button" class="btn btn-outline btn-sm" data-vocab-empty-hsk="1" style="margin-top:14px;">Mở Kho 272 từ HSK</button>';
+    if (isFilterEmpty) {
+      actionBtn = '<button type="button" class="btn btn-outline btn-sm" data-vocab-mfilter="all" style="margin-top:14px;">Hiển thị tất cả từ</button>';
+    } else if (adapter.isTeacher && !isBuiltInBankKey(vs.sourceKey) && vs.sourceKey !== 'all-lessons') {
+      actionBtn = '<button type="button" class="btn btn-primary btn-sm" data-vocab-empty-add="1" style="margin-top:14px;">+ Thêm từ vào bài này</button>';
+    }
     return (
       '<div class="empty-state-icon">' + ICON_BOOK + '</div>' +
       '<h3>' + escapeHtml(title) + '</h3>' +
@@ -489,7 +680,8 @@
           isFilterEmpty ? 'Không có từ nào trong bộ lọc này' : 'Bài học này chưa có từ vựng',
           isFilterEmpty
             ? 'Hãy chọn tab "Tất cả" ở trên để xem lại toàn bộ từ vựng của bài học.'
-            : 'Giáo viên có thể thêm từ thủ công hoặc nhập hàng loạt từ Excel/CSV cho bài học này.'
+            : 'Giáo viên có thể thêm từ thủ công hoặc nhập hàng loạt từ Excel/CSV cho bài học này.',
+          isFilterEmpty
         );
       }
       return;
@@ -583,7 +775,8 @@
   function getCombinedDistractorPool(ctx) {
     const map = {};
     const pool = [];
-    ctx.lessonItems.concat(ctx.hskItems).forEach(function (item) {
+    const activeBank = (ctx.levelBanks && isHskLevelKey(vs.sourceKey)) ? (ctx.levelBanks[vs.sourceKey] || []) : [];
+    ctx.lessonItems.concat(activeBank, ctx.hskItems).forEach(function (item) {
       const key = item.word + '||' + item.meaning;
       if (!map[key]) {
         map[key] = true;
@@ -939,7 +1132,7 @@
 
     tbody.innerHTML = list.map(function (v, idx) {
       const mastered = isItemMastered(v, ctx.masteredMap);
-      const showLessonTag = vs.sourceKey === 'all-lessons' || v.isCustom;
+      const showLessonTag = vs.sourceKey === 'all-lessons' || isHskLevelKey(vs.sourceKey) || v.isCustom;
       const metaBadges =
         '<div class="vlist-meta-tags">' +
           (showLessonTag ? '<span class="vlist-lesson-tag">' + escapeHtml(v.lesson_short) + '</span>' : '') +
@@ -1048,6 +1241,9 @@
   function selectSource(sourceKey, opts) {
     const nextKey = String(sourceKey || '').trim() || 'hsk-272';
     vs.sourceKey = nextKey;
+    vs.hskLessonFilter = (opts && opts.hskLesson !== undefined && opts.hskLesson !== null)
+      ? (String(opts.hskLesson).trim() || 'all')
+      : 'all';
     if (opts && opts.masteryFilter) vs.masteryFilter = opts.masteryFilter;
     vs.quizList = [];
     renderVocabSuite(true);
@@ -1063,6 +1259,7 @@
     const ctx = computeActiveItems(false);
     return {
       sourceKey: vs.sourceKey,
+      hskLessonFilter: vs.hskLessonFilter,
       sourceLabel: ctx.sourceLabel,
       activeItems: ctx.baseList,
       filteredItems: computeActiveItems(true).items,
@@ -1082,6 +1279,13 @@
         const srcBtn = ev.target.closest('[data-vocab-source]');
         if (srcBtn) {
           selectSource(srcBtn.getAttribute('data-vocab-source'));
+          return;
+        }
+        const hskLessonBtn = ev.target.closest('[data-vocab-hsk-lesson]');
+        if (hskLessonBtn) {
+          vs.hskLessonFilter = hskLessonBtn.getAttribute('data-vocab-hsk-lesson') || 'all';
+          vs.quizList = [];
+          renderVocabSuite(true);
           return;
         }
         const mFilterBtn = ev.target.closest('[data-vocab-mfilter]');

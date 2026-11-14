@@ -225,6 +225,11 @@
     return [];
   }
 
+  function isBuiltInVocabBankKey(key) {
+    const k = String(key || '').trim();
+    return k === 'hsk-272' || k === 'hsk-1' || k === 'hsk-2' || k === 'hsk-3';
+  }
+
   function getDefaultVocabLessonKey() {
     const lessons = getLessons();
     if (lessons.length > 0) return lessons[0].lesson_id;
@@ -1111,6 +1116,23 @@
       title: 'Kho 272 từ vựng HSK chuẩn',
       count: hskCount
     });
+    const hskBanks = (typeof window !== 'undefined' && window.StudySnapHskBanks) ? window.StudySnapHskBanks : {};
+    [
+      { key: 'hsk-1', label: 'Từ vựng HSK 1 (3.0)', shortTag: 'HSK 1', title: 'Từ vựng HSK 1 (Giáo trình 3.0)' },
+      { key: 'hsk-2', label: 'Từ vựng HSK 2 (3.0)', shortTag: 'HSK 2', title: 'Từ vựng HSK 2 (Giáo trình 3.0)' },
+      { key: 'hsk-3', label: 'Từ vựng HSK 3 (3.0)', shortTag: 'HSK 3', title: 'Từ vựng HSK 3 (Giáo trình 3.0)' }
+    ].forEach(function (spec) {
+      const bankList = Array.isArray(hskBanks[spec.key]) ? hskBanks[spec.key] : [];
+      if (bankList.length > 0) {
+        options.push({
+          key: spec.key,
+          label: spec.label + ' (' + bankList.length + ' từ)',
+          shortTag: spec.shortTag,
+          title: spec.title,
+          count: bankList.length
+        });
+      }
+    });
     return options;
   }
 
@@ -1271,6 +1293,9 @@
   function formatVocabSourceLabelForTeacher(sourceKey, lessonsList) {
     const key = String(sourceKey || '').trim();
     if (key === 'hsk-272') return 'Kho HSK 272';
+    if (key === 'hsk-1') return 'HSK 1 (3.0)';
+    if (key === 'hsk-2') return 'HSK 2 (3.0)';
+    if (key === 'hsk-3') return 'HSK 3 (3.0)';
     if (key === 'all-lessons') return 'Tổng hợp';
     const found = (lessonsList || []).find(function (l) {
       return String(l.lesson_id || '').trim() === key;
@@ -1495,7 +1520,7 @@
         const box = document.getElementById('teacher-manual-vocab-box');
         const sel = document.getElementById('new-vocab-lesson');
         const wrap = document.getElementById('new-vocab-custom-lesson-wrap');
-        if (sel && sourceKey && sourceKey !== 'all-lessons' && sourceKey !== 'hsk-272') {
+        if (sel && sourceKey && sourceKey !== 'all-lessons' && !isBuiltInVocabBankKey(sourceKey)) {
           const hasOpt = Array.from(sel.options || []).some(function (o) { return o.value === sourceKey; });
           if (hasOpt) sel.value = sourceKey;
         }
@@ -1533,7 +1558,7 @@
       const firstLessonId = lessons[0] ? lessons[0].lesson_id : '__new__';
       const prevVal = newVocabLessonSelect.value && newVocabLessonSelect.value !== '__new__' && lessons.some(function (l) { return l.lesson_id === newVocabLessonSelect.value; })
         ? newVocabLessonSelect.value
-        : ((ui.selectedLesson && ui.selectedLesson !== 'all-lessons' && ui.selectedLesson !== 'hsk-272' && lessons.some(function (l) { return l.lesson_id === ui.selectedLesson; }))
+        : ((ui.selectedLesson && ui.selectedLesson !== 'all-lessons' && !isBuiltInVocabBankKey(ui.selectedLesson) && lessons.some(function (l) { return l.lesson_id === ui.selectedLesson; }))
           ? ui.selectedLesson
           : firstLessonId);
       populateLessonDropdown(newVocabLessonSelect, prevVal);
@@ -6426,7 +6451,7 @@
           if (importVocabLessonSelect) {
             const lessons = getLessons();
             const firstId = lessons[0] ? lessons[0].lesson_id : '__new__';
-            const preferred = (ui.selectedLesson && ui.selectedLesson !== 'all' && ui.selectedLesson !== 'all-lessons' && ui.selectedLesson !== 'hsk-272' && lessons.some(function (l) { return l.lesson_id === ui.selectedLesson; }))
+            const preferred = (ui.selectedLesson && ui.selectedLesson !== 'all' && ui.selectedLesson !== 'all-lessons' && !isBuiltInVocabBankKey(ui.selectedLesson) && lessons.some(function (l) { return l.lesson_id === ui.selectedLesson; }))
               ? ui.selectedLesson
               : firstId;
             populateLessonDropdown(importVocabLessonSelect, preferred);
