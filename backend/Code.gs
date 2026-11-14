@@ -745,6 +745,24 @@ const ASSIGNMENT_HEADERS = [
   'lesson_id'
 ];
 
+const SUBMISSIONS_HEADERS = [
+  'submission_id',
+  'assignment_id',
+  'student_id',
+  'submitted_at',
+  'student_note',
+  'media_type',
+  'media_url',
+  'media_duration',
+  'status',
+  'score',
+  'teacher_comment',
+  'teacher_voice_url',
+  'teacher_voice_duration',
+  'graded_at',
+  'practice_count'
+];
+
 function ensureSheetHeaders_(sheet, requiredHeaders) {
   if (!sheet || !Array.isArray(requiredHeaders) || requiredHeaders.length === 0) return [];
   if (sheet.getLastRow() === 0) {
@@ -784,22 +802,7 @@ function ensureSheetsExist_(ss) {
     },
     {
       name: SHEET_NAMES.SUBMISSIONS,
-      headers: [
-        'submission_id',
-        'assignment_id',
-        'student_id',
-        'submitted_at',
-        'student_note',
-        'media_type',
-        'media_url',
-        'media_duration',
-        'status',
-        'score',
-        'teacher_comment',
-        'teacher_voice_url',
-        'teacher_voice_duration',
-        'graded_at'
-      ]
+      headers: SUBMISSIONS_HEADERS
     },
     {
       name: SHEET_NAMES.EXIT_TICKETS,
@@ -1099,6 +1102,7 @@ function handleSubmitHomework_(ss, payload) {
     );
   }
 
+  ensureSheetHeaders_(sheet, SUBMISSIONS_HEADERS);
   const values = sheet.getDataRange().getValues();
   let foundRowIndex = -1;
   for (let i = 1; i < values.length; i++) {
@@ -1111,16 +1115,31 @@ function handleSubmitHomework_(ss, payload) {
   if (foundRowIndex > 0) {
     const existing = values[foundRowIndex - 1];
     const nextType = payload.media_type || existing[5] || 'audio';
-    const isVocabSub = nextType === 'vocab';
-    const nextStatus = isVocabSub
+    const isVocabTrack = nextType === 'vocab' || nextType === 'vocab_log';
+    const nextStatus = isVocabTrack
       ? String(payload.status || 'graded')
       : (existing[8] === 'graded' ? 'graded' : 'submitted');
-    const nextScore =
-      payload.score !== undefined && payload.score !== null ? String(payload.score) : existing[9];
+    const hasIncomingScore =
+      payload.score !== undefined && payload.score !== null && (!isVocabTrack || String(payload.score) !== '');
+    const nextScore = hasIncomingScore ? String(payload.score) : existing[9];
     const nextNote =
       payload.student_note !== undefined && payload.student_note !== null
         ? String(payload.student_note)
         : existing[4];
+    const rawPriorCount = Number(existing[14] || 0) || 0;
+    const effectivePrior = isVocabTrack && rawPriorCount === 0 && (existing[3] || existing[8] === 'graded')
+      ? 1
+      : rawPriorCount;
+    const incrementPractice = isVocabTrack
+      ? (payload.increment_practice !== false && payload.increment_practice !== 0)
+      : false;
+    const explicitPracticeCount =
+      payload.practice_count !== undefined && payload.practice_count !== null && payload.practice_count !== ''
+        ? Math.max(0, Number(payload.practice_count) || 0)
+        : null;
+    const nextPracticeCount = incrementPractice
+      ? Math.max(effectivePrior + 1, explicitPracticeCount || 0)
+      : (explicitPracticeCount !== null ? explicitPracticeCount : effectivePrior);
     const updatedRow = [
       existing[0],
       assignmentId,
@@ -1135,7 +1154,8 @@ function handleSubmitHomework_(ss, payload) {
       existing[10],
       existing[11],
       existing[12],
-      existing[13]
+      existing[13],
+      nextPracticeCount
     ];
     sheet.getRange(foundRowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
     return {
@@ -1145,17 +1165,24 @@ function handleSubmitHomework_(ss, payload) {
       score: updatedRow[9],
       student_note: updatedRow[4],
       media_duration: updatedRow[7],
-      submitted_at: nowStr
+      submitted_at: nowStr,
+      practice_count: nextPracticeCount
     };
   } else {
     const newId = 'SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase();
     const nextType = String(payload.media_type || 'audio');
-    const isVocabSub = nextType === 'vocab';
-    const nextStatus = isVocabSub ? String(payload.status || 'graded') : 'submitted';
+    const isVocabTrack = nextType === 'vocab' || nextType === 'vocab_log';
+    const nextStatus = isVocabTrack ? String(payload.status || 'graded') : 'submitted';
     const nextScore =
       payload.score !== undefined && payload.score !== null ? String(payload.score) : '';
     const nextNote = String(payload.student_note || '');
     const nextDur = String(payload.media_duration || '01:00');
+    const incrementPractice = isVocabTrack
+      ? (payload.increment_practice !== false && payload.increment_practice !== 0)
+      : false;
+    const nextPracticeCount = isVocabTrack
+      ? Math.max(incrementPractice ? 1 : 0, Number(payload.practice_count || 0) || 0)
+      : 0;
     const newRow = [
       newId,
       assignmentId,
@@ -1170,7 +1197,8 @@ function handleSubmitHomework_(ss, payload) {
       '',
       '',
       '',
-      ''
+      '',
+      nextPracticeCount
     ];
     sheet.appendRow(newRow);
     return {
@@ -1180,7 +1208,8 @@ function handleSubmitHomework_(ss, payload) {
       score: nextScore,
       student_note: nextNote,
       media_duration: nextDur,
-      submitted_at: nowStr
+      submitted_at: nowStr,
+      practice_count: nextPracticeCount
     };
   }
 }
@@ -1200,6 +1229,7 @@ function handleSaveTeacherFeedback_(ss, payload) {
     );
   }
 
+  ensureSheetHeaders_(sheet, SUBMISSIONS_HEADERS);
   const values = sheet.getDataRange().getValues();
   let foundRowIndex = -1;
   for (let i = 1; i < values.length; i++) {
@@ -1225,7 +1255,8 @@ function handleSaveTeacherFeedback_(ss, payload) {
       payload.teacher_comment !== undefined ? payload.teacher_comment : existing[10],
       teacherVoiceUrl || existing[11],
       payload.teacher_voice_duration || existing[12] || '',
-      nowStr
+      nowStr,
+      Number(existing[14] || 0) || 0
     ];
     sheet.getRange(foundRowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
     return { submission_id: existing[0], status: 'graded', teacher_voice_url: updatedRow[11] };
@@ -1245,7 +1276,8 @@ function handleSaveTeacherFeedback_(ss, payload) {
       payload.teacher_comment || '',
       teacherVoiceUrl,
       payload.teacher_voice_duration || '',
-      nowStr
+      nowStr,
+      0
     ];
     sheet.appendRow(newRow);
     return { submission_id: newId, status: newRow[8], teacher_voice_url: teacherVoiceUrl };

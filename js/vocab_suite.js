@@ -83,9 +83,12 @@
     getVocabularyItems: null,
     getHskItems: null,
     getMasteredIds: null,
+    getPracticeCounts: null,
     onToggleMastered: null,
     onDeleteVocab: null,
     onQuizComplete: null,
+    onStrokeComplete: null,
+    onFlashcardCycleComplete: null,
     onSourceChange: null,
     onRequestAddVocab: null
   };
@@ -360,11 +363,26 @@
       ? '<span class="vocab-strip-caption" style="font-weight:500;">(Chưa có bài từ tab Luyện tập cuối buổi — tạo bài bên Luyện cuối buổi hoặc chọn "+ Tạo bài học mới..." khi thêm từ)</span>'
       : '';
 
+    let practiceCounterHtml = '';
+    if (!adapter.isTeacher && typeof adapter.getPracticeCounts === 'function') {
+      const pCounts = adapter.getPracticeCounts() || {};
+      const bySrc = pCounts.bySource || {};
+      const srcEntry = bySrc[vs.sourceKey];
+      const currentSrcCount = srcEntry ? Math.max(0, Number(srcEntry.count || 0) || 0) : 0;
+      const totalPracticeCount = Math.max(0, Number(pCounts.totalCount || 0) || 0);
+      practiceCounterHtml =
+        '<span class="vocab-practice-counter-pill tabular-nums" id="vocab-source-practice-badge" title="Số lần em đã hoàn thành luyện tập từ vựng (Flashcard, Trắc nghiệm, Tập viết)">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20V10"></path><path d="M18 20V4"></path><path d="M6 20v-4"></path></svg>' +
+          '<span>Bài này đã luyện: <strong>' + currentSrcCount + '</strong> lần · Tổng: <strong>' + totalPracticeCount + '</strong> lần</span>' +
+        '</span>';
+    }
+
     strip.innerHTML =
       '<div class="vocab-source-header">' +
         '<span class="vocab-strip-caption">Nguồn từ vựng:</span>' +
         '<strong class="vocab-active-source-name">' + escapeHtml(ctx.sourceLabel) + '</strong>' +
         emptySyncHint +
+        practiceCounterHtml +
       '</div>' +
       '<div class="lesson-selector-bar vocab-lesson-pills-bar" role="group" aria-label="Chọn bài học hoặc kho từ vựng">' +
         lessonPillsHtml +
@@ -728,6 +746,7 @@
         total: total,
         pct: pct
       });
+      renderSourceStrip(computeActiveItems(true));
     }
   }
 
@@ -1164,8 +1183,17 @@
           vs.fcIdx++;
           updateFlashcardUI(ctx);
         } else {
+          if (ctx.items.length > 0 && typeof adapter.onFlashcardCycleComplete === 'function') {
+            adapter.onFlashcardCycleComplete({
+              sourceKey: vs.sourceKey,
+              sourceLabel: ctx.sourceLabel,
+              totalCards: ctx.items.length
+            });
+          }
           buildFlashcardOrder(ctx.items, true);
-          updateFlashcardUI(ctx);
+          const refreshedCtx = computeActiveItems(true);
+          renderSourceStrip(refreshedCtx);
+          updateFlashcardUI(refreshedCtx);
         }
       });
     }
@@ -1352,6 +1380,17 @@
                 status.textContent =
                   'Hoàn thành viết chữ "' + vs.strokeChar + '" (Sai ' + summaryData.totalMistakes + ' nét).';
               }
+              const ctx = computeActiveItems(true);
+              if (typeof adapter.onStrokeComplete === 'function') {
+                adapter.onStrokeComplete({
+                  sourceKey: vs.sourceKey,
+                  sourceLabel: ctx.sourceLabel,
+                  word: vs.strokeWordItem ? vs.strokeWordItem.word : vs.strokeChar,
+                  char: vs.strokeChar,
+                  mistakes: summaryData && typeof summaryData.totalMistakes === 'number' ? summaryData.totalMistakes : 0
+                });
+              }
+              renderSourceStrip(computeActiveItems(true));
             }
           });
         }

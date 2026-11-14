@@ -222,13 +222,22 @@
     const elGraded = document.getElementById('student-stat-hw-graded');
     const elAvg = document.getElementById('student-stat-avg-score');
     const elVocab = document.getElementById('student-stat-vocab-mastered');
+    const elVocabPractices = document.getElementById('student-stat-vocab-practices');
     const elPracticeScore = document.getElementById('student-stat-practice-score');
     const elPracticeRating = document.getElementById('student-stat-practice-rating');
+
+    const vocabPracticeStats =
+      typeof window !== 'undefined' &&
+      window.StudySnapStore &&
+      typeof window.StudySnapStore.getStudentVocabPracticeStats === 'function'
+        ? window.StudySnapStore.getStudentVocabPracticeStats(state, student.student_id)
+        : { totalCount: 0 };
 
     if (elSubmitted) elSubmitted.textContent = submittedPracticeCount + '/' + totalPracticeCount;
     if (elGraded) elGraded.textContent = String(gradedWithVoiceCount);
     if (elAvg) elAvg.textContent = String(avgScore);
     if (elVocab) elVocab.textContent = validMasteredCount + '/' + totalVocab;
+    if (elVocabPractices) elVocabPractices.textContent = 'Đã luyện: ' + vocabPracticeStats.totalCount + ' lần';
 
     const currentEx = getActiveExercise();
     const practiceSub = currentEx ? findStudentPracticeSubmission(currentEx.exercise_id) : null;
@@ -3002,13 +3011,54 @@
     return { masteredCount: masteredCount, total: total };
   }
 
+  async function recordStudentVocabPracticeEvent(eventInfo) {
+    const student = getActiveStudent();
+    if (!eventInfo || !student || !window.StudySnapStore) return;
+    const sourceKey = String(eventInfo.sourceKey || 'hsk-272').trim() || 'hsk-272';
+    const sourceLabel = String(eventInfo.sourceLabel || sourceKey);
+    const payloadScore = eventInfo.score !== undefined && eventInfo.score !== null ? String(eventInfo.score) : '';
+    const mediaDur = String(eventInfo.media_duration || '');
+    const noteStr = String(eventInfo.student_note || ('Luyện từ vựng: ' + sourceLabel));
+
+    if (typeof window.StudySnapStore.recordVocabSourcePractice === 'function') {
+      await window.StudySnapStore.recordVocabSourcePractice(state, {
+        student_id: student.student_id,
+        sourceKey: sourceKey,
+        sourceLabel: sourceLabel,
+        score: payloadScore,
+        media_duration: mediaDur,
+        student_note: noteStr
+      });
+    }
+
+    const matchingTasks = getStudentVocabAssignments(student).filter(function (t) {
+      return String(t.lesson_id || '') === sourceKey;
+    });
+    for (let i = 0; i < matchingTasks.length; i++) {
+      await submitStudentVocabTaskProgress(matchingTasks[i], {
+        score: payloadScore,
+        media_duration: mediaDur,
+        student_note: noteStr
+      });
+    }
+
+    renderStudentHeaderAndStats();
+    renderStudentAssignedVocabTasks();
+    if (window.StudySnapVocabSuite && typeof window.StudySnapVocabSuite.render === 'function') {
+      window.StudySnapVocabSuite.render(false);
+    }
+  }
+
   async function submitStudentVocabTaskProgress(task, opts, triggerBtn) {
     const student = getActiveStudent();
     if (!task || !student) return;
     const options = opts || {};
     const stats = computeMasteryStatsForLesson(task.lesson_id || 'hsk-272');
     const fallbackPct = stats.total > 0 ? Math.min(100, Math.round((stats.masteredCount / stats.total) * 100)) : 100;
-    const scoreStr = options.score !== undefined ? String(options.score) : String(fallbackPct);
+    const existingSub = findVocabSubmissionForTask(task.assignment_id, student.student_id);
+    const scoreStr = options.score !== undefined
+      ? String(options.score)
+      : (existingSub && existingSub.score !== undefined && existingSub.score !== '' ? '' : String(fallbackPct));
     const durStr = options.media_duration || (stats.masteredCount + '/' + Math.max(1, stats.total) + ' từ');
     const noteStr = options.student_note || ('Đã ôn từ vựng (' + (task.lesson_tag || task.lesson_id) + ') • Thuộc ' + stats.masteredCount + '/' + stats.total + ' từ');
 
@@ -3038,6 +3088,9 @@
     const student = getActiveStudent();
     const tasks = getStudentVocabAssignments(student);
     const tabBtn = document.querySelector('[data-student-tab="vocabulary"]');
+    const vocabPracticeStats = window.StudySnapStore && typeof window.StudySnapStore.getStudentVocabPracticeStats === 'function'
+      ? window.StudySnapStore.getStudentVocabPracticeStats(state, student.student_id)
+      : { byAssignment: {} };
 
     let pendingCount = 0;
     tasks.forEach(function (t) {
@@ -3079,15 +3132,22 @@
           const sub = findVocabSubmissionForTask(task.assignment_id, student.student_id);
           const isDone = Boolean(sub);
           const lessonKey = task.lesson_id || 'hsk-272';
+          const taskPracticeCount = Math.max(
+            Number((vocabPracticeStats.byAssignment && vocabPracticeStats.byAssignment[task.assignment_id]) || 0) || 0,
+            sub ? (Number(sub.practice_count || 0) || 1) : 0
+          );
           const statusBadge = isDone
             ? '<span class="status-badge status-graded tabular-nums">Đã hoàn thành' + (sub.score ? ' · ' + escapeHtml(sub.score) + '%' : '') + '</span>'
             : '<span class="status-badge status-missing">Chưa hoàn thành</span>';
+          const countChip =
+            '<span class="vocab-practice-count-chip' + (taskPracticeCount > 0 ? ' is-active' : '') + ' tabular-nums">Đã luyện ' + taskPracticeCount + ' lần</span>';
           return (
             '<div class="vocab-assigned-card' + (isDone ? ' is-done' : '') + '">' +
               '<div class="vocab-assigned-card-top">' +
                 '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
                   '<span class="vlist-lesson-tag">' + escapeHtml(task.lesson_tag || 'Từ vựng') + '</span>' +
                   statusBadge +
+                  countChip +
                 '</div>' +
                 (task.due_date ? '<span class="vocab-assigned-due tabular-nums">Hạn: ' + escapeHtml(task.due_date) + '</span>' : '') +
               '</div>' +
@@ -3115,25 +3175,47 @@
       getLessons: getStudentLessonsList,
       getVocabularyItems: function () { return state.vocabulary || []; },
       getMasteredIds: function () { return ui.masteredIds || []; },
+      getPracticeCounts: function () {
+        if (window.StudySnapStore && typeof window.StudySnapStore.getStudentVocabPracticeStats === 'function') {
+          return window.StudySnapStore.getStudentVocabPracticeStats(state, getActiveStudent().student_id);
+        }
+        return { totalCount: 0, bySource: {}, byAssignment: {} };
+      },
       onToggleMastered: function (masteryKey) {
         toggleStudentVocabMastered(masteryKey);
       },
       onQuizComplete: async function (summary) {
         if (!summary) return;
-        const student = getActiveStudent();
-        const matchingTasks = getStudentVocabAssignments(student).filter(function (t) {
-          return String(t.lesson_id || '') === String(summary.sourceKey || '');
+        await recordStudentVocabPracticeEvent({
+          sourceKey: summary.sourceKey,
+          sourceLabel: summary.sourceLabel,
+          score: summary.pct,
+          media_duration: summary.correct + '/' + summary.total + ' câu',
+          student_note: 'Hoàn thành Trắc nghiệm: ' + summary.correct + '/' + summary.total + ' câu (' + summary.pct + '%)'
         });
-        if (matchingTasks.length > 0) {
-          for (let i = 0; i < matchingTasks.length; i++) {
-            await submitStudentVocabTaskProgress(matchingTasks[i], {
-              score: summary.pct,
-              media_duration: summary.correct + '/' + summary.total + ' câu',
-              student_note: 'Hoàn thành Trắc nghiệm: ' + summary.correct + '/' + summary.total + ' câu (' + summary.pct + '%)'
-            });
-          }
-          showToast('Đã tự động ghi nhận kết quả trắc nghiệm (' + summary.pct + '%) gửi giáo viên!');
-        }
+        showToast('Đã ghi nhận +1 lần luyện Trắc nghiệm (' + summary.pct + '%)!');
+      },
+      onStrokeComplete: async function (summary) {
+        if (!summary) return;
+        await recordStudentVocabPracticeEvent({
+          sourceKey: summary.sourceKey,
+          sourceLabel: summary.sourceLabel,
+          score: '',
+          media_duration: 'Viết chữ ' + summary.char,
+          student_note: 'Hoàn thành Tập viết chữ "' + summary.char + '" (Sai ' + summary.mistakes + ' nét)'
+        });
+        showToast('Đã ghi nhận +1 lần tập viết chữ "' + summary.char + '"!');
+      },
+      onFlashcardCycleComplete: async function (summary) {
+        if (!summary) return;
+        await recordStudentVocabPracticeEvent({
+          sourceKey: summary.sourceKey,
+          sourceLabel: summary.sourceLabel,
+          score: '',
+          media_duration: summary.totalCards + ' thẻ Flashcard',
+          student_note: 'Hoàn thành 1 lượt Flashcard (' + summary.totalCards + ' thẻ)'
+        });
+        showToast('Tuyệt vời! Đã ghi nhận +1 lần ôn Flashcard ("' + summary.sourceLabel + '")!');
       }
     });
   }

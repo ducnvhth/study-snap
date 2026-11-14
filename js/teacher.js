@@ -1268,6 +1268,28 @@
     modal.classList.add('is-open', 'is-visible');
   }
 
+  function formatVocabSourceLabelForTeacher(sourceKey, lessonsList) {
+    const key = String(sourceKey || '').trim();
+    if (key === 'hsk-272') return 'Kho HSK 272';
+    if (key === 'all-lessons') return 'Tổng hợp';
+    const found = (lessonsList || []).find(function (l) {
+      return String(l.lesson_id || '').trim() === key;
+    });
+    return found ? (found.tag || found.title || key) : key;
+  }
+
+  function formatVocabPracticeBreakdown(stats, lessonsList) {
+    const bySource = (stats && stats.bySource) || {};
+    const keys = Object.keys(bySource).filter(function (k) {
+      return (Number(bySource[k] && bySource[k].count) || 0) > 0;
+    });
+    if (keys.length === 0) return 'Chưa có lượt luyện tập nào';
+    return keys.map(function (k) {
+      const entry = bySource[k];
+      return formatVocabSourceLabelForTeacher(k, lessonsList) + ': ' + entry.count + ' lần';
+    }).join(' · ');
+  }
+
   function renderTeacherVocabProgress() {
     const panel = document.getElementById('teacher-vocab-progress-panel');
     const summaryBadge = document.getElementById('teacher-vocab-progress-summary');
@@ -1275,62 +1297,141 @@
     const toggleBtn = document.getElementById('btn-toggle-vocab-progress');
     const assignFilter = document.getElementById('teacher-vocab-assign-filter');
     const statusFilter = document.getElementById('teacher-vocab-status-filter');
+    const btnRevoke = document.getElementById('btn-revoke-selected-vocab-task');
     const metaEl = document.getElementById('teacher-vocab-task-meta');
     const tbody = document.getElementById('teacher-vocab-progress-tbody');
     if (!panel) return;
 
     const activeTasks = getVocabDeliveries(null).active;
-    if (activeTasks.length === 0) {
+    const allStudents = state.students || [];
+    if (activeTasks.length === 0 && allStudents.length === 0) {
       panel.style.display = 'none';
       return;
     }
 
     panel.style.display = 'block';
     if (toggleBtn) {
-      toggleBtn.textContent = ui.vocabProgressExpanded ? 'Thu gọn danh sách' : 'Xem danh sách hoàn thành';
+      toggleBtn.textContent = ui.vocabProgressExpanded ? 'Thu gọn bảng theo dõi' : 'Xem bảng tiến độ & số lần luyện';
     }
     if (body) {
       body.style.display = ui.vocabProgressExpanded ? 'block' : 'none';
     }
 
-    if (!activeTasks.some(function (t) { return t.assignment_id === ui.selectedVocabAsgFilter; })) {
-      ui.selectedVocabAsgFilter = activeTasks[0].assignment_id;
+    const isValidTaskSelection = activeTasks.some(function (t) {
+      return t.assignment_id === ui.selectedVocabAsgFilter;
+    });
+    if (ui.selectedVocabAsgFilter !== '__ALL_PRACTICE__' && !isValidTaskSelection) {
+      ui.selectedVocabAsgFilter = activeTasks.length > 0 ? activeTasks[0].assignment_id : '__ALL_PRACTICE__';
     }
 
     if (assignFilter) {
-      assignFilter.innerHTML = activeTasks.map(function (t) {
+      const taskOptionsHtml = activeTasks.map(function (t) {
         const clsLabel = t.class_name === 'all' ? 'Tất cả lớp' : t.class_name;
         const sel = t.assignment_id === ui.selectedVocabAsgFilter ? ' selected' : '';
         return '<option value="' + escapeHtml(t.assignment_id) + '"' + sel + '>[' + escapeHtml(clsLabel) + '] ' + escapeHtml(t.title) + '</option>';
       }).join('');
+      const allSel = ui.selectedVocabAsgFilter === '__ALL_PRACTICE__' ? ' selected' : '';
+      assignFilter.innerHTML =
+        taskOptionsHtml +
+        '<option value="__ALL_PRACTICE__"' + allSel + '>Thống kê số lần tự luyện tập (Tất cả nguồn từ vựng)</option>';
     }
 
-    const activeTask = activeTasks.find(function (t) { return t.assignment_id === ui.selectedVocabAsgFilter; }) || activeTasks[0];
-    const targetStudents = (state.students || []).filter(function (st) {
-      const tCls = String(activeTask.class_name || '').trim();
-      if (!tCls || tCls === 'all') return true;
-      return String(st.class_name || '').trim().toLowerCase() === tCls.toLowerCase();
-    });
+    const isAllMode = ui.selectedVocabAsgFilter === '__ALL_PRACTICE__' || activeTasks.length === 0;
+    if (btnRevoke) {
+      btnRevoke.style.display = isAllMode ? 'none' : '';
+    }
 
+    const activeTask = isAllMode
+      ? null
+      : (activeTasks.find(function (t) { return t.assignment_id === ui.selectedVocabAsgFilter; }) || activeTasks[0]);
+    const targetStudents = isAllMode
+      ? allStudents
+      : allStudents.filter(function (st) {
+          const tCls = String(activeTask.class_name || '').trim();
+          if (!tCls || tCls === 'all') return true;
+          return String(st.class_name || '').trim().toLowerCase() === tCls.toLowerCase();
+        });
+
+    const lessonsList = getLessons();
     let completedCount = 0;
+    let totalSessions = 0;
+
     const rowsData = targetStudents.map(function (st) {
+      const stuStats = window.StudySnapStore && typeof window.StudySnapStore.getStudentVocabPracticeStats === 'function'
+        ? window.StudySnapStore.getStudentVocabPracticeStats(state, st.student_id)
+        : { totalCount: 0, bySource: {}, byAssignment: {}, lastSubmittedAt: '' };
+
+      if (isAllMode) {
+        const practiceCount = Math.max(0, Number(stuStats.totalCount || 0) || 0);
+        const isDone = practiceCount > 0;
+        if (isDone) completedCount++;
+        totalSessions += practiceCount;
+        return {
+          student: st,
+          isDone: isDone,
+          practiceCount: practiceCount,
+          resultText: formatVocabPracticeBreakdown(stuStats, lessonsList),
+          updatedAt: stuStats.lastSubmittedAt || '—'
+        };
+      }
+
       const sub = findSubmission(activeTask.assignment_id, st.student_id);
       const isDone = Boolean(sub);
       if (isDone) completedCount++;
-      return { student: st, submission: sub, isDone: isDone };
+      const taskCount = Math.max(
+        Number((stuStats.byAssignment && stuStats.byAssignment[activeTask.assignment_id]) || 0) || 0,
+        sub ? (Number(sub.practice_count || 0) || 1) : 0
+      );
+      totalSessions += taskCount;
+
+      const srcEntry = activeTask.lesson_id && stuStats.bySource ? stuStats.bySource[activeTask.lesson_id] : null;
+      const srcCount = srcEntry ? Math.max(0, Number(srcEntry.count || 0) || 0) : 0;
+
+      const parts = [];
+      if (sub) {
+        if (sub.score !== undefined && sub.score !== '') parts.push('Điểm: ' + sub.score + '%');
+        if (sub.media_duration) parts.push('(' + sub.media_duration + ')');
+        if (sub.student_note) parts.push(sub.student_note);
+        if (parts.length === 0) parts.push('Đã xác nhận ôn từ');
+      } else if (srcCount > 0) {
+        parts.push('Đã tự ôn nguồn này ' + srcCount + ' lần (chưa bấm xác nhận bài)');
+      } else {
+        parts.push('—');
+      }
+
+      return {
+        student: st,
+        isDone: isDone,
+        practiceCount: taskCount,
+        resultText: parts.join(' '),
+        updatedAt: (sub && sub.submitted_at) || (srcEntry && srcEntry.lastSubmittedAt) || '—'
+      };
     });
 
     if (summaryBadge) {
-      summaryBadge.textContent =
-        activeTasks.length + ' bài đang giao • ' + completedCount + '/' + targetStudents.length + ' HS đã xong (' + escapeHtml(activeTask.lesson_tag || 'Từ vựng') + ')';
+      if (isAllMode) {
+        summaryBadge.textContent =
+          'Tổng hợp tự luyện • ' + completedCount + '/' + targetStudents.length + ' HS đã luyện · ' + totalSessions + ' lượt';
+      } else {
+        summaryBadge.textContent =
+          activeTasks.length + ' bài đang giao • ' + completedCount + '/' + targetStudents.length + ' HS đã xong · ' + totalSessions + ' lượt luyện';
+      }
     }
 
     if (metaEl) {
-      const clsText = activeTask.class_name === 'all' ? 'Tất cả các lớp' : activeTask.class_name;
-      metaEl.innerHTML =
-        'Lớp nhận bài: <strong>' + escapeHtml(clsText) + '</strong> · Hạn: <strong class="tabular-nums">' +
-        escapeHtml(activeTask.due_date || 'Không giới hạn') + '</strong> · Đã hoàn thành: <strong>' +
-        completedCount + '/' + targetStudents.length + '</strong> học sinh';
+      if (isAllMode) {
+        metaEl.innerHTML =
+          'Chế độ: <strong>Thống kê tổng hợp toàn bộ nguồn từ vựng</strong> · Học sinh đã luyện: <strong>' +
+          completedCount + '/' + targetStudents.length + '</strong> · Tổng lượt luyện: <strong class="tabular-nums">' +
+          totalSessions + ' lần</strong>';
+      } else {
+        const clsText = activeTask.class_name === 'all' ? 'Tất cả các lớp' : activeTask.class_name;
+        metaEl.innerHTML =
+          'Lớp nhận bài: <strong>' + escapeHtml(clsText) + '</strong> · Hạn: <strong class="tabular-nums">' +
+          escapeHtml(activeTask.due_date || 'Không giới hạn') + '</strong> · Đã hoàn thành: <strong>' +
+          completedCount + '/' + targetStudents.length + '</strong> HS · Tổng số lần luyện: <strong class="tabular-nums">' +
+          totalSessions + ' lần</strong>';
+      }
     }
 
     if (!tbody) return;
@@ -1343,31 +1444,27 @@
 
     if (visibleRows.length === 0) {
       tbody.innerHTML =
-        '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--color-muted-foreground);">Không có học sinh nào trong bộ lọc này.</td></tr>';
+        '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--color-muted-foreground);">Không có học sinh nào trong bộ lọc này.</td></tr>';
       return;
     }
 
     tbody.innerHTML = visibleRows.map(function (r) {
       const st = r.student;
-      const sub = r.submission;
       const statusHtml = r.isDone
-        ? '<span class="status-badge status-graded">Đã hoàn thành</span>'
-        : '<span class="status-badge status-missing">Chưa làm</span>';
-      let resultText = '—';
-      if (sub) {
-        const parts = [];
-        if (sub.score !== undefined && sub.score !== '') parts.push('Điểm: ' + sub.score + '%');
-        if (sub.media_duration) parts.push('(' + sub.media_duration + ')');
-        if (sub.student_note) parts.push(sub.student_note);
-        resultText = parts.join(' ') || 'Đã xác nhận ôn từ';
-      }
+        ? '<span class="status-badge status-graded">' + (isAllMode ? 'Đã luyện tập' : 'Đã hoàn thành') + '</span>'
+        : '<span class="status-badge status-missing">' + (isAllMode ? 'Chưa luyện' : 'Chưa làm') + '</span>';
+      const countBadgeHtml =
+        '<span class="vocab-practice-count-chip' + (r.practiceCount > 0 ? ' is-active' : '') + ' tabular-nums">' +
+          r.practiceCount + ' lần' +
+        '</span>';
       return (
         '<tr>' +
           '<td><strong>' + escapeHtml(st.full_name) + '</strong> <span style="font-size:0.75rem;color:var(--color-muted-foreground);">(' + escapeHtml(st.student_id) + ')</span></td>' +
           '<td>' + escapeHtml(st.class_name || '') + '</td>' +
           '<td>' + statusHtml + '</td>' +
-          '<td style="font-size:0.8125rem;">' + escapeHtml(resultText) + '</td>' +
-          '<td class="tabular-nums" style="font-size:0.8125rem;color:var(--color-muted-foreground);">' + escapeHtml(sub && sub.submitted_at ? sub.submitted_at : '—') + '</td>' +
+          '<td>' + countBadgeHtml + '</td>' +
+          '<td style="font-size:0.8125rem;">' + escapeHtml(r.resultText) + '</td>' +
+          '<td class="tabular-nums" style="font-size:0.8125rem;color:var(--color-muted-foreground);">' + escapeHtml(r.updatedAt) + '</td>' +
         '</tr>'
       );
     }).join('');
@@ -5927,7 +6024,7 @@
     }
     if (btnRevokeSelectedVocab) {
       btnRevokeSelectedVocab.addEventListener('click', function () {
-        if (ui.selectedVocabAsgFilter) {
+        if (ui.selectedVocabAsgFilter && ui.selectedVocabAsgFilter !== '__ALL_PRACTICE__') {
           revokeVocabDelivery(ui.selectedVocabAsgFilter, btnRevokeSelectedVocab);
         }
       });
@@ -7353,7 +7450,12 @@
 
       if (deleteStudentSummary) {
         const subCount = (state.submissions || []).filter(function (s) {
-          return String(s.student_id || '').trim() === String(st.student_id || '').trim();
+          const mType = String(s.media_type || '').trim().toLowerCase();
+          return (
+            String(s.student_id || '').trim() === String(st.student_id || '').trim() &&
+            mType !== 'vocab' &&
+            mType !== 'vocab_log'
+          );
         }).length;
         const pracCount = (state.practiceSubmissions || []).filter(function (ps) {
           return String(ps.student_id || '').trim() === String(st.student_id || '').trim();

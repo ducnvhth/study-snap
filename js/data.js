@@ -1723,6 +1723,11 @@ window.StudySnapStore = (function () {
         else if (payload.media_duration) found.media_duration = String(payload.media_duration);
         if (payload.media_type) found.media_type = String(payload.media_type);
         if (json.submission.submitted_at) found.submitted_at = String(json.submission.submitted_at);
+        if (json.submission.practice_count !== undefined && json.submission.practice_count !== null) {
+          found.practice_count = Math.max(0, Number(json.submission.practice_count) || 0);
+        } else if (payload.practice_count !== undefined && payload.practice_count !== null) {
+          found.practice_count = Math.max(0, Number(payload.practice_count) || 0);
+        }
       } else if (targetAsgId && targetStuId) {
         subList.push({
           submission_id: json.submission.submission_id || ('SUB_' + Date.now()),
@@ -1736,7 +1741,10 @@ window.StudySnapStore = (function () {
           media_url: json.submission.media_url || String(payload.media_url || ''),
           media_duration: String(json.submission.media_duration || payload.media_duration || '01:00'),
           status: json.submission.status || (payload.status || 'submitted'),
-          score: json.submission.score !== undefined ? String(json.submission.score) : (payload.score !== undefined ? String(payload.score) : '')
+          score: json.submission.score !== undefined ? String(json.submission.score) : (payload.score !== undefined ? String(payload.score) : ''),
+          practice_count: json.submission.practice_count !== undefined && json.submission.practice_count !== null
+            ? Math.max(0, Number(json.submission.practice_count) || 0)
+            : Math.max(0, Number(payload.practice_count || 0) || 0)
         });
       }
     } else if (action === 'saveTeacherFeedback' && json.submission) {
@@ -1938,7 +1946,8 @@ window.StudySnapStore = (function () {
           teacher_comment: s.teacher_comment || '',
           teacher_voice_url: s.teacher_voice_url || '',
           teacher_voice_duration: s.teacher_voice_duration || '',
-          graded_at: formatCleanDate(s.graded_at)
+          graded_at: formatCleanDate(s.graded_at),
+          practice_count: Math.max(0, Number(s.practice_count || 0) || 0)
         };
       });
     }
@@ -2907,6 +2916,17 @@ window.StudySnapStore = (function () {
     });
   }
 
+  function normalizeVocabPracticeCount(sub) {
+    if (!sub) return 0;
+    const raw = Number(sub.practice_count || 0) || 0;
+    if (raw > 0) return raw;
+    const mType = String(sub.media_type || '').trim().toLowerCase();
+    if ((mType === 'vocab' || mType === 'vocab_log') && (sub.submitted_at || sub.status === 'graded')) {
+      return 1;
+    }
+    return 0;
+  }
+
   async function submitVocabCompletion(stateObj, payload) {
     if (!stateObj || !payload || !payload.assignment_id || !payload.student_id) {
       return { ok: false, error: 'Thiếu thông tin bài ôn từ hoặc học sinh.' };
@@ -2915,22 +2935,34 @@ window.StudySnapStore = (function () {
     const targetAsgId = String(payload.assignment_id).trim();
     const targetStuId = String(payload.student_id).trim();
     const nowStr = new Date().toLocaleString('vi-VN');
-    const nextScore = payload.score !== undefined && payload.score !== null ? String(payload.score) : '';
+    const mediaType = String(payload.media_type || 'vocab').trim() || 'vocab';
+    const hasIncomingScore =
+      payload.score !== undefined && payload.score !== null && String(payload.score) !== '';
     const nextNote = String(payload.student_note || 'Đã hoàn thành ôn tập từ vựng');
     const nextDur = String(payload.media_duration || '');
     const nextStatus = String(payload.status || 'graded');
+    const incrementPractice = payload.increment_practice !== false && payload.increment_practice !== 0;
 
     const existing = stateObj.submissions.find(function (s) {
       return String(s.assignment_id || '').trim() === targetAsgId && String(s.student_id || '').trim() === targetStuId;
     });
+    const prevCount = existing ? normalizeVocabPracticeCount(existing) : 0;
+    const nextPracticeCount = incrementPractice
+      ? prevCount + 1
+      : Math.max(prevCount, Number(payload.practice_count || 0) || 0);
+    const resolvedScore = hasIncomingScore
+      ? String(payload.score)
+      : (existing && existing.score !== undefined && existing.score !== null ? String(existing.score) : '');
+
     if (existing) {
       existing.submitted_at = nowStr;
       existing.student_note = nextNote;
-      existing.media_type = 'vocab';
+      existing.media_type = mediaType;
       existing.media_url = '';
-      existing.media_duration = nextDur;
+      existing.media_duration = nextDur || existing.media_duration || '';
       existing.status = nextStatus;
-      existing.score = nextScore;
+      existing.score = resolvedScore;
+      existing.practice_count = nextPracticeCount;
     } else {
       stateObj.submissions.push({
         submission_id: 'SUB_' + Date.now(),
@@ -2938,14 +2970,15 @@ window.StudySnapStore = (function () {
         student_id: targetStuId,
         submitted_at: nowStr,
         student_note: nextNote,
-        media_type: 'vocab',
+        media_type: mediaType,
         media_url: '',
         media_duration: nextDur,
         status: nextStatus,
-        score: nextScore,
+        score: resolvedScore,
         teacher_comment: '',
         teacher_voice_url: '',
-        teacher_voice_duration: ''
+        teacher_voice_duration: '',
+        practice_count: nextPracticeCount
       });
     }
     saveState(stateObj);
@@ -2954,12 +2987,109 @@ window.StudySnapStore = (function () {
       assignment_id: targetAsgId,
       student_id: targetStuId,
       student_note: nextNote,
-      media_type: 'vocab',
+      media_type: mediaType,
       media_url: '',
-      media_duration: nextDur,
+      media_duration: nextDur || (existing && existing.media_duration) || '',
       status: nextStatus,
-      score: nextScore
+      score: resolvedScore,
+      increment_practice: incrementPractice,
+      practice_count: nextPracticeCount
     });
+  }
+
+  async function recordVocabSourcePractice(stateObj, payload) {
+    if (!stateObj || !payload || !payload.student_id) {
+      return { ok: false, error: 'Thiếu thông tin học sinh.' };
+    }
+    const sourceKey = String(payload.sourceKey || payload.lesson_id || 'hsk-272').trim() || 'hsk-272';
+    const assignmentId = 'VOCAB_SRC__' + sourceKey;
+    return await submitVocabCompletion(stateObj, {
+      assignment_id: assignmentId,
+      student_id: payload.student_id,
+      media_type: 'vocab_log',
+      score: payload.score !== undefined && payload.score !== null ? String(payload.score) : '',
+      media_duration: String(payload.media_duration || ''),
+      student_note: String(payload.student_note || ('Luyện tập ' + (payload.sourceLabel || sourceKey))),
+      status: 'graded',
+      increment_practice: true
+    });
+  }
+
+  function getStudentVocabPracticeStats(stateObj, studentId) {
+    const empty = { totalCount: 0, bySource: {}, byAssignment: {}, lastSubmittedAt: '' };
+    if (!stateObj || !studentId) return empty;
+    const stuId = String(studentId).trim();
+    const asgMap = {};
+    (stateObj.assignments || []).forEach(function (a) {
+      if (String(a.require_media || '').trim().toLowerCase() === 'vocab') {
+        asgMap[String(a.assignment_id || '').trim()] = a;
+      }
+    });
+
+    const bySource = {};
+    const byAssignment = {};
+    let lastSubmittedAt = '';
+
+    (stateObj.submissions || []).forEach(function (s) {
+      if (String(s.student_id || '').trim() !== stuId) return;
+      const mType = String(s.media_type || '').trim().toLowerCase();
+      const asgId = String(s.assignment_id || '').trim();
+      const isLog = mType === 'vocab_log' || asgId.indexOf('VOCAB_SRC__') === 0;
+      const matchedTask = asgMap[asgId] || null;
+      const isTaskVocab = mType === 'vocab' || Boolean(matchedTask);
+      if (!isLog && !isTaskVocab) return;
+
+      const cnt = normalizeVocabPracticeCount(s);
+      if (s.submitted_at) lastSubmittedAt = String(s.submitted_at);
+
+      if (isLog) {
+        const srcKey = asgId.replace(/^VOCAB_SRC__/, '') || 'hsk-272';
+        if (!bySource[srcKey]) {
+          bySource[srcKey] = { count: 0, lastSubmittedAt: '', note: '', score: '' };
+        }
+        bySource[srcKey].count = Math.max(bySource[srcKey].count, cnt);
+        if (s.submitted_at) bySource[srcKey].lastSubmittedAt = String(s.submitted_at);
+        if (s.student_note) bySource[srcKey].note = String(s.student_note);
+        if (s.score !== undefined && s.score !== '') bySource[srcKey].score = String(s.score);
+      } else if (isTaskVocab) {
+        byAssignment[asgId] = Math.max(byAssignment[asgId] || 0, cnt);
+        const lessonKey = matchedTask && matchedTask.lesson_id ? String(matchedTask.lesson_id).trim() : '';
+        if (lessonKey) {
+          if (!bySource[lessonKey]) {
+            bySource[lessonKey] = { count: 0, lastSubmittedAt: '', note: '', score: '' };
+          }
+          bySource[lessonKey].count = Math.max(bySource[lessonKey].count, cnt);
+          if (!bySource[lessonKey].lastSubmittedAt && s.submitted_at) {
+            bySource[lessonKey].lastSubmittedAt = String(s.submitted_at);
+          }
+          if (!bySource[lessonKey].note && s.student_note) {
+            bySource[lessonKey].note = String(s.student_note);
+          }
+          if (bySource[lessonKey].score === '' && s.score !== undefined && s.score !== '') {
+            bySource[lessonKey].score = String(s.score);
+          }
+        }
+      }
+    });
+
+    let totalCount = 0;
+    Object.keys(bySource).forEach(function (k) {
+      totalCount += Number(bySource[k].count || 0) || 0;
+    });
+    // Include any orphan assigned vocab task without lesson_id mapping
+    Object.keys(byAssignment).forEach(function (aid) {
+      const task = asgMap[aid];
+      if (!task || !task.lesson_id) {
+        totalCount += Number(byAssignment[aid] || 0) || 0;
+      }
+    });
+
+    return {
+      totalCount: totalCount,
+      bySource: bySource,
+      byAssignment: byAssignment,
+      lastSubmittedAt: lastSubmittedAt
+    };
   }
 
   function slugifyLessonId(rawText) {
@@ -3155,6 +3285,8 @@ window.StudySnapStore = (function () {
     batchAddVocabulary: batchAddVocabulary,
     deleteVocabulary: deleteVocabulary,
     submitVocabCompletion: submitVocabCompletion,
+    recordVocabSourcePractice: recordVocabSourcePractice,
+    getStudentVocabPracticeStats: getStudentVocabPracticeStats,
     gradeManualTranslation: gradeManualTranslation,
     slugifyLessonId: slugifyLessonId,
     stripPracticeTitlePrefix: stripPracticeTitlePrefix,

@@ -4095,6 +4095,41 @@ body.ss-sync-locked .ss-api-status-chip {
   color: var(--white);
 }
 
+.vocab-practice-counter-pill {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--mint-lt);
+  color: var(--ink);
+  border: 1.5px solid var(--mint-md);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.vocab-practice-count-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--soft);
+  color: var(--muted);
+  border: 1px solid var(--pink-md);
+  border-radius: var(--radius-pill);
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.vocab-practice-count-chip.is-active {
+  background: var(--mint-lt);
+  color: var(--ink);
+  border-color: var(--mint-md);
+}
+
 .vocab-progress-panel {
   background: var(--white);
   border: 1.5px solid var(--pink-md);
