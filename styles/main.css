@@ -1254,6 +1254,63 @@ select.form-control {
   margin-top: 4px;
 }
 
+.matrix-sort-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  font: inherit;
+  font-weight: 800;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.matrix-sort-btn:hover,
+.matrix-sort-btn.is-sorted {
+  background-color: var(--pink-lt);
+  color: var(--pink-contrast);
+}
+
+.matrix-sort-btn:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.matrix-sort-pill-btn {
+  appearance: none;
+  background: var(--white);
+  border: 1px solid var(--color-border-soft);
+  padding: 2px 8px;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-pill);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.matrix-sort-pill-btn:hover,
+.matrix-sort-pill-btn.is-sorted {
+  background-color: var(--pink-lt);
+  border-color: var(--pink);
+  color: var(--pink-contrast);
+}
+
+.matrix-sort-pill-btn:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
 .practice-missing-bar {
   display: flex;
   flex-wrap: wrap;

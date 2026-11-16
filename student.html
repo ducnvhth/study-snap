@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css?v=20261116b">
+  <link rel="stylesheet" href="styles/main.css?v=20261116c">
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
 </head>
 <body>
@@ -191,9 +191,24 @@
             <table class="progress-matrix-table" aria-label="Bảng tổng hợp kết quả các bài luyện tập cuối buổi của học sinh">
               <thead>
                 <tr>
-                  <th>Bài luyện tập cuối buổi</th>
-                  <th>Trạng thái</th>
-                  <th>Điểm số</th>
+                  <th>
+                    <button type="button" class="matrix-sort-btn" data-student-practice-sort="title" title="Sắp xếp theo tên bài">
+                      <span>Bài luyện tập cuối buổi</span>
+                      <span class="sort-indicator" aria-hidden="true"></span>
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" class="matrix-sort-btn" data-student-practice-sort="status" title="Sắp xếp theo trạng thái làm bài">
+                      <span>Trạng thái</span>
+                      <span class="sort-indicator" aria-hidden="true"></span>
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" class="matrix-sort-btn" data-student-practice-sort="score" title="Sắp xếp theo điểm số">
+                      <span>Điểm số</span>
+                      <span class="sort-indicator" aria-hidden="true"></span>
+                    </button>
+                  </th>
                   <th>Xếp loại</th>
                   <th>Chấm câu Dịch / Nhận xét GV</th>
                   <th>Thao tác nhanh</th>
@@ -336,10 +351,30 @@
             <table class="progress-matrix-table" aria-label="Bảng tổng hợp BVN và phản hồi giáo viên của học sinh">
               <thead>
                 <tr>
-                  <th>Bài tập về nhà (BVN)</th>
-                  <th>Hạn nộp</th>
-                  <th>Trạng thái nộp BVN</th>
-                  <th>Điểm số</th>
+                  <th>
+                    <button type="button" class="matrix-sort-btn" data-student-bvn-sort="title" title="Sắp xếp theo tên BVN">
+                      <span>Bài tập về nhà (BVN)</span>
+                      <span class="sort-indicator" aria-hidden="true"></span>
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" class="matrix-sort-btn" data-student-bvn-sort="due" title="Sắp xếp theo hạn nộp">
+                      <span>Hạn nộp</span>
+                      <span class="sort-indicator" aria-hidden="true"></span>
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" class="matrix-sort-btn" data-student-bvn-sort="status" title="Sắp xếp theo trạng thái">
+                      <span>Trạng thái nộp BVN</span>
+                      <span class="sort-indicator" aria-hidden="true"></span>
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" class="matrix-sort-btn" data-student-bvn-sort="score" title="Sắp xếp theo điểm số">
+                      <span>Điểm số</span>
+                      <span class="sort-indicator" aria-hidden="true"></span>
+                    </button>
+                  </th>
                   <th>Phản hồi giáo viên (Nhận xét &amp; Voice)</th>
                   <th>Thao tác nhanh</th>
                 </tr>
@@ -638,6 +673,6 @@
   <script src="js/data.js?v=20261116b"></script>
   <script src="js/auth.js?v=20261114c"></script>
   <script src="js/audio.js?v=20261114j"></script>
-  <script src="js/student.js?v=20261116b"></script>
+  <script src="js/student.js?v=20261116c"></script>
 </body>
 </html>

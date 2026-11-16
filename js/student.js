@@ -52,6 +52,8 @@
     matchingShuffledRight: {},
     practiceViewingResult: false,
     practiceSummaryFilter: 'all',
+    practiceSummarySort: 'default',
+    bvnSummarySort: 'default',
 
     // Exit Ticket state
     selectedTicketId: state.exitTickets[0] ? state.exitTickets[0].ticket_id : 'EXIT_BAI_1',
@@ -90,6 +92,109 @@
     } catch (e) {
       // ignore
     }
+  }
+
+  const STUDENT_SORT_ICONS = {
+    none: '<svg class="sort-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>',
+    asc: '<svg class="sort-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>',
+    desc: '<svg class="sort-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>'
+  };
+
+  function compareNullableNumStudent(aVal, bVal, isAsc) {
+    const hasA = typeof aVal === 'number' && Number.isFinite(aVal);
+    const hasB = typeof bVal === 'number' && Number.isFinite(bVal);
+    if (!hasA && !hasB) return 0;
+    if (!hasA) return 1;
+    if (!hasB) return -1;
+    return isAsc ? (aVal - bVal) : (bVal - aVal);
+  }
+
+  function parseViDateTimestamp(dateStr) {
+    const raw = String(dateStr || '').trim();
+    if (!raw) return null;
+    const m = raw.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (m) {
+      const day = Number(m[1]);
+      const month = Number(m[2]) - 1;
+      const year = Number(m[3]);
+      const ts = new Date(year, month, day).getTime();
+      return Number.isFinite(ts) ? ts : null;
+    }
+    const parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function toggleStudentSortKey(curKey, colKey, defaultDescCols) {
+    const cur = String(curKey || 'default');
+    const firstDesc = Array.isArray(defaultDescCols) && defaultDescCols.indexOf(colKey) !== -1;
+    const first = colKey + (firstDesc ? '_desc' : '_asc');
+    const second = colKey + (firstDesc ? '_asc' : '_desc');
+    if (cur === first) return second;
+    if (cur === second) return 'default';
+    return first;
+  }
+
+  function syncStudentSortIndicators(attrName, activeSortKey) {
+    const cur = String(activeSortKey || 'default');
+    document.querySelectorAll('[' + attrName + ']').forEach(function (btn) {
+      const colKey = btn.getAttribute(attrName);
+      let dir = 'none';
+      if (colKey && cur === colKey + '_asc') dir = 'asc';
+      else if (colKey && cur === colKey + '_desc') dir = 'desc';
+      btn.classList.toggle('is-sorted', dir !== 'none');
+      const ind = btn.querySelector('.sort-indicator');
+      if (ind) {
+        ind.innerHTML = dir === 'asc'
+          ? STUDENT_SORT_ICONS.asc
+          : (dir === 'desc' ? STUDENT_SORT_ICONS.desc : STUDENT_SORT_ICONS.none);
+      }
+    });
+  }
+
+  function sortStudentRows(items, sortKey, accessors) {
+    const list = (items || []).slice();
+    const key = String(sortKey || 'default');
+    if (key === 'default' || list.length <= 1) return list;
+
+    const lastUnderscore = key.lastIndexOf('_');
+    const colKey = lastUnderscore > 0 ? key.slice(0, lastUnderscore) : '';
+    const isAsc = lastUnderscore > 0 ? key.slice(lastUnderscore + 1) === 'asc' : true;
+
+    list.sort(function (a, b) {
+      let diff = 0;
+      if (colKey === 'title' && accessors.getTitle) {
+        const cmp = String(accessors.getTitle(a) || '').localeCompare(
+          String(accessors.getTitle(b) || ''),
+          'vi',
+          { numeric: true, sensitivity: 'base' }
+        );
+        diff = isAsc ? cmp : -cmp;
+      } else if (colKey === 'due' && accessors.getDue) {
+        const tsA = parseViDateTimestamp(accessors.getDue(a));
+        const tsB = parseViDateTimestamp(accessors.getDue(b));
+        diff = compareNullableNumStudent(tsA, tsB, isAsc);
+        if (diff === 0) {
+          const cmp = String(accessors.getDue(a) || '').localeCompare(String(accessors.getDue(b) || ''), 'vi');
+          diff = isAsc ? cmp : -cmp;
+        }
+      } else if (colKey === 'status' && accessors.getStatusRank) {
+        const rA = Number(accessors.getStatusRank(a) || 0);
+        const rB = Number(accessors.getStatusRank(b) || 0);
+        diff = isAsc ? (rA - rB) : (rB - rA);
+      } else if (colKey === 'score' && accessors.getScore) {
+        diff = compareNullableNumStudent(accessors.getScore(a), accessors.getScore(b), isAsc);
+      }
+      if (diff !== 0) return diff;
+      if (accessors.getTitle) {
+        return String(accessors.getTitle(a) || '').localeCompare(
+          String(accessors.getTitle(b) || ''),
+          'vi',
+          { numeric: true, sensitivity: 'base' }
+        );
+      }
+      return 0;
+    });
+    return list;
   }
 
   function escapeHtml(val) {
@@ -672,8 +777,30 @@
       return;
     }
 
+    syncStudentSortIndicators('data-student-bvn-sort', ui.bvnSummarySort);
+
+    const sortedAssignments = sortStudentRows(studentAssignments, ui.bvnSummarySort, {
+      getTitle: function (asg) {
+        return (asg.lesson_tag ? asg.lesson_tag + ' ' : '') + (asg.title || '');
+      },
+      getDue: function (asg) {
+        return asg.due_date || '';
+      },
+      getStatusRank: function (asg) {
+        const sub = findSubmission(asg.assignment_id, student.student_id);
+        if (!sub || (sub.status !== 'submitted' && sub.status !== 'graded')) return 0;
+        return sub.status === 'graded' ? 2 : 1;
+      },
+      getScore: function (asg) {
+        const sub = findSubmission(asg.assignment_id, student.student_id);
+        if (!sub || sub.score === '' || sub.score === null || sub.score === undefined) return null;
+        const n = Number(sub.score);
+        return Number.isFinite(n) ? n : null;
+      }
+    });
+
     let completed = 0;
-    tbody.innerHTML = studentAssignments
+    tbody.innerHTML = sortedAssignments
       .map(function (asg) {
         const sub = findSubmission(asg.assignment_id, student.student_id);
         let statusHtml = '<span class="status-badge status-missing">Chưa nộp BVN</span>';
@@ -794,6 +921,15 @@
   }
 
   function initHomeworkEvents() {
+    document.querySelectorAll('[data-student-bvn-sort]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const colKey = btn.getAttribute('data-student-bvn-sort');
+        if (!colKey) return;
+        ui.bvnSummarySort = toggleStudentSortKey(ui.bvnSummarySort, colKey, ['score']);
+        renderPersonalHomeworkMatrix(getActiveStudent());
+      });
+    });
+
     const selectEl = document.getElementById('student-assignment-select');
     if (selectEl) {
       selectEl.addEventListener('change', function () {
@@ -1611,10 +1747,30 @@
       summaryNote.textContent = parts.join(' • ') + '.';
     }
 
-    const filteredRows = rowsData.filter(function (row) {
+    syncStudentSortIndicators('data-student-practice-sort', ui.practiceSummarySort);
+
+    const rawFilteredRows = rowsData.filter(function (row) {
       if (filterVal === 'missing') return !row.isDone;
       if (filterVal === 'done') return row.isDone;
       return true;
+    });
+
+    const filteredRows = sortStudentRows(rawFilteredRows, ui.practiceSummarySort, {
+      getTitle: function (row) {
+        const ex = row && row.ex ? row.ex : {};
+        return (ex.lesson_tag ? ex.lesson_tag + ' ' : '') + (ex.title || '');
+      },
+      getStatusRank: function (row) {
+        if (row.isDone) return 2;
+        if (row.isDraft) return 1;
+        return 0;
+      },
+      getScore: function (row) {
+        if (!row.isDone) return null;
+        if (typeof row.pct === 'number' && Number.isFinite(row.pct)) return row.pct;
+        const n = Number(row.scoreVal);
+        return Number.isFinite(n) ? n : null;
+      }
     });
 
     if (filteredRows.length === 0) {
@@ -3077,6 +3233,15 @@
   }
 
   function initPracticeEvents() {
+    document.querySelectorAll('[data-student-practice-sort]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const colKey = btn.getAttribute('data-student-practice-sort');
+        if (!colKey) return;
+        ui.practiceSummarySort = toggleStudentSortKey(ui.practiceSummarySort, colKey, ['score']);
+        renderStudentPracticeSummaryTable();
+      });
+    });
+
     document.querySelectorAll('[data-student-practice-filter]').forEach(function (pill) {
       pill.addEventListener('click', function () {
         ui.practiceSummaryFilter = pill.getAttribute('data-student-practice-filter') || 'all';

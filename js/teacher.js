@@ -16,7 +16,10 @@
     alert: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>',
     volume: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>',
     edit: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>',
-    trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>'
+    trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>',
+    sortNone: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>',
+    sortAsc: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg>',
+    sortDesc: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>'
   };
 
   let state = window.StudySnapStore.loadState();
@@ -30,6 +33,7 @@
     gradingStudentId: state.students[0] ? state.students[0].student_id : 'HS01',
     gradingAssignmentId: state.assignments[0] ? state.assignments[0].assignment_id : 'BVN01_1',
     matrixFilter: 'all',
+    matrixSort: 'default',
     teacherDraftVoice: null,
     isTeacherRecording: false,
     vocabFilter: '',
@@ -43,6 +47,7 @@
     practiceProgressClass: 'all',
     practiceProgressScope: 'assigned',
     practiceProgressFilter: 'all',
+    practiceProgressSort: 'default',
     practiceProgressSearch: '',
     practiceDirtyMap: {}
   };
@@ -793,6 +798,102 @@
     }
   }
 
+  function compareVietnamesePersonNames(fullA, fullB) {
+    const cleanA = String(fullA || '').trim();
+    const cleanB = String(fullB || '').trim();
+    const partsA = cleanA ? cleanA.split(/\s+/) : [''];
+    const partsB = cleanB ? cleanB.split(/\s+/) : [''];
+    const givenA = partsA[partsA.length - 1] || '';
+    const givenB = partsB[partsB.length - 1] || '';
+    const givenDiff = givenA.localeCompare(givenB, 'vi', { sensitivity: 'base' });
+    if (givenDiff !== 0) return givenDiff;
+    return cleanA.localeCompare(cleanB, 'vi', { sensitivity: 'base' });
+  }
+
+  function compareNullableNumeric(aVal, bVal, isAsc) {
+    const hasA = typeof aVal === 'number' && Number.isFinite(aVal);
+    const hasB = typeof bVal === 'number' && Number.isFinite(bVal);
+    if (!hasA && !hasB) return 0;
+    if (!hasA) return 1;
+    if (!hasB) return -1;
+    return isAsc ? (aVal - bVal) : (bVal - aVal);
+  }
+
+  function getNextMatrixSortKey(curSortKey, colKey) {
+    const cur = String(curSortKey || 'default');
+    if (colKey === 'name') {
+      return cur === 'name_asc' ? 'name_desc' : 'name_asc';
+    }
+    if (colKey === 'progress') {
+      return cur === 'progress_desc' ? 'progress_asc' : 'progress_desc';
+    }
+    if (cur === colKey + ':desc') return colKey + ':asc';
+    if (cur === colKey + ':asc') return 'default';
+    return colKey + ':desc';
+  }
+
+  function buildSortHeaderButtonHtml(label, colKey, activeSortKey, attrName, pillStyle) {
+    const cur = String(activeSortKey || 'default');
+    let dir = 'none';
+    if (colKey === 'name' && (cur === 'name_asc' || cur === 'name_desc')) {
+      dir = cur === 'name_asc' ? 'asc' : 'desc';
+    } else if (colKey === 'progress' && (cur === 'progress_desc' || cur === 'progress_asc')) {
+      dir = cur === 'progress_asc' ? 'asc' : 'desc';
+    } else if (cur === colKey + ':asc') {
+      dir = 'asc';
+    } else if (cur === colKey + ':desc') {
+      dir = 'desc';
+    }
+    const iconHtml = dir === 'asc' ? ICONS.sortAsc : (dir === 'desc' ? ICONS.sortDesc : ICONS.sortNone);
+    const cls = (pillStyle ? 'matrix-sort-pill-btn' : 'matrix-sort-btn') + (dir !== 'none' ? ' is-sorted' : '');
+    return (
+      '<button type="button" class="' + cls + '" ' + attrName + '="' + escapeHtml(colKey) + '" title="Bấm để sắp xếp">' +
+        '<span>' + escapeHtml(label) + '</span>' +
+        iconHtml +
+      '</button>'
+    );
+  }
+
+  function sortMatrixEntries(entries, sortKey, accessors) {
+    const list = (entries || []).slice();
+    const key = String(sortKey || 'default');
+    if (key === 'default' || list.length <= 1) return list;
+
+    list.sort(function (a, b) {
+      let diff = 0;
+      if (key === 'name_asc' || key === 'name_desc') {
+        diff = compareVietnamesePersonNames(accessors.getName(a), accessors.getName(b));
+        return key === 'name_desc' ? -diff : diff;
+      }
+      if (key === 'avg_desc' || key === 'avg_asc') {
+        diff = compareNullableNumeric(accessors.getAvg(a), accessors.getAvg(b), key === 'avg_asc');
+      } else if (key === 'progress_desc' || key === 'progress_asc') {
+        const expA = Number(accessors.getExpected(a) || 0) || 0;
+        const expB = Number(accessors.getExpected(b) || 0) || 0;
+        const pctA = expA > 0 ? (Number(accessors.getDone(a) || 0) / expA) : null;
+        const pctB = expB > 0 ? (Number(accessors.getDone(b) || 0) / expB) : null;
+        diff = compareNullableNumeric(pctA, pctB, key === 'progress_asc');
+        if (diff === 0) {
+          diff = compareNullableNumeric(accessors.getDone(a), accessors.getDone(b), key === 'progress_asc');
+        }
+      } else if (key === 'missing_desc') {
+        const misA = Number(accessors.getMissing(a) || 0) || 0;
+        const misB = Number(accessors.getMissing(b) || 0) || 0;
+        diff = misB - misA;
+      } else if (key.indexOf('ex:') === 0 || key.indexOf('asg:') === 0) {
+        const lastColon = key.lastIndexOf(':');
+        const dir = lastColon > 0 ? key.slice(lastColon + 1) : 'desc';
+        const targetId = lastColon > 0 ? key.slice(key.indexOf(':') + 1, lastColon) : '';
+        const valA = accessors.getItemScore ? accessors.getItemScore(a, targetId) : null;
+        const valB = accessors.getItemScore ? accessors.getItemScore(b, targetId) : null;
+        diff = compareNullableNumeric(valA, valB, dir === 'asc');
+      }
+      if (diff !== 0) return diff;
+      return compareVietnamesePersonNames(accessors.getName(a), accessors.getName(b));
+    });
+    return list;
+  }
+
   function renderProgressMatrix() {
     const thead = document.getElementById('matrix-thead');
     const tbody = document.getElementById('matrix-tbody');
@@ -801,9 +902,14 @@
     const filteredAssignments = getFilteredAssignments();
     const studentsInClass = getFilteredStudents();
 
+    const sortSelEl = document.getElementById('bvn-matrix-sort');
+    if (sortSelEl) {
+      sortSelEl.value = ui.matrixSort || 'default';
+    }
+
     thead.innerHTML =
       '<tr>' +
-        '<th>Học sinh</th>' +
+        '<th>' + buildSortHeaderButtonHtml('Học sinh', 'name', ui.matrixSort, 'data-bvn-sort-col', false) + '</th>' +
         filteredAssignments.map(function (asg) {
           const clsRaw = String(asg.class_name || '').trim();
           const isUnassigned = !clsRaw || clsRaw.toLowerCase() === 'unassigned';
@@ -816,9 +922,10 @@
             '<div style="font-size:0.75rem;font-weight:700;color:var(--color-primary);">' + escapeHtml(asg.session_tag || 'Buổi 1') + classBadge + '</div>' +
             '<div>' + escapeHtml(asg.lesson_tag) + ': ' + escapeHtml(asg.title.replace(/^Bài \d+:\s*/i, '')) + '</div>' +
             '<div class="tabular-nums" style="font-size:0.8125rem;font-weight:500;color:var(--color-muted-foreground);margin-top:2px;">Hạn nộp: ' + escapeHtml(asg.due_date) + '</div>' +
+            '<div>' + buildSortHeaderButtonHtml('Xếp điểm', 'asg:' + asg.assignment_id, ui.matrixSort, 'data-bvn-sort-col', true) + '</div>' +
           '</th>';
         }).join('') +
-        '<th>Tổng kết tiến độ</th>' +
+        '<th>' + buildSortHeaderButtonHtml('Tổng kết tiến độ', 'progress', ui.matrixSort, 'data-bvn-sort-col', false) + '</th>' +
       '</tr>';
 
     if (studentsInClass.length === 0) {
@@ -841,7 +948,50 @@
       return true;
     });
 
-    tbody.innerHTML = filteredStudents.map(function (st) {
+    const bvnEntries = filteredStudents.map(function (st) {
+      let done = 0;
+      let missing = 0;
+      let scoreSum = 0;
+      let scoreCount = 0;
+      const itemScores = {};
+      filteredAssignments.forEach(function (asg) {
+        const sub = findSubmission(asg.assignment_id, st.student_id);
+        if (sub && (sub.status === 'submitted' || sub.status === 'graded')) {
+          done++;
+          const numScore = sub.score !== '' && sub.score !== null && !isNaN(Number(sub.score)) ? Number(sub.score) : null;
+          if (numScore !== null) {
+            scoreSum += numScore;
+            scoreCount++;
+            itemScores[asg.assignment_id] = numScore;
+          } else {
+            itemScores[asg.assignment_id] = 0;
+          }
+        } else {
+          missing++;
+          itemScores[asg.assignment_id] = null;
+        }
+      });
+      return {
+        student: st,
+        done: done,
+        expected: filteredAssignments.length,
+        missing: missing,
+        avg: scoreCount > 0 ? (scoreSum / scoreCount) : null,
+        itemScores: itemScores
+      };
+    });
+
+    const sortedBvnEntries = sortMatrixEntries(bvnEntries, ui.matrixSort, {
+      getName: function (e) { return e.student && e.student.full_name; },
+      getAvg: function (e) { return e.avg; },
+      getDone: function (e) { return e.done; },
+      getExpected: function (e) { return e.expected; },
+      getMissing: function (e) { return e.missing; },
+      getItemScore: function (e, id) { return e.itemScores ? e.itemScores[id] : null; }
+    });
+
+    tbody.innerHTML = sortedBvnEntries.map(function (entry) {
+      const st = entry.student;
       let completedCount = 0;
 
       const assignmentCells = filteredAssignments.map(function (asg) {
@@ -4186,7 +4336,12 @@
       stat.avgPct = stat.pctCount > 0 ? Math.round(stat.pctSum / stat.pctCount) : null;
     });
 
-    const filteredRows = studentRows.filter(function (row) {
+    const exById = {};
+    exercises.forEach(function (ex) {
+      exById[ex.exercise_id] = ex;
+    });
+
+    const rawFilteredRows = studentRows.filter(function (row) {
       if (searchQuery) {
         const hay = (
           String(row.student.full_name || '') + ' ' +
@@ -4202,6 +4357,23 @@
       return true;
     });
 
+    const sortKey = String(ui.practiceProgressSort || 'default');
+    const filteredRows = sortMatrixEntries(rawFilteredRows, sortKey, {
+      getName: function (r) { return r && r.student ? r.student.full_name : ''; },
+      getAvg: function (r) { return r ? r.avgPct : null; },
+      getDone: function (r) { return r ? r.done : 0; },
+      getExpected: function (r) { return r ? r.expected : 0; },
+      getMissing: function (r) { return r ? r.missing : 0; },
+      getItemScore: function (r, exId) {
+        const cell = r && r.cells ? r.cells[exId] : null;
+        if (!cell || !cell.applicable || !cell.sub) return null;
+        const scoreVal = Number(cell.sub.total_score || 0) || 0;
+        const exObj = exById[exId];
+        const maxVal = Number(cell.sub.max_score || (exObj ? exObj.total_score : 0) || 0) || 0;
+        return maxVal > 0 ? (scoreVal / maxVal) * 100 : scoreVal;
+      }
+    });
+
     const overallCompletionPct = totalExpected > 0 ? Math.round((totalDone / totalExpected) * 100) : 0;
     const overallAvgPct = overallPctCount > 0 ? Math.round(overallPctSum / overallPctCount) : null;
 
@@ -4209,6 +4381,7 @@
       selectedClass: selectedClass,
       scope: scope,
       filter: filter,
+      sortKey: sortKey,
       searchQuery: searchQuery,
       allStudents: allStudents,
       classStudents: classStudents,
@@ -4228,6 +4401,11 @@
 
   function renderPracticeProgressMatrix() {
     const snap = computePracticeProgressSnapshot();
+
+    const sortSelectEl = document.getElementById('practice-progress-sort');
+    if (sortSelectEl) {
+      sortSelectEl.value = snap.sortKey;
+    }
 
     const pillEl = document.getElementById('teacher-practice-progress-pill');
     if (pillEl) {
@@ -4281,7 +4459,7 @@
 
     thead.innerHTML =
       '<tr>' +
-        '<th>Học sinh</th>' +
+        '<th>' + buildSortHeaderButtonHtml('Học sinh', 'name', snap.sortKey, 'data-prac-sort-col', false) + '</th>' +
         snap.exercises.map(function (ex) {
           const st = snap.exStats[ex.exercise_id] || { doneCount: 0, expectedCount: 0, avgPct: null };
           const deliveries = getPracticeExerciseDeliveriesForClass(ex, snap.selectedClass);
@@ -4303,10 +4481,11 @@
                 (st.avgPct !== null ? (' • TB: ' + st.avgPct + '%') : '') +
                 (ex.total_score ? (' • Tối đa ' + ex.total_score + 'đ') : '') +
               '</div>' +
+              '<div>' + buildSortHeaderButtonHtml('Xếp điểm', 'ex:' + ex.exercise_id, snap.sortKey, 'data-prac-sort-col', true) + '</div>' +
             '</th>'
           );
         }).join('') +
-        '<th>Tổng kết tiến độ</th>' +
+        '<th>' + buildSortHeaderButtonHtml('Tổng kết tiến độ', 'progress', snap.sortKey, 'data-prac-sort-col', false) + '</th>' +
       '</tr>';
 
     const colSpan = snap.exercises.length + 2;
@@ -5657,9 +5836,26 @@
       });
     });
 
+    const pracSortEl = document.getElementById('practice-progress-sort');
+    if (pracSortEl) {
+      pracSortEl.addEventListener('change', function () {
+        ui.practiceProgressSort = pracSortEl.value || 'default';
+        renderPracticeProgressMatrix();
+      });
+    }
+
     const pracMatrixThead = document.getElementById('practice-matrix-thead');
     if (pracMatrixThead) {
       pracMatrixThead.addEventListener('click', function (ev) {
+        const sortBtn = ev.target && ev.target.closest ? ev.target.closest('[data-prac-sort-col]') : null;
+        if (sortBtn) {
+          const colKey = sortBtn.getAttribute('data-prac-sort-col');
+          if (colKey) {
+            ui.practiceProgressSort = getNextMatrixSortKey(ui.practiceProgressSort, colKey);
+            renderPracticeProgressMatrix();
+          }
+          return;
+        }
         const jumpBtn = ev.target && ev.target.closest ? ev.target.closest('[data-jump-practice-ex]') : null;
         if (!jumpBtn) return;
         const exId = jumpBtn.getAttribute('data-jump-practice-ex');
@@ -8364,7 +8560,7 @@
       });
     }
 
-    // Bộ lọc Bảng tổng hợp
+    // Bộ lọc & sắp xếp Bảng tổng hợp BVN
     document.querySelectorAll('[data-matrix-filter]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         ui.matrixFilter = btn.getAttribute('data-matrix-filter');
@@ -8374,6 +8570,26 @@
         renderProgressMatrix();
       });
     });
+
+    const bvnSortEl = document.getElementById('bvn-matrix-sort');
+    if (bvnSortEl) {
+      bvnSortEl.addEventListener('change', function () {
+        ui.matrixSort = bvnSortEl.value || 'default';
+        renderProgressMatrix();
+      });
+    }
+
+    const bvnMatrixThead = document.getElementById('matrix-thead');
+    if (bvnMatrixThead) {
+      bvnMatrixThead.addEventListener('click', function (ev) {
+        const sortBtn = ev.target && ev.target.closest ? ev.target.closest('[data-bvn-sort-col]') : null;
+        if (!sortBtn) return;
+        const colKey = sortBtn.getAttribute('data-bvn-sort-col');
+        if (!colKey) return;
+        ui.matrixSort = getNextMatrixSortKey(ui.matrixSort, colKey);
+        renderProgressMatrix();
+      });
+    }
 
     // Modal Xác nhận Xóa Học Sinh
     const modalDeleteStudent = document.getElementById('modal-delete-student-confirm');

@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css?v=20261116b">
+  <link rel="stylesheet" href="styles/main.css?v=20261116c">
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -328,6 +328,19 @@
                   <option value="all">Tất cả bài trong kho đề</option>
                 </select>
               </div>
+              <div class="practice-progress-control-item">
+                <label for="practice-progress-sort">Sắp xếp:</label>
+                <select id="practice-progress-sort" class="form-control" style="min-width:210px;width:auto;font-weight:600;">
+                  <option value="default">Mặc định (theo danh sách)</option>
+                  <option value="name_asc">Tên học sinh (A &rarr; Z)</option>
+                  <option value="name_desc">Tên học sinh (Z &rarr; A)</option>
+                  <option value="avg_desc">Điểm TB (Cao &rarr; Thấp)</option>
+                  <option value="avg_asc">Điểm TB (Thấp &rarr; Cao)</option>
+                  <option value="progress_desc">Hoàn thành (Nhiều &rarr; Ít)</option>
+                  <option value="progress_asc">Hoàn thành (Ít &rarr; Nhiều)</option>
+                  <option value="missing_desc">Chưa làm nhiều nhất trước</option>
+                </select>
+              </div>
               <div class="practice-progress-search-wrap">
                 <label for="practice-progress-search" class="sr-only">Tìm học sinh</label>
                 <input type="search" id="practice-progress-search" class="form-control" placeholder="Tìm theo tên hoặc mã học sinh..." aria-label="Tìm theo tên hoặc mã học sinh">
@@ -641,6 +654,19 @@
               <button type="button" class="filter-pill" data-matrix-filter="missing">Có BVN chưa làm</button>
               <button type="button" class="filter-pill" data-matrix-filter="submitted">Đang chờ chữa</button>
               <button type="button" class="filter-pill" data-matrix-filter="graded">Đã chữa BVN</button>
+            </div>
+            <div class="practice-progress-control-item">
+              <label for="bvn-matrix-sort">Sắp xếp:</label>
+              <select id="bvn-matrix-sort" class="form-control" style="min-width:190px;width:auto;font-weight:600;padding:6px 10px;font-size:0.875rem;">
+                <option value="default">Mặc định</option>
+                <option value="name_asc">Tên học sinh (A &rarr; Z)</option>
+                <option value="name_desc">Tên học sinh (Z &rarr; A)</option>
+                <option value="progress_desc">Hoàn thành BVN (Nhiều &rarr; Ít)</option>
+                <option value="progress_asc">Hoàn thành BVN (Ít &rarr; Nhiều)</option>
+                <option value="missing_desc">Chưa nộp nhiều nhất trước</option>
+                <option value="avg_desc">Điểm TB (Cao &rarr; Thấp)</option>
+                <option value="avg_asc">Điểm TB (Thấp &rarr; Cao)</option>
+              </select>
             </div>
           </div>
 
@@ -1711,6 +1737,6 @@
   <script src="js/data.js?v=20261116b"></script>
   <script src="js/auth.js?v=20261114c"></script>
   <script src="js/audio.js?v=20261114j"></script>
-  <script src="js/teacher.js?v=20261116b"></script>
+  <script src="js/teacher.js?v=20261116c"></script>
 </body>
 </html>
