@@ -3808,6 +3808,10 @@
       btnGoPractice.addEventListener('click', function () {
         switchTab('practice');
         renderPracticeSection();
+        const practiceTarget = document.getElementById('student-practice-title');
+        if (practiceTarget && typeof practiceTarget.scrollIntoView === 'function') {
+          practiceTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
       });
     }
 
