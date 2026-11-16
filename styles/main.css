@@ -1287,6 +1287,14 @@ select.form-control {
   border: 0;
 }
 
+.progress-matrix-table tr.is-active-row td {
+  background-color: var(--pink-rose-bg);
+}
+
+.progress-matrix-table tr.is-active-row td:first-child {
+  background-color: var(--pink-lt);
+}
+
 /* Vocabulary Module: Lesson Selector ("Bài 1", "Bài 2", ..., "Tổng hợp") */
 .lesson-selector-bar {
   display: flex;

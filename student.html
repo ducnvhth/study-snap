@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css?v=20261116a">
+  <link rel="stylesheet" href="styles/main.css?v=20261116b">
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
 </head>
 <body>
@@ -160,6 +160,50 @@
               </button>
             </div>
           </form>
+        </div>
+
+        <!-- Bảng Tự Động Tổng Hợp Kết Quả Các Bài Luyện Tập Cuối Buổi Của Học Sinh -->
+        <div class="surface-panel" style="margin-top: 24px;" id="student-practice-summary-panel">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+                <path d="M3 9h18"></path>
+                <path d="M9 21V9"></path>
+              </svg>
+              <h2>Bảng Tổng Hợp Kết Quả Các Bài Luyện Tập Cuối Buổi</h2>
+            </div>
+            <span class="status-badge status-graded tabular-nums" id="student-practice-summary-badge">0/0 bài</span>
+          </div>
+
+          <div class="matrix-toolbar" style="margin-bottom: 14px;">
+            <p style="margin:0;font-size:0.9375rem;color:var(--color-muted-foreground);" id="student-practice-summary-note">
+              Theo dõi toàn bộ bài luyện tập cuối buổi được giao, điểm số, xếp loại và nhận xét chấm câu Dịch từ giáo viên.
+            </p>
+            <div class="filter-pill-group" role="group" aria-label="Lọc trạng thái bài luyện tập cuối buổi">
+              <button type="button" class="filter-pill is-active" data-student-practice-filter="all">Tất cả bài</button>
+              <button type="button" class="filter-pill" data-student-practice-filter="missing">Chưa làm</button>
+              <button type="button" class="filter-pill" data-student-practice-filter="done">Đã hoàn thành</button>
+            </div>
+          </div>
+
+          <div class="matrix-scroll-wrapper">
+            <table class="progress-matrix-table" aria-label="Bảng tổng hợp kết quả các bài luyện tập cuối buổi của học sinh">
+              <thead>
+                <tr>
+                  <th>Bài luyện tập cuối buổi</th>
+                  <th>Trạng thái</th>
+                  <th>Điểm số</th>
+                  <th>Xếp loại</th>
+                  <th>Chấm câu Dịch / Nhận xét GV</th>
+                  <th>Thao tác nhanh</th>
+                </tr>
+              </thead>
+              <tbody id="student-practice-summary-tbody">
+                <!-- Populated by js/student.js -->
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -594,6 +638,6 @@
   <script src="js/data.js?v=20261114h"></script>
   <script src="js/auth.js?v=20261114c"></script>
   <script src="js/audio.js?v=20261114j"></script>
-  <script src="js/student.js?v=20261114h"></script>
+  <script src="js/student.js?v=20261116b"></script>
 </body>
 </html>

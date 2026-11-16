@@ -51,6 +51,7 @@
     selectedTargetBlank: null,
     matchingShuffledRight: {},
     practiceViewingResult: false,
+    practiceSummaryFilter: 'all',
 
     // Exit Ticket state
     selectedTicketId: state.exitTickets[0] ? state.exitTickets[0].ticket_id : 'EXIT_BAI_1',
@@ -1422,6 +1423,233 @@
     }
   }
 
+  const PRACTICE_SUMMARY_ICONS = {
+    check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+    clock: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>',
+    alert: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>'
+  };
+
+  function getStudentPracticeRatingMeta(rating) {
+    if (rating === 'good') {
+      return { label: 'Khá', badgeClass: 'status-submitted', icon: PRACTICE_SUMMARY_ICONS.check };
+    }
+    if (rating === 'needs_review') {
+      return { label: 'Cần ôn', badgeClass: 'status-missing', icon: PRACTICE_SUMMARY_ICONS.alert };
+    }
+    return { label: 'Rất tốt', badgeClass: 'status-graded', icon: PRACTICE_SUMMARY_ICONS.check };
+  }
+
+  function getPracticeManualTranslationStatus(exercise, sub) {
+    let totalManual = 0;
+    let gradedManual = 0;
+    const comments = [];
+    if (exercise && Array.isArray(exercise.sections)) {
+      exercise.sections.forEach(function (sec) {
+        if (sec && sec.type === 'translation') {
+          ((sec.data && sec.data.items) || []).forEach(function (item) {
+            if (item && item.mode === 'manual') {
+              totalManual++;
+              const mg = sub && sub.manual_grades ? sub.manual_grades[item.id] : null;
+              if (mg) {
+                gradedManual++;
+                if (mg.comment) comments.push(String(mg.comment).trim());
+              }
+            }
+          });
+        }
+      });
+    }
+    return {
+      totalManual: totalManual,
+      gradedManual: gradedManual,
+      pendingManual: Math.max(0, totalManual - gradedManual),
+      comments: comments.filter(Boolean)
+    };
+  }
+
+  function hasPracticeLocalDraft(exerciseId) {
+    try {
+      const raw = localStorage.getItem(getPracticeDraftKey(exerciseId));
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      return Boolean(parsed && parsed.answers && Object.keys(parsed.answers).length > 0);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function renderStudentPracticeSummaryTable() {
+    const tbody = document.getElementById('student-practice-summary-tbody');
+    const summaryBadge = document.getElementById('student-practice-summary-badge');
+    const summaryNote = document.getElementById('student-practice-summary-note');
+    if (!tbody) return;
+
+    const student = getActiveStudent();
+    const visibleExercises = getVisiblePracticeExercises(student);
+    const activeEx = getActiveExercise();
+    const filterVal = ui.practiceSummaryFilter || 'all';
+
+    document.querySelectorAll('[data-student-practice-filter]').forEach(function (pill) {
+      pill.classList.toggle('is-active', pill.getAttribute('data-student-practice-filter') === filterVal);
+    });
+
+    if (visibleExercises.length === 0) {
+      if (summaryBadge) summaryBadge.textContent = '0/0 bài';
+      if (summaryNote) {
+        summaryNote.textContent = 'Giáo viên chưa giao bài luyện tập cuối buổi nào cho lớp của em.';
+      }
+      tbody.innerHTML =
+        '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--color-muted-foreground);">' +
+          'Hiện chưa có bài luyện tập cuối buổi nào được giao cho lớp của em.' +
+        '</td></tr>';
+      return;
+    }
+
+    let doneCount = 0;
+    let pctSum = 0;
+    let pctCount = 0;
+    let pendingManualTotal = 0;
+
+    const rowsData = visibleExercises.map(function (ex) {
+      const sub = findStudentPracticeSubmission(ex.exercise_id);
+      const isDone = Boolean(sub);
+      const isDraft = !isDone && hasPracticeLocalDraft(ex.exercise_id);
+      const maxScore = Number((sub && sub.max_score) || ex.total_score || 0) || 0;
+      const scoreVal = isDone ? (Number(sub.total_score || 0) || 0) : 0;
+      const pct = (isDone && maxScore > 0) ? Math.round((scoreVal / maxScore) * 100) : null;
+      const manualInfo = isDone ? getPracticeManualTranslationStatus(ex, sub) : { totalManual: 0, gradedManual: 0, pendingManual: 0, comments: [] };
+
+      if (isDone) {
+        doneCount++;
+        if (pct !== null) {
+          pctSum += pct;
+          pctCount++;
+        }
+        if (manualInfo.pendingManual > 0) pendingManualTotal++;
+      }
+
+      return {
+        ex: ex,
+        sub: sub,
+        isDone: isDone,
+        isDraft: isDraft,
+        maxScore: maxScore,
+        scoreVal: scoreVal,
+        pct: pct,
+        manualInfo: manualInfo
+      };
+    });
+
+    const avgPct = pctCount > 0 ? Math.round(pctSum / pctCount) : null;
+    if (summaryBadge) {
+      summaryBadge.textContent = doneCount + '/' + visibleExercises.length + ' bài' + (avgPct !== null ? (' • TB ' + avgPct + '%') : '');
+    }
+    if (summaryNote) {
+      const missingTotal = visibleExercises.length - doneCount;
+      const parts = ['Hoàn thành ' + doneCount + '/' + visibleExercises.length + ' bài'];
+      if (missingTotal > 0) parts.push('còn ' + missingTotal + ' bài chưa làm');
+      if (pendingManualTotal > 0) parts.push(pendingManualTotal + ' bài đang chờ cô chấm câu Dịch');
+      summaryNote.textContent = parts.join(' • ') + '.';
+    }
+
+    const filteredRows = rowsData.filter(function (row) {
+      if (filterVal === 'missing') return !row.isDone;
+      if (filterVal === 'done') return row.isDone;
+      return true;
+    });
+
+    if (filteredRows.length === 0) {
+      const emptyMsg = filterVal === 'missing'
+        ? 'Em đã hoàn thành tất cả các bài luyện tập cuối buổi được giao!'
+        : 'Em chưa hoàn thành bài luyện tập cuối buổi nào.';
+      tbody.innerHTML =
+        '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--color-muted-foreground);">' +
+          emptyMsg + ' ' +
+          '<button type="button" class="btn btn-outline btn-sm" data-student-practice-reset="1" style="margin-left:8px;">Xem tất cả bài</button>' +
+        '</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = filteredRows.map(function (row) {
+      const ex = row.ex;
+      const sub = row.sub;
+      const isActiveRow = Boolean(activeEx && activeEx.exercise_id === ex.exercise_id);
+
+      let statusHtml = '';
+      if (row.isDone) {
+        statusHtml = '<span class="status-badge status-graded">' + PRACTICE_SUMMARY_ICONS.check + '<span>Đã hoàn thành</span></span>';
+      } else if (row.isDraft) {
+        statusHtml = '<span class="status-badge status-submitted">' + PRACTICE_SUMMARY_ICONS.clock + '<span>Đang làm dở (đã lưu nháp)</span></span>';
+      } else {
+        statusHtml = '<span class="status-badge status-missing">' + PRACTICE_SUMMARY_ICONS.alert + '<span>Chưa làm bài</span></span>';
+      }
+
+      const scoreHtml = row.isDone
+        ? ('<strong class="mono-text tabular-nums">' + row.scoreVal + (row.maxScore > 0 ? ('/' + row.maxScore) : '') + ' đ</strong>' +
+            (row.pct !== null ? (' <span class="tabular-nums" style="font-size:0.8125rem;color:var(--color-muted-foreground);">(' + row.pct + '%)</span>') : ''))
+        : '<span class="mono-text tabular-nums" style="color:var(--color-muted-foreground);">—</span>';
+
+      let ratingHtml = '<span style="font-size:0.8125rem;color:var(--color-muted-foreground);">Chưa có</span>';
+      if (row.isDone && sub) {
+        const rm = getStudentPracticeRatingMeta(sub.rating);
+        ratingHtml = '<span class="status-badge ' + rm.badgeClass + '">' + rm.icon + '<span>' + rm.label + '</span></span>';
+      }
+
+      let reviewNoteHtml = '';
+      if (!row.isDone) {
+        reviewNoteHtml = '<p class="matrix-teacher-note" style="color:var(--color-muted-foreground);">' +
+          (row.isDraft ? 'Em đang làm dở bài này. Bấm "Làm tiếp" để hoàn thành và xem điểm.' : 'Em chưa làm bài này. Hãy bấm "Làm bài ngay" để luyện tập.') +
+          '</p>';
+      } else if (row.manualInfo.totalManual === 0) {
+        reviewNoteHtml = '<p class="matrix-teacher-note">Hệ thống đã tự chấm điểm đầy đủ' +
+          (sub && sub.submitted_at ? (' • Nộp lúc ' + escapeHtml(sub.submitted_at)) : '') + '.</p>';
+      } else if (row.manualInfo.pendingManual > 0) {
+        reviewNoteHtml = '<p class="matrix-teacher-note">' +
+          '<span class="status-badge status-submitted" style="margin-bottom:4px;">' + PRACTICE_SUMMARY_ICONS.clock + '<span>Chờ cô chấm (' + row.manualInfo.gradedManual + '/' + row.manualInfo.totalManual + ' câu Dịch)</span></span>' +
+          (sub && sub.submitted_at ? ('<br><span style="font-size:0.75rem;color:var(--color-muted-foreground);">Nộp lúc ' + escapeHtml(sub.submitted_at) + '</span>') : '') +
+          '</p>';
+      } else {
+        const previewComment = row.manualInfo.comments.length > 0
+          ? ('<br><strong>Nhận xét GV:</strong> ' + escapeHtml(row.manualInfo.comments[0]) + (row.manualInfo.comments.length > 1 ? ' ...' : ''))
+          : '';
+        reviewNoteHtml = '<p class="matrix-teacher-note">' +
+          '<span class="status-badge status-graded" style="margin-bottom:4px;">' + PRACTICE_SUMMARY_ICONS.check + '<span>Đã chấm đủ ' + row.manualInfo.totalManual + ' câu Dịch</span></span>' +
+          previewComment +
+          '</p>';
+      }
+
+      const btnLabel = row.isDone ? 'Xem chi tiết điểm' : (row.isDraft ? 'Làm tiếp bài' : 'Làm bài ngay');
+      const btnClass = row.isDone ? 'btn-outline' : 'btn-primary';
+
+      return (
+        '<tr' + (isActiveRow ? ' class="is-active-row"' : '') + '>' +
+          '<td>' +
+            '<div style="font-weight:700;color:var(--color-foreground);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+              '<span class="status-badge" style="background:var(--color-surface-soft);color:var(--color-primary-deep);font-weight:700;font-size:0.75rem;">' +
+                escapeHtml(ex.lesson_tag || 'Bài học') +
+              '</span>' +
+              '<span>' + escapeHtml(ex.title || 'Bài luyện tập') + '</span>' +
+              (isActiveRow ? '<span class="status-badge status-submitted" style="font-size:0.75rem;">Đang mở</span>' : '') +
+            '</div>' +
+            '<div class="tabular-nums" style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-top:2px;">' +
+              (ex.sections ? ex.sections.length + ' phần' : '') +
+              (row.maxScore > 0 ? (' • Tối đa ' + row.maxScore + ' điểm') : '') +
+            '</div>' +
+          '</td>' +
+          '<td>' + statusHtml + '</td>' +
+          '<td>' + scoreHtml + '</td>' +
+          '<td>' + ratingHtml + '</td>' +
+          '<td>' + reviewNoteHtml + '</td>' +
+          '<td>' +
+            '<button type="button" class="btn ' + btnClass + ' btn-sm" data-open-practice-row="' + escapeHtml(ex.exercise_id) + '">' +
+              btnLabel +
+            '</button>' +
+          '</td>' +
+        '</tr>'
+      );
+    }).join('');
+  }
+
   function renderPracticeSection() {
     const visibleExercises = getVisiblePracticeExercises();
     const exercise = getActiveExercise();
@@ -1456,6 +1684,9 @@
           '<h3>Chưa có bài tập nào được giao cho lớp của em</h3>' +
           '<p>Giáo viên sẽ sớm cập nhật bài luyện tập cuối buổi cho lớp tại đây.</p>' +
           '</div>';
+      }
+      if (typeof renderStudentPracticeSummaryTable === 'function') {
+        renderStudentPracticeSummaryTable();
       }
       return;
     }
@@ -1515,6 +1746,9 @@
         bindPracticeResultsEvents(exercise, existingSub);
       }
       if (formEl) formEl.style.display = 'none';
+      if (typeof renderStudentPracticeSummaryTable === 'function') {
+        renderStudentPracticeSummaryTable();
+      }
       return;
     }
 
@@ -1522,7 +1756,12 @@
     if (formEl) formEl.style.display = 'block';
 
     const container = document.getElementById('student-practice-sections-container');
-    if (!container) return;
+    if (!container) {
+      if (typeof renderStudentPracticeSummaryTable === 'function') {
+        renderStudentPracticeSummaryTable();
+      }
+      return;
+    }
 
     container.innerHTML = (exercise.sections || [])
       .map(function (sec, idx) {
@@ -1557,6 +1796,9 @@
       .join('');
 
     bindSectionInteractiveEvents(exercise);
+    if (typeof renderStudentPracticeSummaryTable === 'function') {
+      renderStudentPracticeSummaryTable();
+    }
   }
 
   function renderSectionBodyHtml(sec) {
@@ -2760,6 +3002,54 @@
   }
 
   function initPracticeEvents() {
+    document.querySelectorAll('[data-student-practice-filter]').forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        ui.practiceSummaryFilter = pill.getAttribute('data-student-practice-filter') || 'all';
+        renderStudentPracticeSummaryTable();
+      });
+    });
+
+    const summaryTbody = document.getElementById('student-practice-summary-tbody');
+    if (summaryTbody) {
+      summaryTbody.addEventListener('click', function (ev) {
+        const target = ev.target && ev.target.closest ? ev.target : null;
+        if (!target) return;
+
+        const resetBtn = target.closest('[data-student-practice-reset]');
+        if (resetBtn) {
+          ui.practiceSummaryFilter = 'all';
+          renderStudentPracticeSummaryTable();
+          return;
+        }
+
+        const openBtn = target.closest('[data-open-practice-row]');
+        if (openBtn) {
+          const exId = openBtn.getAttribute('data-open-practice-row');
+          if (!exId) return;
+          ui.selectedExerciseId = exId;
+          const existingSub = findStudentPracticeSubmission(exId);
+          if (existingSub) {
+            ui.practiceAnswers = JSON.parse(JSON.stringify(existingSub.answers || {}));
+            ui.practiceViewingResult = true;
+          } else {
+            ui.practiceAnswers = {};
+            ui.selectedMatchingLeft = null;
+            ui.selectedWordBankChip = null;
+            ui.selectedTargetBlank = null;
+            ui.practiceViewingResult = false;
+          }
+          renderStudentHeaderAndStats();
+          renderPracticeSection();
+          const pracTab = document.getElementById('student-tab-practice');
+          if (pracTab && typeof pracTab.scrollIntoView === 'function') {
+            pracTab.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else if (typeof window.scrollTo === 'function') {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }
+      });
+    }
+
     const btnResetDraft = document.getElementById('btn-reset-practice-draft');
     if (btnResetDraft) {
       btnResetDraft.addEventListener('click', function () {
