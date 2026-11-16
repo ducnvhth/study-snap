@@ -118,6 +118,37 @@ function collectDriveUrls(candidates) {
   return list;
 }
 
+function extractDriveIdSimple(url) {
+  const s = String(url || '').trim();
+  const m = s.match(/[?&](?:id|fileId)=([a-zA-Z0-9_-]+)/) || s.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return m && m[1] ? m[1] : '';
+}
+
+async function filterUnreferencedDriveUrls(db, candidates) {
+  const list = collectDriveUrls(candidates);
+  if (list.length === 0) return [];
+  const subUrlsRes = await db
+    .prepare("SELECT media_url, teacher_voice_url FROM submissions WHERE media_url != '' OR teacher_voice_url != ''")
+    .all();
+  const stillUrls = new Set();
+  const stillIds = new Set();
+  (subUrlsRes && subUrlsRes.results ? subUrlsRes.results : []).forEach(function (r) {
+    [r.media_url, r.teacher_voice_url].forEach(function (u) {
+      const clean = String(u || '').trim();
+      if (!clean) return;
+      stillUrls.add(clean);
+      const fid = extractDriveIdSimple(clean);
+      if (fid) stillIds.add(fid);
+    });
+  });
+  return list.filter(function (u) {
+    if (stillUrls.has(u)) return false;
+    const fid = extractDriveIdSimple(u);
+    if (fid && stillIds.has(fid)) return false;
+    return true;
+  });
+}
+
 function collectPracticeMediaUrls(sectionsInput) {
   let sections = sectionsInput;
   if (typeof sections === 'string') {
@@ -1120,7 +1151,7 @@ export async function handleApiRequest(request, env, ctx) {
           deleted_exit_tickets: changesOf(2),
           deleted_practice_submissions: changesOf(3)
         },
-        deletedMediaUrls: collectDriveUrls(mediaCandidates)
+        deletedMediaUrls: await filterUnreferencedDriveUrls(db, mediaCandidates)
       });
     }
 
@@ -1189,7 +1220,7 @@ export async function handleApiRequest(request, env, ctx) {
             submitted_at: nowStr,
             practice_count: nextPracticeCount
           },
-          deletedMediaUrls: replacedUrls
+          deletedMediaUrls: await filterUnreferencedDriveUrls(db, replacedUrls)
         });
       } else {
         const newId = makeShortId('SUB');
@@ -1283,7 +1314,7 @@ export async function handleApiRequest(request, env, ctx) {
             teacher_voice_url: nextVoiceUrl,
             teacher_voice_duration: nextVoiceDur
           },
-          deletedMediaUrls: replacedUrls
+          deletedMediaUrls: await filterUnreferencedDriveUrls(db, replacedUrls)
         });
       } else {
         const newId = makeShortId('SUB');
@@ -1306,6 +1337,137 @@ export async function handleApiRequest(request, env, ctx) {
           }
         });
       }
+    }
+
+    if (action === 'copyTeacherFeedback') {
+      const assignmentId = String(payload.assignment_id || '').trim();
+      const sourceStudentId = String(payload.source_student_id || '').trim();
+      const includeSource = Boolean(payload.include_source && sourceStudentId);
+      const rawTargets = Array.isArray(payload.target_student_ids) ? payload.target_student_ids : [];
+      const targetSet = new Set();
+      rawTargets.forEach(function (id) {
+        const clean = String(id || '').trim();
+        if (clean) targetSet.add(clean);
+      });
+      if (includeSource) targetSet.add(sourceStudentId);
+
+      if (!assignmentId || targetSet.size === 0) {
+        return jsonResponse({ ok: false, error: 'Thiếu mã BVN hoặc danh sách học sinh cần copy phản hồi.' }, 400);
+      }
+
+      const rawVoiceUrl = String(payload.teacher_voice_url || '').trim();
+      const incomingVoiceUrl = rawVoiceUrl.indexOf('demo:') === 0 ? '' : rawVoiceUrl;
+      if (payload.teacher_voice_base64 || (incomingVoiceUrl.indexOf('data:') === 0 && incomingVoiceUrl.length > 262144)) {
+        return jsonResponse({
+          ok: false,
+          error: 'Bản ghi âm phản hồi phải được tải lên Google Drive trước khi sao chép sang nhiều học sinh.'
+        }, 400);
+      }
+
+      const copyComment = payload.copy_comment !== false;
+      const copyVoice = payload.copy_voice !== false && Boolean(incomingVoiceUrl);
+      const copyScore = Boolean(payload.copy_score);
+      const mergeMode = String(payload.merge_mode || 'replace') === 'append' ? 'append' : 'replace';
+      const incomingComment = payload.teacher_comment !== undefined ? String(payload.teacher_comment).trim() : '';
+      const incomingScore = payload.score !== undefined && payload.score !== null ? String(payload.score).trim() : '';
+      const incomingVoiceDur = copyVoice ? String(payload.teacher_voice_duration || '') : '';
+      const nowStr = formatViDateTime();
+
+      const existingRowsRes = await db
+        .prepare('SELECT * FROM submissions WHERE assignment_id = ?')
+        .bind(assignmentId)
+        .all();
+      const existingByStu = {};
+      (existingRowsRes && existingRowsRes.results ? existingRowsRes.results : []).forEach(function (r) {
+        existingByStu[String(r.student_id || '').trim()] = r;
+      });
+
+      const stmts = [];
+      const replacedVoiceCandidates = [];
+      const updatedSubmissions = [];
+
+      targetSet.forEach(function (stuId) {
+        const existing = existingByStu[stuId];
+        if (existing) {
+          const existingVoiceRaw = String(existing.teacher_voice_url || '').trim();
+          const existingRealVoice = existingVoiceRaw.indexOf('demo:') === 0 ? '' : existingVoiceRaw;
+          const nextScore = copyScore && incomingScore !== '' ? incomingScore : String(existing.score || '');
+          let nextComment = String(existing.teacher_comment || '');
+          if (copyComment && incomingComment !== '') {
+            if (mergeMode === 'append' && nextComment) {
+              nextComment = nextComment.indexOf(incomingComment) !== -1
+                ? nextComment
+                : (nextComment + '\n' + incomingComment);
+            } else {
+              nextComment = incomingComment;
+            }
+          }
+          const nextVoiceUrl = copyVoice ? incomingVoiceUrl : existingRealVoice;
+          const nextVoiceDur = copyVoice
+            ? incomingVoiceDur
+            : (nextVoiceUrl ? String(existing.teacher_voice_duration || '') : '');
+          if (copyVoice && existingRealVoice && existingRealVoice !== incomingVoiceUrl) {
+            replacedVoiceCandidates.push(existingRealVoice);
+          }
+          const nextSubmittedAt = existing.submitted_at || nowStr;
+
+          stmts.push(
+            db
+              .prepare('UPDATE submissions SET submitted_at = ?, status = ?, score = ?, teacher_comment = ?, teacher_voice_url = ?, teacher_voice_duration = ?, graded_at = ? WHERE submission_id = ?')
+              .bind(nextSubmittedAt, 'graded', nextScore, nextComment, nextVoiceUrl, nextVoiceDur, nowStr, existing.submission_id)
+          );
+          updatedSubmissions.push({
+            submission_id: existing.submission_id,
+            assignment_id: assignmentId,
+            student_id: stuId,
+            status: 'graded',
+            score: nextScore,
+            teacher_comment: nextComment,
+            teacher_voice_url: nextVoiceUrl,
+            teacher_voice_duration: nextVoiceDur,
+            graded_at: nowStr
+          });
+        } else {
+          const newId = makeShortId('SUB');
+          const nextScore = copyScore && incomingScore !== '' ? incomingScore : '';
+          const nextComment = copyComment ? incomingComment : '';
+          const nextVoiceUrl = copyVoice ? incomingVoiceUrl : '';
+          const nextVoiceDur = copyVoice ? incomingVoiceDur : '';
+
+          stmts.push(
+            db
+              .prepare('INSERT INTO submissions (submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+              .bind(newId, assignmentId, stuId, '', '', 'audio', '', '', 'graded', nextScore, nextComment, nextVoiceUrl, nextVoiceDur, nowStr, 0)
+          );
+          updatedSubmissions.push({
+            submission_id: newId,
+            assignment_id: assignmentId,
+            student_id: stuId,
+            submitted_at: '',
+            student_note: '',
+            media_type: 'audio',
+            media_url: '',
+            media_duration: '',
+            status: 'graded',
+            score: nextScore,
+            teacher_comment: nextComment,
+            teacher_voice_url: nextVoiceUrl,
+            teacher_voice_duration: nextVoiceDur,
+            graded_at: nowStr
+          });
+        }
+      });
+
+      await runBatchedStatements(db, stmts);
+      return await buildMutationResponse(db, payload, preVer, {
+        copiedFeedback: {
+          assignment_id: assignmentId,
+          updated_count: updatedSubmissions.length,
+          teacher_voice_url: incomingVoiceUrl,
+          submissions: updatedSubmissions
+        },
+        deletedMediaUrls: await filterUnreferencedDriveUrls(db, replacedVoiceCandidates)
+      });
     }
 
     if (action === 'submitExitTicket') {
@@ -1504,7 +1666,7 @@ export async function handleApiRequest(request, env, ctx) {
           deleted_assignments: changesOf(0),
           deleted_submissions: changesOf(1)
         },
-        deletedMediaUrls: collectDriveUrls(mediaCandidates)
+        deletedMediaUrls: await filterUnreferencedDriveUrls(db, mediaCandidates)
       });
     }
 

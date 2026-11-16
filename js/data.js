@@ -897,6 +897,7 @@ window.StudySnapLoading = (function () {
     assignExercisesToClass: 'Đang giao bài tập cho lớp...',
     unassignAssignment: 'Đang hủy giao bài cho lớp...',
     saveTeacherFeedback: 'Đang lưu nhận xét & phản hồi giọng nói...',
+    copyTeacherFeedback: 'Đang sao chép file chữa & nhận xét cho các học sinh...',
     createClass: 'Đang tạo lớp học mới...',
     deleteClass: 'Đang xóa lớp học...',
     changeStudentClass: 'Đang chuyển lớp cho học sinh...',
@@ -967,6 +968,10 @@ window.StudySnapLoading = (function () {
     unassignAssignment: {
       title: 'Đang hủy giao bài cho lớp...',
       desc: 'Vui lòng đợi hệ thống cập nhật trạng thái giao bài.'
+    },
+    copyTeacherFeedback: {
+      title: 'Đang sao chép file chữa & lời nhận xét...',
+      desc: 'Hệ thống đang đồng bộ nhận xét và file Voice Feedback tới các học sinh đã chọn.'
     },
     saveTeacherFeedback: {
       title: 'Đang lưu nhận xét & phản hồi giọng nói...',
@@ -1770,6 +1775,28 @@ window.StudySnapStore = (function () {
         if (json.submission.teacher_voice_url !== undefined) found.teacher_voice_url = json.submission.teacher_voice_url;
         if (json.submission.teacher_voice_duration !== undefined) found.teacher_voice_duration = json.submission.teacher_voice_duration;
       }
+    } else if (action === 'copyTeacherFeedback' && json.copiedFeedback && Array.isArray(json.copiedFeedback.submissions)) {
+      const subList = Array.isArray(stateObj.submissions) ? stateObj.submissions : (stateObj.submissions = []);
+      json.copiedFeedback.submissions.forEach(function (srvSub) {
+        if (!srvSub) return;
+        const found = subList.find(function (s) {
+          return (
+            (srvSub.submission_id && s.submission_id === srvSub.submission_id) ||
+            (s.assignment_id === srvSub.assignment_id && s.student_id === srvSub.student_id)
+          );
+        });
+        if (found) {
+          if (srvSub.submission_id) found.submission_id = srvSub.submission_id;
+          if (srvSub.status) found.status = srvSub.status;
+          if (srvSub.score !== undefined) found.score = srvSub.score;
+          if (srvSub.teacher_comment !== undefined) found.teacher_comment = srvSub.teacher_comment;
+          if (srvSub.teacher_voice_url !== undefined) found.teacher_voice_url = srvSub.teacher_voice_url;
+          if (srvSub.teacher_voice_duration !== undefined) found.teacher_voice_duration = srvSub.teacher_voice_duration;
+          if (srvSub.graded_at) found.graded_at = srvSub.graded_at;
+        } else {
+          subList.push(srvSub);
+        }
+      });
     } else if (action === 'savePracticeExercise' && json.practiceExercise) {
       const pe = json.practiceExercise;
       const exList = Array.isArray(stateObj.practiceExercises) ? stateObj.practiceExercises : [];
@@ -2379,21 +2406,24 @@ window.StudySnapStore = (function () {
       return { payload: payloadCopy };
     }
 
-    if (actionName === 'saveTeacherFeedback' && payloadCopy.teacher_voice_base64 && String(payloadCopy.teacher_voice_base64).indexOf('data:') === 0) {
+    if ((actionName === 'saveTeacherFeedback' || actionName === 'copyTeacherFeedback') && payloadCopy.teacher_voice_base64 && String(payloadCopy.teacher_voice_base64).indexOf('data:') === 0) {
       const fbMeta = inferMimeAndExtFromDataUrl(
         payloadCopy.teacher_voice_base64,
         payloadCopy.teacher_voice_mime_type || 'audio/webm'
       );
+      const stuSuffix = actionName === 'copyTeacherFeedback'
+        ? (payloadCopy.source_student_id || 'Shared')
+        : (payloadCopy.student_id || 'HS');
       const upVoice = await uploadMediaToDriveViaGas({
         base64_data: payloadCopy.teacher_voice_base64,
         mime_type: fbMeta.mimeType,
-        filename: 'VoiceFeedback_' + (payloadCopy.assignment_id || 'EX') + '_' + (payloadCopy.student_id || 'HS') + '_' + Date.now() + fbMeta.ext
+        filename: 'VoiceFeedback_' + (payloadCopy.assignment_id || 'EX') + '_' + stuSuffix + '_' + Date.now() + fbMeta.ext
       });
       if (!upVoice.ok) return { errorResponse: upVoice };
       cacheUploadedDriveMedia(upVoice.media_url, payloadCopy.teacher_voice_base64, 'voice_feedback.webm');
       payloadCopy.teacher_voice_url = upVoice.media_url;
       payloadCopy.teacher_voice_base64 = '';
-      if (stateObj && Array.isArray(stateObj.submissions)) {
+      if (stateObj && Array.isArray(stateObj.submissions) && actionName === 'saveTeacherFeedback') {
         const localSub = stateObj.submissions.find(function (s) {
           return s.assignment_id === payloadCopy.assignment_id && s.student_id === payloadCopy.student_id;
         });

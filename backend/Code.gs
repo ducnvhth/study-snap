@@ -496,6 +496,11 @@ function doPost(e) {
       return buildMutationResponse_(ss, payload, preVer, { submission: result });
     }
 
+    if (action === 'copyTeacherFeedback') {
+      const result = handleCopyTeacherFeedback_(ss, payload);
+      return buildMutationResponse_(ss, payload, preVer, { copiedFeedback: result });
+    }
+
     if (action === 'submitExitTicket') {
       const result = handleSubmitExitTicket_(ss, payload);
       return buildMutationResponse_(ss, payload, preVer, { exitResult: result });
@@ -1313,6 +1318,157 @@ function handleSaveTeacherFeedback_(ss, payload) {
       teacher_voice_duration: newVoiceDur
     };
   }
+}
+
+function handleCopyTeacherFeedback_(ss, payload) {
+  const sheet = ss.getSheetByName(SHEET_NAMES.SUBMISSIONS);
+  const assignmentId = String(payload.assignment_id || '').trim();
+  const sourceStudentId = String(payload.source_student_id || '').trim();
+  const includeSource = Boolean(payload.include_source && sourceStudentId);
+  const rawTargets = Array.isArray(payload.target_student_ids) ? payload.target_student_ids : [];
+  const targetIds = [];
+  const seenTargets = {};
+  rawTargets.forEach(function (id) {
+    const clean = String(id || '').trim();
+    if (clean && !seenTargets[clean]) {
+      seenTargets[clean] = true;
+      targetIds.push(clean);
+    }
+  });
+  if (includeSource && !seenTargets[sourceStudentId]) {
+    seenTargets[sourceStudentId] = true;
+    targetIds.push(sourceStudentId);
+  }
+  if (!sheet || !assignmentId || targetIds.length === 0) {
+    return { assignment_id: assignmentId, updated_count: 0, teacher_voice_url: '', submissions: [] };
+  }
+
+  const rawVoiceUrl = String(payload.teacher_voice_url || '').trim();
+  let sharedVoiceUrl = rawVoiceUrl.indexOf('demo:') === 0 ? '' : rawVoiceUrl;
+  if (payload.teacher_voice_base64 && payload.teacher_voice_mime_type) {
+    sharedVoiceUrl = saveBase64MediaToDrive_(
+      payload.teacher_voice_base64,
+      payload.teacher_voice_mime_type,
+      'VoiceFeedback_' + assignmentId + '_Shared_' + Date.now()
+    );
+  }
+
+  const copyComment = payload.copy_comment !== false;
+  const copyVoice = payload.copy_voice !== false && Boolean(sharedVoiceUrl);
+  const copyScore = Boolean(payload.copy_score);
+  const mergeMode = String(payload.merge_mode || 'replace') === 'append' ? 'append' : 'replace';
+  const incomingComment = payload.teacher_comment !== undefined ? String(payload.teacher_comment).trim() : '';
+  const incomingScore = payload.score !== undefined && payload.score !== null ? String(payload.score).trim() : '';
+  const incomingVoiceDur = copyVoice ? String(payload.teacher_voice_duration || '') : '';
+  const nowStr = new Date().toLocaleString('vi-VN');
+
+  ensureSheetHeaders_(sheet, SUBMISSIONS_HEADERS);
+  const values = sheet.getDataRange().getValues();
+  const rowIndexByStudent = {};
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][1] || '').trim() === assignmentId) {
+      rowIndexByStudent[String(values[i][2] || '').trim()] = i + 1;
+    }
+  }
+
+  const updatedSubmissions = [];
+  targetIds.forEach(function (stuId) {
+    const rowIdx = rowIndexByStudent[stuId];
+    if (rowIdx > 0) {
+      const existing = values[rowIdx - 1];
+      const existingVoiceRaw = String(existing[11] || '').trim();
+      const existingRealVoice = existingVoiceRaw.indexOf('demo:') === 0 ? '' : existingVoiceRaw;
+      const nextScore = copyScore && incomingScore !== '' ? incomingScore : existing[9];
+      let nextComment = String(existing[10] || '');
+      if (copyComment && incomingComment !== '') {
+        if (mergeMode === 'append' && nextComment) {
+          nextComment = nextComment.indexOf(incomingComment) !== -1
+            ? nextComment
+            : (nextComment + '\n' + incomingComment);
+        } else {
+          nextComment = incomingComment;
+        }
+      }
+      const nextVoiceUrl = copyVoice ? sharedVoiceUrl : existingRealVoice;
+      const nextVoiceDur = copyVoice ? incomingVoiceDur : (nextVoiceUrl ? (existing[12] || '') : '');
+      const updatedRow = [
+        existing[0],
+        assignmentId,
+        stuId,
+        existing[3] || nowStr,
+        existing[4],
+        existing[5],
+        existing[6],
+        existing[7],
+        'graded',
+        nextScore,
+        nextComment,
+        nextVoiceUrl,
+        nextVoiceDur,
+        nowStr,
+        Number(existing[14] || 0) || 0
+      ];
+      sheet.getRange(rowIdx, 1, 1, updatedRow.length).setValues([updatedRow]);
+      updatedSubmissions.push({
+        submission_id: existing[0],
+        assignment_id: assignmentId,
+        student_id: stuId,
+        status: 'graded',
+        score: nextScore,
+        teacher_comment: nextComment,
+        teacher_voice_url: nextVoiceUrl,
+        teacher_voice_duration: nextVoiceDur,
+        graded_at: nowStr
+      });
+    } else {
+      const newId = 'SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase();
+      const nextScore = copyScore && incomingScore !== '' ? incomingScore : '';
+      const nextComment = copyComment ? incomingComment : '';
+      const nextVoiceUrl = copyVoice ? sharedVoiceUrl : '';
+      const nextVoiceDur = copyVoice ? incomingVoiceDur : '';
+      const newRow = [
+        newId,
+        assignmentId,
+        stuId,
+        '',
+        '',
+        'audio',
+        '',
+        '',
+        'graded',
+        nextScore,
+        nextComment,
+        nextVoiceUrl,
+        nextVoiceDur,
+        nowStr,
+        0
+      ];
+      sheet.appendRow(newRow);
+      updatedSubmissions.push({
+        submission_id: newId,
+        assignment_id: assignmentId,
+        student_id: stuId,
+        submitted_at: '',
+        student_note: '',
+        media_type: 'audio',
+        media_url: '',
+        media_duration: '',
+        status: 'graded',
+        score: nextScore,
+        teacher_comment: nextComment,
+        teacher_voice_url: nextVoiceUrl,
+        teacher_voice_duration: nextVoiceDur,
+        graded_at: nowStr
+      });
+    }
+  });
+
+  return {
+    assignment_id: assignmentId,
+    updated_count: updatedSubmissions.length,
+    teacher_voice_url: sharedVoiceUrl,
+    submissions: updatedSubmissions
+  };
 }
 
 function handleSubmitExitTicket_(ss, payload) {

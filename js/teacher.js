@@ -6510,44 +6510,77 @@
       });
     }
 
+    function getActiveGradingSourceSnapshot() {
+      const asg = findAssignment(ui.gradingAssignmentId);
+      const st = findStudent(ui.gradingStudentId);
+      const scoreInput = document.getElementById('teacher-score-input');
+      const commentInput = document.getElementById('teacher-comment-input');
+      const scoreVal = scoreInput ? scoreInput.value.trim() : '';
+      const rawCommentVal = commentInput ? commentInput.value.trim() : '';
+      const targetKey = ui.gradingAssignmentId + ':' + ui.gradingStudentId;
+
+      const sub = findSubmission(ui.gradingAssignmentId, ui.gradingStudentId);
+      const existingComment = (sub && sub.teacher_comment) ? String(sub.teacher_comment) : '';
+      const existingScore = (sub && sub.score !== undefined && sub.score !== null) ? String(sub.score) : '';
+      const userEditedThisComment = Boolean(
+        commentInput && commentInput.dataset && commentInput.dataset.loadedSubKey === targetKey && commentInput.dataset.userEdited === '1'
+      );
+      const resolvedComment = rawCommentVal !== ''
+        ? rawCommentVal
+        : (userEditedThisComment ? '' : existingComment);
+      const allowClearComment = Boolean(existingComment && userEditedThisComment && rawCommentVal === '');
+      const resolvedScore = scoreVal !== '' ? scoreVal : existingScore;
+
+      const existingRealVoiceUrl = isRealTeacherVoiceUrl(sub && sub.teacher_voice_url)
+        ? String(sub.teacher_voice_url).trim()
+        : '';
+      const existingRealVoiceDur = existingRealVoiceUrl && sub && sub.teacher_voice_duration
+        ? String(sub.teacher_voice_duration).trim()
+        : '';
+
+      const draftVoice = ui.teacherDraftVoice;
+      const hasVoiceUpload = Boolean(draftVoice && draftVoice.dataUrl);
+      const voiceUrl = hasVoiceUpload ? draftVoice.dataUrl : existingRealVoiceUrl;
+      const voiceDur = hasVoiceUpload ? (draftVoice.duration || '') : existingRealVoiceDur;
+
+      return {
+        asg: asg,
+        st: st,
+        sub: sub,
+        existingComment: existingComment,
+        existingScore: existingScore,
+        scoreVal: scoreVal,
+        resolvedScore: resolvedScore,
+        rawCommentVal: rawCommentVal,
+        resolvedComment: resolvedComment,
+        allowClearComment: allowClearComment,
+        existingRealVoiceUrl: existingRealVoiceUrl,
+        existingRealVoiceDur: existingRealVoiceDur,
+        draftVoice: draftVoice,
+        hasVoiceUpload: hasVoiceUpload,
+        voiceUrl: voiceUrl,
+        voiceDur: voiceDur
+      };
+    }
+
     // Giáo viên lưu chấm bài & phản hồi (chỉ lưu Voice khi giáo viên tự thu, tuyệt đối bảo toàn feedback cũ)
     const teacherGradingForm = document.getElementById('teacher-grading-form');
     if (teacherGradingForm) {
       teacherGradingForm.addEventListener('submit', async function (ev) {
         ev.preventDefault();
         const submitBtn = teacherGradingForm.querySelector('button[type="submit"]');
-        const scoreInput = document.getElementById('teacher-score-input');
-        const commentInput = document.getElementById('teacher-comment-input');
-        const scoreVal = scoreInput ? scoreInput.value.trim() : '';
-        const rawCommentVal = commentInput ? commentInput.value.trim() : '';
+        const snap = getActiveGradingSourceSnapshot();
         const nowStr = new Date().toLocaleString('vi-VN');
-        const targetKey = ui.gradingAssignmentId + ':' + ui.gradingStudentId;
+        let sub = snap.sub;
+        const resolvedComment = snap.resolvedComment;
+        const allowClearComment = snap.allowClearComment;
+        const resolvedScore = snap.resolvedScore;
+        const draftVoice = snap.draftVoice;
+        const hasVoiceUpload = snap.hasVoiceUpload;
+        const voiceUrl = snap.voiceUrl;
+        const voiceDur = snap.voiceDur;
 
-        let sub = findSubmission(ui.gradingAssignmentId, ui.gradingStudentId);
-        const existingComment = (sub && sub.teacher_comment) ? String(sub.teacher_comment) : '';
-        const existingScore = (sub && sub.score !== undefined && sub.score !== null) ? String(sub.score) : '';
-        const userEditedThisComment = Boolean(
-          commentInput && commentInput.dataset && commentInput.dataset.loadedSubKey === targetKey && commentInput.dataset.userEdited === '1'
-        );
-        const resolvedComment = rawCommentVal !== ''
-          ? rawCommentVal
-          : (userEditedThisComment ? '' : existingComment);
-        const allowClearComment = Boolean(existingComment && userEditedThisComment && rawCommentVal === '');
-        const resolvedScore = scoreVal !== '' ? scoreVal : existingScore;
-
-        const existingRealVoiceUrl = isRealTeacherVoiceUrl(sub && sub.teacher_voice_url)
-          ? String(sub.teacher_voice_url).trim()
-          : '';
-        const existingRealVoiceDur = existingRealVoiceUrl && sub && sub.teacher_voice_duration
-          ? String(sub.teacher_voice_duration).trim()
-          : '';
-
-        const draftVoice = ui.teacherDraftVoice;
-        const hasVoiceUpload = Boolean(draftVoice && draftVoice.dataUrl);
-        const voiceUrl = hasVoiceUpload ? draftVoice.dataUrl : existingRealVoiceUrl;
-        const voiceDur = hasVoiceUpload ? (draftVoice.duration || '') : existingRealVoiceDur;
-
-        if (!hasVoiceUpload && !existingRealVoiceUrl && resolvedComment === '' && resolvedScore === '') {
+        if (!hasVoiceUpload && !snap.existingRealVoiceUrl && resolvedComment === '' && resolvedScore === '') {
           showToast('Vui lòng nhập điểm, nhận xét hoặc tự thu âm Voice Feedback trước khi lưu!');
           return;
         }
@@ -6639,6 +6672,333 @@
           hasVoiceUpload
             ? 'Đã lưu nhận xét & Voice Feedback tự thu cho ' + (st ? st.full_name : '') + '!'
             : 'Đã lưu điểm & nhận xét cho ' + (st ? st.full_name : '') + '!'
+        );
+      });
+    }
+
+    // Copy file chữa Voice & lời nhận xét BVN sang các bạn khác cùng lớp
+    const btnOpenCopyFeedback = document.getElementById('btn-open-copy-feedback');
+    const copyFeedbackModal = document.getElementById('modal-copy-teacher-feedback');
+    const btnCloseCopyFeedbackModal = document.getElementById('btn-close-copy-feedback-modal');
+    const btnCancelCopyFeedback = document.getElementById('btn-cancel-copy-feedback');
+    const copyFeedbackForm = document.getElementById('copy-feedback-form');
+    const btnCopyFbSelectPending = document.getElementById('btn-copy-fb-select-pending');
+    const btnCopyFbSelectAll = document.getElementById('btn-copy-fb-select-all');
+    const btnCopyFbClearAll = document.getElementById('btn-copy-fb-clear-all');
+    let activeCopySnap = null;
+
+    function closeCopyFeedbackModal() {
+      if (copyFeedbackModal) copyFeedbackModal.classList.remove('is-open');
+      activeCopySnap = null;
+    }
+
+    function openCopyFeedbackModal() {
+      const snap = getActiveGradingSourceSnapshot();
+      if (!snap.asg || !snap.st) {
+        showToast('Hãy chọn học sinh và BVN cần copy trước.');
+        return;
+      }
+      if (!snap.resolvedComment && !snap.voiceUrl) {
+        showToast('Bạn hiện tại chưa có lời nhận xét hoặc file Voice Feedback để sao chép.');
+        return;
+      }
+
+      const srcClass = String(snap.st.class_name || '').trim();
+      const classmates = (state.students || []).filter(function (s) {
+        return (
+          s &&
+          s.student_id !== snap.st.student_id &&
+          String(s.class_name || '').trim() === srcClass
+        );
+      });
+      if (classmates.length === 0) {
+        showToast('Lớp ' + (srcClass || 'hiện tại') + ' chưa có học sinh nào khác để sao chép.');
+        return;
+      }
+
+      activeCopySnap = snap;
+
+      const summaryBox = document.getElementById('copy-fb-source-summary');
+      const chkComment = document.getElementById('copy-fb-include-comment');
+      const chkVoice = document.getElementById('copy-fb-include-voice');
+      const chkScore = document.getElementById('copy-fb-include-score');
+      const voicePill = document.getElementById('copy-fb-voice-pill');
+      const voiceLabel = document.getElementById('copy-fb-voice-label');
+      const scoreLabel = document.getElementById('copy-fb-score-label');
+      const classLabel = document.getElementById('copy-fb-class-label');
+      const studentsListBox = document.getElementById('copy-fb-students-list');
+      const mergeSelect = document.getElementById('copy-fb-merge-mode');
+
+      if (summaryBox) {
+        const commentPreviewHtml = snap.resolvedComment
+          ? '<p class="copy-fb-note-preview">' + escapeHtml(snap.resolvedComment) + '</p>'
+          : '<p style="margin:4px 0 0;font-size:0.8125rem;color:var(--color-muted-foreground);">Không có nhận xét chữ (chỉ sao chép Voice Feedback).</p>';
+        const voiceBadge = snap.voiceUrl
+          ? '<span class="status-badge status-graded">Kèm file Voice (' + escapeHtml(snap.voiceDur || 'đã thu') + ')</span>'
+          : '<span class="status-badge status-submitted">Chỉ nhận xét chữ</span>';
+        summaryBox.innerHTML =
+          '<div class="copy-fb-source-head">' +
+            '<div>' +
+              '<strong>Nguồn:</strong> ' + escapeHtml(snap.st.full_name) + ' (' + escapeHtml(snap.st.student_id) + ') • ' +
+              escapeHtml(snap.asg.lesson_tag || snap.asg.title) +
+            '</div>' +
+            voiceBadge +
+          '</div>' +
+          commentPreviewHtml;
+      }
+
+      if (chkComment) {
+        chkComment.disabled = !snap.resolvedComment;
+        chkComment.checked = Boolean(snap.resolvedComment);
+      }
+      if (chkVoice) {
+        chkVoice.disabled = !snap.voiceUrl;
+        chkVoice.checked = Boolean(snap.voiceUrl);
+      }
+      if (voicePill) voicePill.classList.toggle('is-disabled', !snap.voiceUrl);
+      if (voiceLabel) {
+        voiceLabel.textContent = snap.voiceUrl
+          ? ('Sao chép file thu âm Voice (' + (snap.voiceDur || 'đã thu') + ')')
+          : 'Chưa có file Voice Feedback để copy';
+      }
+      if (chkScore) {
+        chkScore.disabled = snap.resolvedScore === '';
+        chkScore.checked = false;
+      }
+      if (scoreLabel) {
+        scoreLabel.textContent = snap.resolvedScore !== ''
+          ? ('Sao chép luôn điểm số (' + snap.resolvedScore + 'đ)')
+          : 'Chưa có điểm số để sao chép';
+      }
+      if (mergeSelect) mergeSelect.value = 'replace';
+      if (classLabel) {
+        classLabel.textContent = 'Chọn học sinh lớp ' + (srcClass || 'hiện tại') + ' (' + classmates.length + ' bạn khác):';
+      }
+
+      if (studentsListBox) {
+        studentsListBox.innerHTML = classmates.map(function (c) {
+          const cSub = findSubmission(snap.asg.assignment_id, c.student_id);
+          const cStatus = cSub ? String(cSub.status || 'submitted') : 'missing';
+          const hasNote = Boolean(cSub && cSub.teacher_comment);
+          const hasVoice = Boolean(cSub && isRealTeacherVoiceUrl(cSub.teacher_voice_url));
+          const preChecked = cStatus === 'submitted' ? ' checked' : '';
+          let statusBadge = '<span class="status-badge status-missing">Chưa nộp BVN</span>';
+          if (cStatus === 'graded') {
+            statusBadge = '<span class="status-badge status-graded">Đã chữa' + (cSub.score ? ' • ' + escapeHtml(cSub.score) + 'đ' : '') + '</span>';
+          } else if (cStatus === 'submitted') {
+            statusBadge = '<span class="status-badge status-submitted">Đã nộp • Chờ chữa</span>';
+          }
+          const existingPreview = hasNote
+            ? '<div class="copy-fb-existing-note" title="' + escapeHtml(cSub.teacher_comment) + '">Đã có nhận xét: ' + escapeHtml(cSub.teacher_comment) + '</div>'
+            : (hasVoice ? '<div class="copy-fb-existing-note">Đã có Voice GV riêng</div>' : '');
+
+          return (
+            '<label class="copy-fb-student-item">' +
+              '<span class="copy-fb-student-main">' +
+                '<input type="checkbox" class="copy-fb-student-check" data-copy-stu-id="' + escapeHtml(c.student_id) + '" data-sub-status="' + escapeHtml(cStatus) + '"' + preChecked + ' style="margin-top:3px;">' +
+                '<span style="min-width:0;">' +
+                  '<strong style="color:var(--ink);">' + escapeHtml(c.full_name) + '</strong> ' +
+                  '<span class="tabular-nums" style="font-size:0.8125rem;color:var(--muted);">(' + escapeHtml(c.student_id) + ')</span>' +
+                  existingPreview +
+                '</span>' +
+              '</span>' +
+              statusBadge +
+            '</label>'
+          );
+        }).join('');
+      }
+
+      if (copyFeedbackModal) copyFeedbackModal.classList.add('is-open');
+    }
+
+    if (btnOpenCopyFeedback) {
+      btnOpenCopyFeedback.addEventListener('click', openCopyFeedbackModal);
+    }
+    if (btnCloseCopyFeedbackModal) {
+      btnCloseCopyFeedbackModal.addEventListener('click', closeCopyFeedbackModal);
+    }
+    if (btnCancelCopyFeedback) {
+      btnCancelCopyFeedback.addEventListener('click', closeCopyFeedbackModal);
+    }
+    if (copyFeedbackModal) {
+      copyFeedbackModal.addEventListener('click', function (ev) {
+        if (ev.target === copyFeedbackModal) closeCopyFeedbackModal();
+      });
+    }
+    if (btnCopyFbSelectPending) {
+      btnCopyFbSelectPending.addEventListener('click', function () {
+        document.querySelectorAll('.copy-fb-student-check').forEach(function (chk) {
+          chk.checked = chk.getAttribute('data-sub-status') === 'submitted';
+        });
+      });
+    }
+    if (btnCopyFbSelectAll) {
+      btnCopyFbSelectAll.addEventListener('click', function () {
+        document.querySelectorAll('.copy-fb-student-check').forEach(function (chk) { chk.checked = true; });
+      });
+    }
+    if (btnCopyFbClearAll) {
+      btnCopyFbClearAll.addEventListener('click', function () {
+        document.querySelectorAll('.copy-fb-student-check').forEach(function (chk) { chk.checked = false; });
+      });
+    }
+
+    if (copyFeedbackForm) {
+      copyFeedbackForm.addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        const snap = activeCopySnap || getActiveGradingSourceSnapshot();
+        if (!snap.asg || !snap.st) return;
+
+        const chkComment = document.getElementById('copy-fb-include-comment');
+        const chkVoice = document.getElementById('copy-fb-include-voice');
+        const chkScore = document.getElementById('copy-fb-include-score');
+        const mergeSelect = document.getElementById('copy-fb-merge-mode');
+
+        const copyComment = Boolean(chkComment && chkComment.checked && snap.resolvedComment);
+        const copyVoice = Boolean(chkVoice && chkVoice.checked && snap.voiceUrl);
+        const copyScore = Boolean(chkScore && chkScore.checked && snap.resolvedScore !== '');
+        const mergeMode = mergeSelect && mergeSelect.value === 'append' ? 'append' : 'replace';
+
+        if (!copyComment && !copyVoice && !copyScore) {
+          showToast('Hãy chọn ít nhất 1 nội dung (nhận xét, file Voice hoặc điểm) để sao chép.');
+          return;
+        }
+
+        const checkedIds = [];
+        document.querySelectorAll('.copy-fb-student-check').forEach(function (chk) {
+          if (chk.checked) {
+            const sid = chk.getAttribute('data-copy-stu-id');
+            if (sid) checkedIds.push(sid);
+          }
+        });
+        if (checkedIds.length === 0) {
+          showToast('Vui lòng tích chọn ít nhất 1 học sinh nhận phản hồi!');
+          return;
+        }
+
+        const srcSub = snap.sub;
+        const sourceHasUnsavedEdits = Boolean(
+          snap.hasVoiceUpload ||
+          !srcSub ||
+          snap.resolvedComment !== (srcSub.teacher_comment || '') ||
+          snap.resolvedScore !== (srcSub.score !== undefined && srcSub.score !== null ? String(srcSub.score) : '')
+        );
+
+        const confirmBtn = document.getElementById('btn-confirm-copy-feedback');
+        let syncRes = null;
+        await runWithLoading(
+          confirmBtn,
+          'Đang copy phản hồi...',
+          async function () {
+            syncRes = await window.StudySnapStore.syncPostToGas(state, {
+              action: 'copyTeacherFeedback',
+              assignment_id: snap.asg.assignment_id,
+              source_student_id: snap.st.student_id,
+              include_source: sourceHasUnsavedEdits,
+              target_student_ids: checkedIds,
+              teacher_comment: copyComment ? snap.resolvedComment : '',
+              score: copyScore ? snap.resolvedScore : snap.resolvedScore,
+              copy_comment: copyComment,
+              copy_voice: copyVoice,
+              copy_score: copyScore,
+              merge_mode: mergeMode,
+              teacher_voice_url: snap.hasVoiceUpload ? '' : (copyVoice ? snap.existingRealVoiceUrl : ''),
+              teacher_voice_duration: copyVoice ? snap.voiceDur : '',
+              teacher_voice_base64: (copyVoice && snap.hasVoiceUpload) ? snap.draftVoice.dataUrl : '',
+              teacher_voice_mime_type: (copyVoice && snap.hasVoiceUpload) ? snap.draftVoice.mimeType : ''
+            });
+          },
+          {
+            title: 'Đang copy file chữa & lời nhận xét...',
+            desc: 'Hệ thống đang áp dụng nhận xét' + (copyVoice ? ' và file Voice Feedback' : '') + ' cho ' + checkedIds.length + ' bạn.'
+          }
+        );
+
+        if (syncRes && syncRes.ok === false) {
+          showToast(syncRes.error || 'Chưa sao chép được lên máy chủ — dữ liệu của các học sinh vẫn giữ nguyên!');
+          return;
+        }
+
+        const nowStr = new Date().toLocaleString('vi-VN');
+        const srvSubs = syncRes && syncRes.copiedFeedback && Array.isArray(syncRes.copiedFeedback.submissions)
+          ? syncRes.copiedFeedback.submissions
+          : null;
+        const resolvedSharedVoiceUrl = (syncRes && syncRes.copiedFeedback && syncRes.copiedFeedback.teacher_voice_url !== undefined)
+          ? syncRes.copiedFeedback.teacher_voice_url
+          : (copyVoice ? snap.voiceUrl : '');
+
+        if (srvSubs) {
+          srvSubs.forEach(function (srvSub) {
+            const existing = findSubmission(snap.asg.assignment_id, srvSub.student_id);
+            if (existing) {
+              Object.assign(existing, srvSub);
+            } else {
+              state.submissions.push(srvSub);
+            }
+          });
+        } else {
+          const localApplyIds = checkedIds.slice();
+          if (sourceHasUnsavedEdits && localApplyIds.indexOf(snap.st.student_id) === -1) {
+            localApplyIds.push(snap.st.student_id);
+          }
+          localApplyIds.forEach(function (stuId) {
+            const isSource = stuId === snap.st.student_id;
+            const existing = findSubmission(snap.asg.assignment_id, stuId);
+            if (existing) {
+              existing.status = 'graded';
+              existing.graded_at = nowStr;
+              if (isSource) {
+                existing.score = snap.resolvedScore;
+                existing.teacher_comment = snap.resolvedComment;
+                existing.teacher_voice_url = snap.voiceUrl;
+                existing.teacher_voice_duration = snap.voiceDur;
+              } else {
+                if (copyScore && snap.resolvedScore !== '') existing.score = snap.resolvedScore;
+                if (copyComment && snap.resolvedComment !== '') {
+                  if (mergeMode === 'append' && existing.teacher_comment) {
+                    existing.teacher_comment = existing.teacher_comment.indexOf(snap.resolvedComment) !== -1
+                      ? existing.teacher_comment
+                      : (existing.teacher_comment + '\n' + snap.resolvedComment);
+                  } else {
+                    existing.teacher_comment = snap.resolvedComment;
+                  }
+                }
+                if (copyVoice && resolvedSharedVoiceUrl) {
+                  existing.teacher_voice_url = resolvedSharedVoiceUrl;
+                  existing.teacher_voice_duration = snap.voiceDur;
+                }
+              }
+            } else {
+              state.submissions.push({
+                submission_id: 'SUB_' + Date.now() + '_' + stuId,
+                assignment_id: snap.asg.assignment_id,
+                student_id: stuId,
+                submitted_at: '',
+                student_note: '',
+                media_type: 'audio',
+                media_url: '',
+                media_duration: '',
+                status: 'graded',
+                score: isSource ? snap.resolvedScore : (copyScore ? snap.resolvedScore : ''),
+                teacher_comment: isSource ? snap.resolvedComment : (copyComment ? snap.resolvedComment : ''),
+                teacher_voice_url: isSource ? snap.voiceUrl : (copyVoice ? resolvedSharedVoiceUrl : ''),
+                teacher_voice_duration: isSource ? snap.voiceDur : (copyVoice ? snap.voiceDur : ''),
+                graded_at: nowStr
+              });
+            }
+          });
+        }
+
+        window.StudySnapStore.saveState(state);
+        if (sourceHasUnsavedEdits) {
+          resetGradingDraftInputs();
+        }
+        closeCopyFeedbackModal();
+        renderAll();
+        showToast(
+          'Đã copy ' +
+          (copyComment && copyVoice ? 'lời nhận xét & file Voice' : (copyVoice ? 'file Voice Feedback' : 'lời nhận xét')) +
+          ' sang ' + checkedIds.length + ' bạn lớp ' + (snap.st.class_name || 'cùng lớp') + '!'
         );
       });
     }
