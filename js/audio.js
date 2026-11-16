@@ -377,16 +377,19 @@ window.StudySnapAudio = (function () {
    */
   function renderVoicePlayer(opts) {
     const id = opts.id || ('vp-' + Math.random().toString(36).slice(2, 9));
-    const requireReal = Boolean(opts.requireRealAudio);
+    const isTeacherVariant = opts.variant === 'teacher';
+    const requireReal = Boolean(opts.requireRealAudio) || isTeacherVariant;
     const url = opts.url !== undefined && opts.url !== null && String(opts.url).trim() !== ''
       ? String(opts.url).trim()
       : (requireReal ? '' : 'demo:voice');
     const durationStr = formatDuration(parseDurationToSeconds(opts.duration || '00:40'));
     const label = opts.label || 'Bản thu âm';
-    const fallbackText = opts.fallbackText !== undefined ? String(opts.fallbackText) : '你好，老师！我是越南学生。';
+    const fallbackText = requireReal
+      ? ''
+      : (opts.fallbackText !== undefined ? String(opts.fallbackText) : '你好，老师！我是越南学生。');
     const lang = opts.lang || 'zh-CN';
     const compactClass = opts.compact ? ' is-compact' : '';
-    const variantClass = opts.variant === 'teacher' ? ' is-teacher-voice' : ' is-student-voice';
+    const variantClass = isTeacherVariant ? ' is-teacher-voice' : ' is-student-voice';
 
     const existing = playerSessions[id];
     const isPlaying = existing && existing.isPlaying;
@@ -410,7 +413,8 @@ window.StudySnapAudio = (function () {
         'data-voice-url="' + escapeAttr(url) + '" ' +
         'data-voice-duration="' + escapeAttr(totalStr) + '" ' +
         'data-voice-fallback="' + escapeAttr(fallbackText) + '" ' +
-        'data-voice-lang="' + escapeAttr(lang) + '"' +
+        'data-voice-lang="' + escapeAttr(lang) + '" ' +
+        'data-voice-variant="' + (isTeacherVariant ? 'teacher' : 'student') + '"' +
         (requireReal ? ' data-voice-require-real="1"' : '') + '>' +
         '<button type="button" class="voice-ctrl-btn voice-play-toggle" data-vp-action="toggle" ' +
           'title="' + (isPlaying ? 'Tạm dừng (Pause)' : 'Phát (Play)') + '" ' +
@@ -502,14 +506,15 @@ window.StudySnapAudio = (function () {
   function getOrCreateSession(playerEl) {
     const id = playerEl.getAttribute('data-voice-player');
     const rawUrl = (playerEl.getAttribute('data-voice-url') || '').trim();
-    const requireReal = playerEl.getAttribute('data-voice-require-real') === '1';
+    const variant = playerEl.getAttribute('data-voice-variant') || 'student';
+    const requireReal = playerEl.getAttribute('data-voice-require-real') === '1' || variant === 'teacher';
     const driveId = extractDriveFileId(rawUrl);
     let effectiveUrl = (driveId && resolvedMediaCache[driveId]) ? resolvedMediaCache[driveId] : rawUrl;
     if (!driveId && effectiveUrl.indexOf('data:') === 0) {
       effectiveUrl = dataUrlToBlobUrlSync(effectiveUrl) || effectiveUrl;
     }
     const durStr = playerEl.getAttribute('data-voice-duration') || '00:40';
-    const fallbackText = playerEl.getAttribute('data-voice-fallback') || '';
+    const fallbackText = requireReal ? '' : (playerEl.getAttribute('data-voice-fallback') || '');
     const lang = playerEl.getAttribute('data-voice-lang') || 'zh-CN';
     const totalSec = parseDurationToSeconds(durStr);
 
@@ -521,6 +526,7 @@ window.StudySnapAudio = (function () {
         id: id,
         rawUrl: rawUrl,
         url: effectiveUrl,
+        variant: variant,
         fallbackText: fallbackText,
         lang: lang,
         requireReal: requireReal,
@@ -535,6 +541,7 @@ window.StudySnapAudio = (function () {
         errorMessage: ''
       };
     } else {
+      playerSessions[id].variant = variant;
       playerSessions[id].fallbackText = fallbackText;
       playerSessions[id].requireReal = requireReal;
       if (driveId && resolvedMediaCache[driveId] && playerSessions[id].url !== resolvedMediaCache[driveId]) {
@@ -589,8 +596,8 @@ window.StudySnapAudio = (function () {
     activePlayerId = session.id;
     syncPlayerDom(session.id);
 
-    // Phát giọng đọc minh họa từ vị trí tương ứng với thanh tua (seek position)
-    if ('speechSynthesis' in window && session.fallbackText) {
+    // Chỉ đọc mẫu dự phòng cho demo học sinh, TUYỆT ĐỐI KHÔNG tự đọc AI TTS cho Voice Feedback giáo viên hoặc audio yêu cầu file thật
+    if (!session.requireReal && session.variant !== 'teacher' && 'speechSynthesis' in window && session.fallbackText) {
       try {
         window.speechSynthesis.cancel();
         const ratio = session.totalSeconds > 0 ? session.currentSeconds / session.totalSeconds : 0;
@@ -709,7 +716,10 @@ window.StudySnapAudio = (function () {
     const rawUrl = String(session.rawUrl || '').trim();
     const isExplicitDemo = rawUrl.indexOf('demo:') === 0;
     if (!rawUrl || (session.requireReal && isExplicitDemo)) {
-      notifyPlayerError(session, 'Chưa có tệp âm thanh để phát. Hãy tải file audio hoặc dán đường dẫn hợp lệ.');
+      const noRealMsg = session.variant === 'teacher'
+        ? 'Chưa có bản thu giọng nói thật từ giáo viên. Giáo viên cần tự thu âm Voice Feedback.'
+        : 'Chưa có tệp âm thanh để phát. Hãy tải file audio hoặc dán đường dẫn hợp lệ.';
+      notifyPlayerError(session, noRealMsg);
       return;
     }
 
@@ -1900,7 +1910,12 @@ window.StudySnapAudio = (function () {
    * Phát file media thực tế hoặc giọng đọc minh họa (chỉ đọc TTS nếu là dữ liệu mẫu demo:)
    */
   async function playMediaOrDemo(url, fallbackSpeechText, lang) {
-    if (!url) return;
+    if (!url || String(url).indexOf('demo:teacher-voice') === 0 || lang === 'vi-VN') {
+      if (!url || String(url).indexOf('demo:') === 0) {
+        showGlobalAudioToast('Chưa có bản thu giọng nói thật từ giáo viên.');
+        return;
+      }
+    }
     if (String(url).indexOf('demo:') === 0) {
       speakText(fallbackSpeechText, lang || 'zh-CN');
       return;

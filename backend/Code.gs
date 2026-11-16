@@ -1220,7 +1220,8 @@ function handleSaveTeacherFeedback_(ss, payload) {
   const studentId = payload.student_id;
   const nowStr = new Date().toLocaleString('vi-VN');
 
-  let teacherVoiceUrl = payload.teacher_voice_url || '';
+  const rawVoiceUrl = String(payload.teacher_voice_url || '').trim();
+  let teacherVoiceUrl = rawVoiceUrl.indexOf('demo:') === 0 ? '' : rawVoiceUrl;
   if (payload.teacher_voice_base64 && payload.teacher_voice_mime_type) {
     teacherVoiceUrl = saveBase64MediaToDrive_(
       payload.teacher_voice_base64,
@@ -1241,6 +1242,16 @@ function handleSaveTeacherFeedback_(ss, payload) {
 
   if (foundRowIndex > 0) {
     const existing = values[foundRowIndex - 1];
+    const existingVoiceRaw = String(existing[11] || '').trim();
+    const existingRealVoice = existingVoiceRaw.indexOf('demo:') === 0 ? '' : existingVoiceRaw;
+    const nextVoiceUrl = teacherVoiceUrl || existingRealVoice || '';
+    const nextVoiceDur = nextVoiceUrl
+      ? (teacherVoiceUrl ? (payload.teacher_voice_duration || existing[12] || '') : (existing[12] || payload.teacher_voice_duration || ''))
+      : '';
+    const hasIncomingScore = payload.score !== undefined && (String(payload.score) !== '' || existing[9] === '' || payload.allow_clear_score === true);
+    const nextScore = hasIncomingScore ? payload.score : existing[9];
+    const hasIncomingComment = payload.teacher_comment !== undefined && (String(payload.teacher_comment) !== '' || !existing[10] || payload.allow_clear_comment === true);
+    const nextComment = hasIncomingComment ? payload.teacher_comment : existing[10];
     const updatedRow = [
       existing[0],
       assignmentId,
@@ -1251,17 +1262,25 @@ function handleSaveTeacherFeedback_(ss, payload) {
       existing[6],
       existing[7],
       'graded',
-      payload.score !== undefined ? payload.score : existing[9],
-      payload.teacher_comment !== undefined ? payload.teacher_comment : existing[10],
-      teacherVoiceUrl || existing[11],
-      payload.teacher_voice_duration || existing[12] || '',
+      nextScore,
+      nextComment,
+      nextVoiceUrl,
+      nextVoiceDur,
       nowStr,
       Number(existing[14] || 0) || 0
     ];
     sheet.getRange(foundRowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
-    return { submission_id: existing[0], status: 'graded', teacher_voice_url: updatedRow[11] };
+    return {
+      submission_id: existing[0],
+      status: 'graded',
+      score: updatedRow[9],
+      teacher_comment: updatedRow[10],
+      teacher_voice_url: updatedRow[11],
+      teacher_voice_duration: updatedRow[12]
+    };
   } else {
     const newId = 'SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase();
+    const newVoiceDur = teacherVoiceUrl ? (payload.teacher_voice_duration || '') : '';
     const newRow = [
       newId,
       assignmentId,
@@ -1275,12 +1294,19 @@ function handleSaveTeacherFeedback_(ss, payload) {
       payload.score || '',
       payload.teacher_comment || '',
       teacherVoiceUrl,
-      payload.teacher_voice_duration || '',
+      newVoiceDur,
       nowStr,
       0
     ];
     sheet.appendRow(newRow);
-    return { submission_id: newId, status: newRow[8], teacher_voice_url: teacherVoiceUrl };
+    return {
+      submission_id: newId,
+      status: newRow[8],
+      score: newRow[9],
+      teacher_comment: newRow[10],
+      teacher_voice_url: teacherVoiceUrl,
+      teacher_voice_duration: newVoiceDur
+    };
   }
 }
 

@@ -1229,7 +1229,8 @@ export async function handleApiRequest(request, env, ctx) {
       const assignmentId = String(payload.assignment_id || '').trim();
       const studentId = String(payload.student_id || '').trim();
       const nowStr = formatViDateTime();
-      const incomingVoiceUrl = String(payload.teacher_voice_url || '').trim();
+      const rawVoiceUrl = String(payload.teacher_voice_url || '').trim();
+      const incomingVoiceUrl = rawVoiceUrl.indexOf('demo:') === 0 ? '' : rawVoiceUrl;
 
       if (payload.teacher_voice_base64 || (incomingVoiceUrl.indexOf('data:') === 0 && incomingVoiceUrl.length > 262144)) {
         return jsonResponse({
@@ -1244,14 +1245,28 @@ export async function handleApiRequest(request, env, ctx) {
         .first();
 
       if (existing) {
-        const nextScore = payload.score !== undefined ? String(payload.score) : String(existing.score || '');
-        const nextComment = payload.teacher_comment !== undefined ? String(payload.teacher_comment) : String(existing.teacher_comment || '');
-        const nextVoiceUrl = incomingVoiceUrl || existing.teacher_voice_url || '';
+        const existingRealVoice =
+          existing.teacher_voice_url && String(existing.teacher_voice_url).trim().indexOf('demo:') !== 0
+            ? String(existing.teacher_voice_url).trim()
+            : '';
+        const incomingScore = payload.score !== undefined ? String(payload.score) : undefined;
+        const nextScore =
+          incomingScore === undefined || (incomingScore === '' && existing.score !== '' && payload.allow_clear_score !== true)
+            ? String(existing.score || '')
+            : incomingScore;
+        const incomingComment = payload.teacher_comment !== undefined ? String(payload.teacher_comment) : undefined;
+        const nextComment =
+          incomingComment === undefined || (incomingComment === '' && existing.teacher_comment && payload.allow_clear_comment !== true)
+            ? String(existing.teacher_comment || '')
+            : incomingComment;
+        const nextVoiceUrl = incomingVoiceUrl || existingRealVoice || '';
         const replacedUrls =
-          incomingVoiceUrl && existing.teacher_voice_url && incomingVoiceUrl !== existing.teacher_voice_url
-            ? collectDriveUrls([existing.teacher_voice_url])
+          incomingVoiceUrl && existingRealVoice && incomingVoiceUrl !== existingRealVoice
+            ? collectDriveUrls([existingRealVoice])
             : [];
-        const nextVoiceDur = payload.teacher_voice_duration || existing.teacher_voice_duration || '';
+        const nextVoiceDur = nextVoiceUrl
+          ? (incomingVoiceUrl ? String(payload.teacher_voice_duration || existing.teacher_voice_duration || '') : String(existing.teacher_voice_duration || payload.teacher_voice_duration || ''))
+          : '';
         const nextSubmittedAt = existing.submitted_at || nowStr;
 
         await db
@@ -1260,7 +1275,14 @@ export async function handleApiRequest(request, env, ctx) {
           .run();
 
         return await buildMutationResponse(db, payload, preVer, {
-          submission: { submission_id: existing.submission_id, status: 'graded', teacher_voice_url: nextVoiceUrl },
+          submission: {
+            submission_id: existing.submission_id,
+            status: 'graded',
+            score: nextScore,
+            teacher_comment: nextComment,
+            teacher_voice_url: nextVoiceUrl,
+            teacher_voice_duration: nextVoiceDur
+          },
           deletedMediaUrls: replacedUrls
         });
       } else {
@@ -1268,13 +1290,20 @@ export async function handleApiRequest(request, env, ctx) {
         const nextStatus = String(payload.status || 'graded');
         const nextScore = payload.score !== undefined ? String(payload.score) : '';
         const nextComment = String(payload.teacher_comment || '');
-        const nextVoiceDur = String(payload.teacher_voice_duration || '');
+        const nextVoiceDur = incomingVoiceUrl ? String(payload.teacher_voice_duration || '') : '';
         await db
           .prepare('INSERT INTO submissions (submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
           .bind(newId, assignmentId, studentId, '', '', '', '', '', nextStatus, nextScore, nextComment, incomingVoiceUrl, nextVoiceDur, nowStr, 0)
           .run();
         return await buildMutationResponse(db, payload, preVer, {
-          submission: { submission_id: newId, status: nextStatus, teacher_voice_url: incomingVoiceUrl }
+          submission: {
+            submission_id: newId,
+            status: nextStatus,
+            score: nextScore,
+            teacher_comment: nextComment,
+            teacher_voice_url: incomingVoiceUrl,
+            teacher_voice_duration: nextVoiceDur
+          }
         });
       }
     }

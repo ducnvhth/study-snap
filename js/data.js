@@ -147,8 +147,8 @@ window.STUDYSNAP_INITIAL_DATA = {
       status: 'graded',
       score: 9.5,
       teacher_comment: 'Phát âm thanh 1 và thanh 4 rất sáng, dứt khoát! Biến điệu "你好 (nǐ hǎo)" chuẩn. Chú ý bật hơi mạnh hơn một chút ở từ "留学生 (liúxuéshēng)" nhé.',
-      teacher_voice_url: 'demo:teacher-voice-sub01',
-      teacher_voice_duration: '00:42',
+      teacher_voice_url: '',
+      teacher_voice_duration: '',
       graded_at: '10/11/2026 19:05'
     },
     {
@@ -179,8 +179,8 @@ window.STUDYSNAP_INITIAL_DATA = {
       status: 'graded',
       score: 8.5,
       teacher_comment: 'Ngữ điệu tự nhiên, trôi chảy. Em cần giữ độ cao của thanh 1 ở từ "高兴 (gāoxìng)" và đọc nhẹ thanh nhẹ ở từ "认识 (rènshi)" nhé.',
-      teacher_voice_url: 'demo:teacher-voice-sub03',
-      teacher_voice_duration: '00:35',
+      teacher_voice_url: '',
+      teacher_voice_duration: '',
       graded_at: '10/11/2026 20:15'
     },
     {
@@ -195,8 +195,8 @@ window.STUDYSNAP_INITIAL_DATA = {
       status: 'graded',
       score: 9.0,
       teacher_comment: 'Giọng đọc rõ chữ, phân biệt tốt âm đầu lưỡi z, c, s và zh, ch, sh. Phát huy ở Bài 2 nhé!',
-      teacher_voice_url: 'demo:teacher-voice-sub04',
-      teacher_voice_duration: '00:30',
+      teacher_voice_url: '',
+      teacher_voice_duration: '',
       graded_at: '10/11/2026 22:00'
     },
     {
@@ -211,8 +211,8 @@ window.STUDYSNAP_INITIAL_DATA = {
       status: 'graded',
       score: 9.0,
       teacher_comment: 'Biến điệu chữ "不" trong câu "汉语发音不太难 (Hànyǔ fāyīn bú tài nán)" rất chuẩn xác!',
-      teacher_voice_url: 'demo:teacher-voice-sub05',
-      teacher_voice_duration: '00:28',
+      teacher_voice_url: '',
+      teacher_voice_duration: '',
       graded_at: '11/11/2026 09:30'
     },
     {
@@ -1759,8 +1759,11 @@ window.StudySnapStore = (function () {
       });
       if (found) {
         if (json.submission.submission_id) found.submission_id = json.submission.submission_id;
-        if (json.submission.teacher_voice_url) found.teacher_voice_url = json.submission.teacher_voice_url;
         if (json.submission.status) found.status = json.submission.status;
+        if (json.submission.score !== undefined) found.score = json.submission.score;
+        if (json.submission.teacher_comment !== undefined) found.teacher_comment = json.submission.teacher_comment;
+        if (json.submission.teacher_voice_url !== undefined) found.teacher_voice_url = json.submission.teacher_voice_url;
+        if (json.submission.teacher_voice_duration !== undefined) found.teacher_voice_duration = json.submission.teacher_voice_duration;
       }
     } else if (action === 'savePracticeExercise' && json.practiceExercise) {
       const pe = json.practiceExercise;

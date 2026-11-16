@@ -693,7 +693,9 @@
     if (statusBadge) {
       if (submission.status === 'graded') {
         statusBadge.className = 'status-badge status-graded';
-        statusBadge.textContent = 'Đã chấm • ' + submission.score + '/10 điểm';
+        statusBadge.textContent = (submission.score !== '' && submission.score !== undefined && submission.score !== null)
+          ? ('Đã chấm • ' + submission.score + '/10 điểm')
+          : 'Đã chấm • Có phản hồi GV';
       } else {
         statusBadge.className = 'status-badge status-submitted';
         statusBadge.textContent = 'Đã nộp BVN • Chờ giáo viên phản hồi';
@@ -705,9 +707,10 @@
         ? 'Video BVN em đã nộp'
         : 'Ghi âm BVN em đã nộp';
 
+    const hasRealTeacherVoice = isRealTeacherVoiceUrl(submission.teacher_voice_url);
     let teacherReviewHtml = '';
-    if (submission.status === 'graded' || submission.teacher_comment || submission.teacher_voice_url) {
-      const voiceBtnHtml = submission.teacher_voice_url
+    if (submission.status === 'graded' || submission.teacher_comment || hasRealTeacherVoice) {
+      const voiceBtnHtml = hasRealTeacherVoice
         ? '<div class="media-player-box" style="flex-direction:column;align-items:stretch;">' +
           '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">' +
           '<span style="font-weight: 700; font-size: 0.875rem; color: var(--color-primary);">Phản hồi giọng nói (Voice Feedback) của Giáo viên</span>' +
@@ -720,9 +723,10 @@
             url: submission.teacher_voice_url,
             duration: submission.teacher_voice_duration || '00:35',
             label: 'Voice Feedback của Giáo viên',
-            fallbackText: submission.teacher_comment || '你的汉语发音很标准，继续加油！',
+            fallbackText: '',
             lang: 'vi-VN',
-            variant: 'teacher'
+            variant: 'teacher',
+            requireRealAudio: true
           }) +
           '</div>'
         : '';
@@ -773,6 +777,13 @@
       '</div>' +
       '</div>' +
       teacherReviewHtml;
+  }
+
+  function isRealTeacherVoiceUrl(url) {
+    const clean = String(url || '').trim();
+    if (!clean) return false;
+    if (clean.indexOf('demo:') === 0) return false;
+    return true;
   }
 
   function renderPersonalHomeworkMatrix(student) {
@@ -828,23 +839,27 @@
         if (sub) {
           completed++;
           if (sub.status === 'graded') {
+            const hasRealVoice = isRealTeacherVoiceUrl(sub.teacher_voice_url);
             statusHtml = '<span class="status-badge status-graded">Đã chữa &amp; Có phản hồi GV</span>';
-            scoreHtml = '<strong class="mono-text tabular-nums">' + escapeHtml(sub.score) + (asg.require_media === 'practice' ? 'đ' : ' / 10') + '</strong>';
+            scoreHtml = (sub.score !== '' && sub.score !== undefined && sub.score !== null)
+              ? ('<strong class="mono-text tabular-nums">' + escapeHtml(sub.score) + (asg.require_media === 'practice' ? 'đ' : ' / 10') + '</strong>')
+              : '<span class="mono-text tabular-nums" style="color: var(--color-muted-foreground);">—</span>';
             feedbackHtml =
               '<div class="matrix-cell-content">' +
               '<p class="matrix-teacher-note">' +
-              escapeHtml(sub.teacher_comment || 'Đã chấm điểm.') +
+              escapeHtml(sub.teacher_comment || (hasRealVoice ? 'Giáo viên đã gửi phản hồi bằng Voice.' : 'Đã chấm điểm.')) +
               '</p>' +
-              (sub.teacher_voice_url
+              (hasRealVoice
                 ? window.StudySnapAudio.renderVoicePlayer({
                     id: 'student-matrix-voice-' + sub.submission_id,
                     url: sub.teacher_voice_url,
                     duration: sub.teacher_voice_duration || '00:35',
                     label: 'Voice GV',
-                    fallbackText: sub.teacher_comment || '你的汉语发音很标准，继续加油！',
+                    fallbackText: '',
                     lang: 'vi-VN',
                     compact: true,
-                    variant: 'teacher'
+                    variant: 'teacher',
+                    requireRealAudio: true
                   })
                 : '') +
               '</div>';
