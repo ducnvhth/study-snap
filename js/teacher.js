@@ -40,6 +40,10 @@
     selectedPracticeExId: (state.practiceExercises && state.practiceExercises[0]) ? state.practiceExercises[0].exercise_id : 'EX_HSK1_BAI_1',
     activeGradingSubId: null,
     practiceCurrentView: 'builder',
+    practiceProgressClass: 'all',
+    practiceProgressScope: 'assigned',
+    practiceProgressFilter: 'all',
+    practiceProgressSearch: '',
     practiceDirtyMap: {}
   };
 
@@ -1665,16 +1669,21 @@
   }
 
   function switchPracticeSubView(view) {
-    ui.practiceCurrentView = view;
+    const resolvedView = (view === 'submissions' || view === 'progress') ? view : 'builder';
+    ui.practiceCurrentView = resolvedView;
     const btnBuilder = document.getElementById('subtab-btn-builder');
     const btnSubs = document.getElementById('subtab-btn-submissions');
+    const btnProgress = document.getElementById('subtab-btn-progress');
     const viewBuilder = document.getElementById('teacher-practice-view-builder');
     const viewSubs = document.getElementById('teacher-practice-view-submissions');
+    const viewProgress = document.getElementById('teacher-practice-view-progress');
 
-    if (btnBuilder) btnBuilder.classList.toggle('is-active', view === 'builder');
-    if (btnSubs) btnSubs.classList.toggle('is-active', view === 'submissions');
-    if (viewBuilder) viewBuilder.style.display = view === 'builder' ? 'block' : 'none';
-    if (viewSubs) viewSubs.style.display = view === 'submissions' ? 'block' : 'none';
+    if (btnBuilder) btnBuilder.classList.toggle('is-active', resolvedView === 'builder');
+    if (btnSubs) btnSubs.classList.toggle('is-active', resolvedView === 'submissions');
+    if (btnProgress) btnProgress.classList.toggle('is-active', resolvedView === 'progress');
+    if (viewBuilder) viewBuilder.style.display = resolvedView === 'builder' ? 'block' : 'none';
+    if (viewSubs) viewSubs.style.display = resolvedView === 'submissions' ? 'block' : 'none';
+    if (viewProgress) viewProgress.style.display = resolvedView === 'progress' ? 'block' : 'none';
   }
 
   function createDefaultSection(type, sectionNum) {
@@ -2429,7 +2438,10 @@
       }
       const subCountBadge = document.getElementById('teacher-practice-sub-count');
       if (subCountBadge) subCountBadge.textContent = '0 bài nộp';
+      const missingBarText = document.getElementById('practice-single-ex-missing-text');
+      if (missingBarText) missingBarText.textContent = 'Chưa có bài luyện tập cuối buổi nào để theo dõi.';
 
+      renderPracticeProgressMatrix();
       switchPracticeSubView(ui.practiceCurrentView || 'builder');
       return;
     }
@@ -2481,8 +2493,9 @@
     // Render Google Form interactive builder
     renderBuilderSectionsList(ex);
 
-    // Render Submissions Table
+    // Render Submissions Table & Progress Matrix
     renderTeacherPracticeSubmissions(ex);
+    renderPracticeProgressMatrix();
 
     // Ensure correct subview is displayed
     switchPracticeSubView(ui.practiceCurrentView || 'builder');
@@ -3955,23 +3968,565 @@
     });
   }
 
+  function findPracticeSubmission(exerciseId, studentId) {
+    return (state.practiceSubmissions || []).find(function (s) {
+      return (
+        String(s.exercise_id || '') === String(exerciseId || '') &&
+        String(s.student_id || '') === String(studentId || '')
+      );
+    }) || null;
+  }
+
+  function hasPendingManualTranslation(ex, sub) {
+    if (!ex || !sub) return false;
+    let pending = false;
+    (ex.sections || []).forEach(function (sec) {
+      if (sec.type === 'translation') {
+        ((sec.data && sec.data.items) || []).forEach(function (item) {
+          if (item.mode === 'manual') {
+            const mg = sub.manual_grades && sub.manual_grades[item.id];
+            if (!mg) pending = true;
+          }
+        });
+      }
+    });
+    return pending;
+  }
+
+  function getPracticeRatingMeta(rating) {
+    if (rating === 'good') {
+      return { label: 'Khá', badgeClass: 'status-submitted', icon: ICONS.check };
+    }
+    if (rating === 'needs_review') {
+      return { label: 'Cần ôn', badgeClass: 'status-missing', icon: ICONS.alert };
+    }
+    return { label: 'Rất tốt', badgeClass: 'status-graded', icon: ICONS.check };
+  }
+
+  function getPracticeExerciseDeliveriesForClass(ex, targetClass) {
+    if (!ex || !ex.exercise_id) return [];
+    const active = getExerciseDeliveries(ex.exercise_id).active;
+    if (!targetClass || targetClass === 'all') return active;
+    const targetLower = String(targetClass).trim().toLowerCase();
+    return active.filter(function (asg) {
+      const clsLower = String(asg.class_name || '').trim().toLowerCase();
+      return clsLower === 'all' || clsLower === targetLower;
+    });
+  }
+
+  function isPracticeExerciseAssignedToStudent(ex, student) {
+    if (!ex || !ex.exercise_id || !student) return false;
+    const sClass = String(student.class_name || '').trim().toLowerCase();
+    const active = getExerciseDeliveries(ex.exercise_id).active;
+    return active.some(function (asg) {
+      const clsLower = String(asg.class_name || '').trim().toLowerCase();
+      if (!clsLower || clsLower === 'unassigned') return false;
+      if (clsLower === 'all') return true;
+      return Boolean(sClass && clsLower === sClass);
+    });
+  }
+
+  function computePracticeProgressSnapshot() {
+    const availableClasses = getAvailableClasses();
+    let selectedClass = String(ui.practiceProgressClass || 'all').trim() || 'all';
+    if (selectedClass !== 'all' && availableClasses.indexOf(selectedClass) === -1) {
+      selectedClass = 'all';
+      ui.practiceProgressClass = 'all';
+    }
+
+    const scope = ui.practiceProgressScope === 'all' ? 'all' : 'assigned';
+    const filter = ui.practiceProgressFilter || 'all';
+    const searchQuery = String(ui.practiceProgressSearch || '').trim().toLowerCase();
+
+    const allStudents = Array.isArray(state.students) ? state.students : [];
+    const classStudents = selectedClass === 'all'
+      ? allStudents
+      : allStudents.filter(function (st) {
+          return String(st.class_name || '').trim() === selectedClass;
+        });
+
+    const allExercises = Array.isArray(state.practiceExercises) ? state.practiceExercises : [];
+    const exercises = scope === 'all'
+      ? allExercises
+      : allExercises.filter(function (ex) {
+          return getPracticeExerciseDeliveriesForClass(ex, selectedClass).length > 0;
+        });
+
+    const exStats = {};
+    exercises.forEach(function (ex) {
+      exStats[ex.exercise_id] = {
+        expectedCount: 0,
+        doneCount: 0,
+        pendingManualCount: 0,
+        pctSum: 0,
+        pctCount: 0,
+        avgPct: null
+      };
+    });
+
+    let totalExpected = 0;
+    let totalDone = 0;
+    let totalMissing = 0;
+    let totalPendingManual = 0;
+    let overallPctSum = 0;
+    let overallPctCount = 0;
+
+    const studentRows = classStudents.map(function (st) {
+      let expected = 0;
+      let done = 0;
+      let missing = 0;
+      let pendingManualCount = 0;
+      let pctSum = 0;
+      let pctCount = 0;
+      let scoreSum = 0;
+      let maxSum = 0;
+      const cells = {};
+
+      exercises.forEach(function (ex) {
+        const sub = findPracticeSubmission(ex.exercise_id, st.student_id);
+        const assigned = isPracticeExerciseAssignedToStudent(ex, st);
+        const applicable = assigned || Boolean(sub);
+        let status = 'unassigned';
+        let pendingManual = false;
+
+        if (applicable) {
+          expected++;
+          totalExpected++;
+          exStats[ex.exercise_id].expectedCount++;
+
+          if (sub) {
+            done++;
+            totalDone++;
+            exStats[ex.exercise_id].doneCount++;
+            pendingManual = hasPendingManualTranslation(ex, sub);
+            if (pendingManual) {
+              pendingManualCount++;
+              totalPendingManual++;
+              exStats[ex.exercise_id].pendingManualCount++;
+            }
+            status = pendingManual ? 'pending_manual' : 'done';
+
+            const scoreVal = Number(sub.total_score || 0) || 0;
+            const maxVal = Number(sub.max_score || ex.total_score || 0) || 0;
+            scoreSum += scoreVal;
+            maxSum += maxVal;
+            if (maxVal > 0) {
+              const pct = (scoreVal / maxVal) * 100;
+              pctSum += pct;
+              pctCount++;
+              overallPctSum += pct;
+              overallPctCount++;
+              exStats[ex.exercise_id].pctSum += pct;
+              exStats[ex.exercise_id].pctCount++;
+            }
+          } else {
+            missing++;
+            totalMissing++;
+            status = 'missing';
+          }
+        }
+
+        cells[ex.exercise_id] = {
+          status: status,
+          assigned: assigned,
+          applicable: applicable,
+          sub: sub,
+          pendingManual: pendingManual
+        };
+      });
+
+      const completionPct = expected > 0 ? Math.round((done / expected) * 100) : 0;
+      const avgPct = pctCount > 0 ? Math.round(pctSum / pctCount) : null;
+
+      return {
+        student: st,
+        expected: expected,
+        done: done,
+        missing: missing,
+        pendingManualCount: pendingManualCount,
+        completionPct: completionPct,
+        avgPct: avgPct,
+        scoreSum: scoreSum,
+        maxSum: maxSum,
+        cells: cells
+      };
+    });
+
+    exercises.forEach(function (ex) {
+      const stat = exStats[ex.exercise_id];
+      stat.avgPct = stat.pctCount > 0 ? Math.round(stat.pctSum / stat.pctCount) : null;
+    });
+
+    const filteredRows = studentRows.filter(function (row) {
+      if (searchQuery) {
+        const hay = (
+          String(row.student.full_name || '') + ' ' +
+          String(row.student.student_id || '') + ' ' +
+          String(row.student.username || '') + ' ' +
+          String(row.student.class_name || '')
+        ).toLowerCase();
+        if (hay.indexOf(searchQuery) === -1) return false;
+      }
+      if (filter === 'missing') return row.missing > 0;
+      if (filter === 'pending') return row.pendingManualCount > 0;
+      if (filter === 'completed') return row.expected > 0 && row.missing === 0;
+      return true;
+    });
+
+    const overallCompletionPct = totalExpected > 0 ? Math.round((totalDone / totalExpected) * 100) : 0;
+    const overallAvgPct = overallPctCount > 0 ? Math.round(overallPctSum / overallPctCount) : null;
+
+    return {
+      selectedClass: selectedClass,
+      scope: scope,
+      filter: filter,
+      searchQuery: searchQuery,
+      allStudents: allStudents,
+      classStudents: classStudents,
+      allExercises: allExercises,
+      exercises: exercises,
+      exStats: exStats,
+      studentRows: studentRows,
+      filteredRows: filteredRows,
+      totalExpected: totalExpected,
+      totalDone: totalDone,
+      totalMissing: totalMissing,
+      totalPendingManual: totalPendingManual,
+      overallCompletionPct: overallCompletionPct,
+      overallAvgPct: overallAvgPct
+    };
+  }
+
+  function renderPracticeProgressMatrix() {
+    const snap = computePracticeProgressSnapshot();
+
+    const pillEl = document.getElementById('teacher-practice-progress-pill');
+    if (pillEl) {
+      pillEl.textContent = snap.totalExpected > 0
+        ? (snap.totalDone + '/' + snap.totalExpected)
+        : (snap.classStudents.length + ' HS');
+    }
+
+    const classFilterEl = document.getElementById('practice-progress-class-filter');
+    if (classFilterEl) {
+      const prevVal = snap.selectedClass;
+      renderClassAssignOptions(classFilterEl, false);
+      classFilterEl.value = prevVal;
+    }
+
+    const scopeFilterEl = document.getElementById('practice-progress-scope-filter');
+    if (scopeFilterEl) {
+      scopeFilterEl.value = snap.scope;
+    }
+
+    document.querySelectorAll('[data-practice-matrix-filter]').forEach(function (pill) {
+      const val = pill.getAttribute('data-practice-matrix-filter');
+      pill.classList.toggle('is-active', val === snap.filter);
+    });
+
+    const statStudents = document.getElementById('prac-stat-students');
+    const statCompleted = document.getElementById('prac-stat-completed');
+    const statMissing = document.getElementById('prac-stat-missing');
+    const statAvg = document.getElementById('prac-stat-avg');
+    const statPendingNote = document.getElementById('prac-stat-pending-note');
+    const matrixBadge = document.getElementById('prac-progress-matrix-badge');
+
+    if (statStudents) statStudents.textContent = snap.classStudents.length + ' học sinh';
+    if (statCompleted) {
+      statCompleted.textContent = snap.totalDone + '/' + snap.totalExpected + ' (' + snap.overallCompletionPct + '%)';
+    }
+    if (statMissing) statMissing.textContent = String(snap.totalMissing);
+    if (statAvg) statAvg.textContent = snap.overallAvgPct !== null ? (snap.overallAvgPct + '%') : '—';
+    if (statPendingNote) {
+      statPendingNote.textContent = snap.totalPendingManual > 0
+        ? ('Điểm TB • ' + snap.totalPendingManual + ' bài chờ chấm Dịch')
+        : 'Điểm TB trung bình các bài đã nộp';
+    }
+    if (matrixBadge) {
+      matrixBadge.textContent = snap.filteredRows.length + ' HS × ' + snap.exercises.length + ' bài';
+    }
+
+    const thead = document.getElementById('practice-matrix-thead');
+    const tbody = document.getElementById('practice-matrix-tbody');
+    if (!thead || !tbody) return;
+
+    thead.innerHTML =
+      '<tr>' +
+        '<th>Học sinh</th>' +
+        snap.exercises.map(function (ex) {
+          const st = snap.exStats[ex.exercise_id] || { doneCount: 0, expectedCount: 0, avgPct: null };
+          const deliveries = getPracticeExerciseDeliveriesForClass(ex, snap.selectedClass);
+          const deliveryLabel = deliveries.length > 0
+            ? (deliveries.some(function (d) { return String(d.class_name || '').toLowerCase() === 'all'; })
+              ? 'Tất cả lớp'
+              : deliveries.map(function (d) { return d.class_name; }).join(', '))
+            : 'Chưa giao lớp';
+          return (
+            '<th>' +
+              '<button type="button" class="practice-matrix-col-btn" data-jump-practice-ex="' + escapeHtml(ex.exercise_id) + '" title="Bấm để mở đề luyện tập này">' +
+                '<span style="font-size:0.75rem;color:var(--pink-contrast);">' +
+                  escapeHtml(ex.lesson_tag || 'Bài học') + ' • ' + escapeHtml(deliveryLabel) +
+                '</span>' +
+                '<span>' + escapeHtml(ex.title || 'Bài luyện tập') + '</span>' +
+              '</button>' +
+              '<div class="practice-matrix-col-meta tabular-nums">' +
+                'Đã làm: ' + st.doneCount + '/' + st.expectedCount + ' HS' +
+                (st.avgPct !== null ? (' • TB: ' + st.avgPct + '%') : '') +
+                (ex.total_score ? (' • Tối đa ' + ex.total_score + 'đ') : '') +
+              '</div>' +
+            '</th>'
+          );
+        }).join('') +
+        '<th>Tổng kết tiến độ</th>' +
+      '</tr>';
+
+    const colSpan = snap.exercises.length + 2;
+
+    if (snap.classStudents.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="' + colSpan + '" style="text-align:center;padding:28px;color:var(--color-muted-foreground);">' +
+          'Chưa có học sinh nào trong lớp đang chọn. Hãy chuyển sang Tab <strong>4. Quản Lý Lớp &amp; Học Sinh</strong> để thêm học sinh.' +
+        '</td></tr>';
+      return;
+    }
+
+    if (snap.exercises.length === 0) {
+      const hintBody = snap.allExercises.length > 0
+        ? 'Chưa có bài luyện tập cuối buổi nào được giao cho lớp đang chọn. ' +
+          '<button type="button" class="btn btn-outline btn-sm" data-practice-show-all="1" style="margin-left:8px;">Hiển thị tất cả ' + snap.allExercises.length + ' bài trong kho</button>'
+        : 'Chưa có bài luyện tập cuối buổi nào trong hệ thống. Bấm <strong>"Quay lại Soạn câu hỏi"</strong> để tạo bài tập đầu tiên.';
+      tbody.innerHTML =
+        '<tr><td colspan="' + colSpan + '" style="text-align:center;padding:28px;color:var(--color-muted-foreground);">' +
+          hintBody +
+        '</td></tr>';
+      return;
+    }
+
+    if (snap.filteredRows.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="' + colSpan + '" style="text-align:center;padding:28px;color:var(--color-muted-foreground);">' +
+          'Không có học sinh nào khớp với bộ lọc hoặc từ khóa tìm kiếm hiện tại. ' +
+          '<button type="button" class="btn btn-outline btn-sm" data-practice-reset-filter="1" style="margin-left:8px;">Hiển thị tất cả</button>' +
+        '</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = snap.filteredRows.map(function (row) {
+      const st = row.student;
+      const cellsHtml = snap.exercises.map(function (ex) {
+        const cell = row.cells[ex.exercise_id];
+        if (!cell || cell.status === 'unassigned') {
+          return (
+            '<td>' +
+              '<div class="practice-matrix-cell">' +
+                '<span class="status-badge status-unassigned">Chưa giao cho lớp</span>' +
+              '</div>' +
+            '</td>'
+          );
+        }
+
+        if (cell.status === 'missing' || !cell.sub) {
+          return (
+            '<td>' +
+              '<div class="practice-matrix-cell">' +
+                '<div>' +
+                  '<span class="status-badge status-missing">' + ICONS.alert + '<span>Chưa làm bài</span></span>' +
+                '</div>' +
+                '<div class="practice-matrix-meta-time">Chưa có bài nộp</div>' +
+              '</div>' +
+            '</td>'
+          );
+        }
+
+        const sub = cell.sub;
+        const maxScore = Number(sub.max_score || ex.total_score || 0) || 0;
+        const score = Number(sub.total_score || 0) || 0;
+        const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : null;
+        const ratingMeta = getPracticeRatingMeta(sub.rating);
+        const btnLabel = cell.pendingManual ? 'Chấm câu Dịch' : 'Xem &amp; sửa điểm';
+        const btnClass = cell.pendingManual ? 'btn-primary' : 'btn-outline';
+
+        return (
+          '<td>' +
+            '<div class="practice-matrix-cell">' +
+              '<div class="practice-matrix-score-line">' +
+                '<span class="practice-matrix-score-val tabular-nums">' +
+                  score + (maxScore > 0 ? ('/' + maxScore) : '') + ' đ' +
+                  (pct !== null ? (' <small style="font-weight:700;color:var(--color-muted-foreground);">(' + pct + '%)</small>') : '') +
+                '</span>' +
+                '<span class="status-badge ' + ratingMeta.badgeClass + '">' + ratingMeta.icon + '<span>' + ratingMeta.label + '</span></span>' +
+              '</div>' +
+              (cell.pendingManual
+                ? '<div><span class="status-badge status-submitted">' + ICONS.clock + '<span>Chờ chấm câu Dịch</span></span></div>'
+                : '') +
+              '<div class="practice-matrix-meta-time tabular-nums">' +
+                (sub.submitted_at ? ('Nộp lúc ' + escapeHtml(sub.submitted_at)) : 'Đã hoàn thành') +
+              '</div>' +
+              '<div>' +
+                '<button type="button" class="btn ' + btnClass + ' btn-sm" data-open-manual-sub="' + escapeHtml(sub.submission_id) + '">' +
+                  btnLabel +
+                '</button>' +
+              '</div>' +
+            '</div>' +
+          '</td>'
+        );
+      }).join('');
+
+      const allDone = row.expected > 0 && row.missing === 0;
+      const summaryBadgeClass = allDone
+        ? 'status-graded'
+        : (row.done > 0 ? 'status-submitted' : 'status-missing');
+      const summaryIcon = allDone ? ICONS.check : (row.done > 0 ? ICONS.clock : ICONS.alert);
+
+      return (
+        '<tr>' +
+          '<td>' +
+            '<div class="student-cell-info">' +
+              '<span class="student-avatar">' + escapeHtml(st.avatar_initials || 'HS') + '</span>' +
+              '<div>' +
+                '<div style="font-weight:700;color:var(--color-foreground);">' + escapeHtml(st.full_name) + '</div>' +
+                '<div class="tabular-nums" style="font-size:0.8125rem;color:var(--color-muted-foreground);">' +
+                  escapeHtml(st.class_name || 'Chưa phân lớp') + ' • TK: ' + escapeHtml(st.username || String(st.student_id || '').toLowerCase()) +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</td>' +
+          cellsHtml +
+          '<td>' +
+            '<div class="practice-matrix-cell" style="min-width:168px;">' +
+              '<div>' +
+                '<span class="status-badge ' + summaryBadgeClass + ' tabular-nums">' +
+                  summaryIcon +
+                  '<span>Hoàn thành ' + row.done + '/' + row.expected + ' bài</span>' +
+                '</span>' +
+              '</div>' +
+              '<div class="practice-progress-bar" aria-hidden="true">' +
+                '<div class="practice-progress-fill" style="width:' + row.completionPct + '%;"></div>' +
+              '</div>' +
+              '<div class="practice-matrix-meta-time tabular-nums">' +
+                (row.avgPct !== null ? ('TB đạt ' + row.avgPct + '% (' + row.scoreSum + '/' + row.maxSum + 'đ)') : 'Chưa có điểm bài nào') +
+              '</div>' +
+            '</div>' +
+          '</td>' +
+        '</tr>'
+      );
+    }).join('');
+  }
+
+  function exportPracticeProgressToCsv() {
+    const snap = computePracticeProgressSnapshot();
+    if (snap.filteredRows.length === 0) {
+      showToast('Chưa có dữ liệu học sinh phù hợp để xuất báo cáo tiến độ!');
+      return;
+    }
+
+    const headers = ['Mã HS', 'Họ và tên', 'Lớp học'];
+    snap.exercises.forEach(function (ex) {
+      const colPrefix = (ex.lesson_tag ? '[' + ex.lesson_tag + '] ' : '') + (ex.title || ex.exercise_id);
+      headers.push(colPrefix + ' - Điểm');
+      headers.push(colPrefix + ' - Xếp loại');
+      headers.push(colPrefix + ' - Trạng thái');
+    });
+    headers.push('Số bài hoàn thành', 'Tổng bài được giao', 'Tỷ lệ hoàn thành (%)', 'Điểm TB (%)');
+
+    const rows = [headers];
+    snap.filteredRows.forEach(function (row) {
+      const st = row.student;
+      const line = [st.student_id || '', st.full_name || '', st.class_name || ''];
+      snap.exercises.forEach(function (ex) {
+        const cell = row.cells[ex.exercise_id];
+        if (!cell || cell.status === 'unassigned') {
+          line.push('', '', 'Chưa giao cho lớp');
+          return;
+        }
+        if (cell.status === 'missing' || !cell.sub) {
+          line.push('', '', 'Chưa làm bài');
+          return;
+        }
+        const sub = cell.sub;
+        const maxScore = sub.max_score || ex.total_score || 0;
+        const ratingLabel = getPracticeRatingMeta(sub.rating).label;
+        const statusLabel = cell.pendingManual ? 'Chờ chấm câu Dịch' : 'Đã hoàn thành';
+        line.push(String(sub.total_score || 0) + (maxScore ? '/' + maxScore : ''), ratingLabel, statusLabel);
+      });
+      line.push(
+        String(row.done),
+        String(row.expected),
+        String(row.completionPct) + '%',
+        row.avgPct !== null ? (String(row.avgPct) + '%') : '—'
+      );
+      rows.push(line);
+    });
+
+    const csvContent =
+      '\uFEFF' +
+      rows.map(function (r) {
+        return r.map(function (cell) {
+          return '"' + String(cell === null || cell === undefined ? '' : cell).replace(/"/g, '""') + '"';
+        }).join(',');
+      }).join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    const classSlug = snap.selectedClass === 'all' ? 'TatCaLop' : slugifyLessonId(snap.selectedClass);
+    link.download = 'StudySnap_Tong_Hop_Tien_Do_Luyen_Tap_' + classSlug + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Đã xuất file Excel (CSV) tổng hợp tiến độ bài luyện tập cuối buổi!');
+  }
+
   function renderTeacherPracticeSubmissions(ex) {
     const tbody = document.getElementById('teacher-practice-submissions-tbody');
     const countBadge = document.getElementById('teacher-practice-sub-count');
+    const missingBarText = document.getElementById('practice-single-ex-missing-text');
     if (!tbody) return;
 
     const subs = (state.practiceSubmissions || []).filter(function (s) {
-      return s.exercise_id === ex.exercise_id;
+      return ex && s.exercise_id === ex.exercise_id;
     });
 
     if (countBadge) {
       countBadge.textContent = subs.length + ' bài nộp';
     }
 
+    if (missingBarText && ex) {
+      const targetedStudents = (state.students || []).filter(function (st) {
+        return isPracticeExerciseAssignedToStudent(ex, st);
+      });
+      if (targetedStudents.length === 0) {
+        missingBarText.innerHTML =
+          'Đề này hiện <strong>chưa giao cho lớp nào</strong> (đang có <span class="tabular-nums">' + subs.length + '</span> bài nộp).';
+      } else {
+        const subIdSet = {};
+        subs.forEach(function (s) { subIdSet[String(s.student_id || '')] = true; });
+        const missingStudents = targetedStudents.filter(function (st) {
+          return !subIdSet[String(st.student_id || '')];
+        });
+        const doneTargeted = targetedStudents.length - missingStudents.length;
+        if (missingStudents.length === 0) {
+          missingBarText.innerHTML =
+            '<strong>Tiến độ lớp được giao:</strong> Đã hoàn thành <strong class="tabular-nums">' +
+            doneTargeted + '/' + targetedStudents.length + ' HS (100%)</strong>.';
+        } else {
+          const previewNames = missingStudents.slice(0, 5).map(function (st) {
+            return escapeHtml(st.full_name);
+          }).join(', ');
+          const extraCount = missingStudents.length > 5 ? (' và ' + (missingStudents.length - 5) + ' bạn khác') : '';
+          missingBarText.innerHTML =
+            '<strong>Tiến độ lớp được giao:</strong> Đã làm <strong class="tabular-nums">' +
+            doneTargeted + '/' + targetedStudents.length + ' HS</strong> • ' +
+            '<span style="color:var(--color-destructive);font-weight:700;">Chưa làm (' + missingStudents.length + '):</span> ' +
+            previewNames + extraCount + '.';
+        }
+      }
+    }
+
     if (subs.length === 0) {
       tbody.innerHTML =
         '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--color-muted-foreground);">' +
-        'Chưa có học sinh nào nộp bài tập này. Học sinh có thể làm trực tiếp tại Cổng Học sinh (Tab 2).' +
+        'Chưa có học sinh nào nộp bài tập này. Học sinh có thể làm trực tiếp tại Cổng Học sinh (Tab 1).' +
         '</td></tr>';
       return;
     }
@@ -3983,12 +4538,9 @@
         const totalScore = sub.total_score || 0;
         const maxScore = sub.max_score || ex.total_score || 35;
 
-        let ratingBadge = '<span class="status-badge status-graded">Rất tốt 🌟</span>';
-        if (sub.rating === 'good') {
-          ratingBadge = '<span class="status-badge status-submitted">Khá 👍</span>';
-        } else if (sub.rating === 'needs_review') {
-          ratingBadge = '<span class="status-badge status-missing">Cần ôn 📚</span>';
-        }
+        const ratingMeta = getPracticeRatingMeta(sub.rating);
+        const ratingBadge = '<span class="status-badge ' + ratingMeta.badgeClass + '">' +
+          ratingMeta.icon + '<span>' + ratingMeta.label + '</span></span>';
 
         const secScores = sub.section_scores || {};
         const breakdownStr = (ex.sections || [])
@@ -3998,17 +4550,7 @@
           })
           .join(' • ');
 
-        let hasPendingManual = false;
-        (ex.sections || []).forEach(function (sec) {
-          if (sec.type === 'translation') {
-            ((sec.data && sec.data.items) || []).forEach(function (item) {
-              if (item.mode === 'manual') {
-                const mg = sub.manual_grades && sub.manual_grades[item.id];
-                if (!mg) hasPendingManual = true;
-              }
-            });
-          }
-        });
+        const hasPendingManual = hasPendingManualTranslation(ex, sub);
 
         const statusBadge = hasPendingManual
           ? '<span class="status-badge status-submitted">Chờ chấm câu Dịch</span>'
@@ -4463,10 +5005,13 @@
       });
     }
 
-    // 2. Sub-view Switcher (Google Form Builder vs Submissions)
+    // 2. Sub-view Switcher (Soạn câu hỏi vs Điểm học sinh vs Tổng hợp tiến độ)
     document.querySelectorAll('[data-practice-view]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         const view = btn.getAttribute('data-practice-view');
+        if (view === 'progress') {
+          renderPracticeProgressMatrix();
+        }
         switchPracticeSubView(view);
       });
     });
@@ -4894,6 +5439,101 @@
     const btnExportCsv = document.getElementById('btn-export-practice-csv');
     if (btnExportCsv) {
       btnExportCsv.addEventListener('click', exportPracticeSubmissionsToCsv);
+    }
+
+    // 6b. Tab 1 Progress Summary Matrix Controls & Export
+    const btnExportProgressCsv = document.getElementById('btn-export-practice-progress-csv');
+    if (btnExportProgressCsv) {
+      btnExportProgressCsv.addEventListener('click', exportPracticeProgressToCsv);
+    }
+
+    const btnBackBuilder = document.getElementById('btn-back-to-practice-builder');
+    if (btnBackBuilder) {
+      btnBackBuilder.addEventListener('click', function () {
+        switchPracticeSubView('builder');
+      });
+    }
+
+    const btnJumpProgress = document.getElementById('btn-jump-practice-progress');
+    if (btnJumpProgress) {
+      btnJumpProgress.addEventListener('click', function () {
+        renderPracticeProgressMatrix();
+        switchPracticeSubView('progress');
+      });
+    }
+
+    const pracClassFilter = document.getElementById('practice-progress-class-filter');
+    if (pracClassFilter) {
+      pracClassFilter.addEventListener('change', function () {
+        ui.practiceProgressClass = pracClassFilter.value || 'all';
+        renderPracticeProgressMatrix();
+      });
+    }
+
+    const pracScopeFilter = document.getElementById('practice-progress-scope-filter');
+    if (pracScopeFilter) {
+      pracScopeFilter.addEventListener('change', function () {
+        ui.practiceProgressScope = pracScopeFilter.value === 'all' ? 'all' : 'assigned';
+        renderPracticeProgressMatrix();
+      });
+    }
+
+    const pracSearchInput = document.getElementById('practice-progress-search');
+    if (pracSearchInput) {
+      pracSearchInput.addEventListener('input', function () {
+        ui.practiceProgressSearch = pracSearchInput.value || '';
+        renderPracticeProgressMatrix();
+      });
+    }
+
+    document.querySelectorAll('[data-practice-matrix-filter]').forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        ui.practiceProgressFilter = pill.getAttribute('data-practice-matrix-filter') || 'all';
+        renderPracticeProgressMatrix();
+      });
+    });
+
+    const pracMatrixThead = document.getElementById('practice-matrix-thead');
+    if (pracMatrixThead) {
+      pracMatrixThead.addEventListener('click', function (ev) {
+        const jumpBtn = ev.target && ev.target.closest ? ev.target.closest('[data-jump-practice-ex]') : null;
+        if (!jumpBtn) return;
+        const exId = jumpBtn.getAttribute('data-jump-practice-ex');
+        if (!exId) return;
+        ui.selectedPracticeExId = exId;
+        switchPracticeSubView('submissions');
+        renderTeacherPracticeTab();
+      });
+    }
+
+    const pracMatrixTbody = document.getElementById('practice-matrix-tbody');
+    if (pracMatrixTbody) {
+      pracMatrixTbody.addEventListener('click', function (ev) {
+        const target = ev.target && ev.target.closest ? ev.target : null;
+        if (!target) return;
+
+        const gradeBtn = target.closest('[data-open-manual-sub]');
+        if (gradeBtn) {
+          const subId = gradeBtn.getAttribute('data-open-manual-sub');
+          if (subId) openManualGradingModal(subId);
+          return;
+        }
+
+        const showAllBtn = target.closest('[data-practice-show-all]');
+        if (showAllBtn) {
+          ui.practiceProgressScope = 'all';
+          renderPracticeProgressMatrix();
+          return;
+        }
+
+        const resetBtn = target.closest('[data-practice-reset-filter]');
+        if (resetBtn) {
+          ui.practiceProgressFilter = 'all';
+          ui.practiceProgressSearch = '';
+          if (pracSearchInput) pracSearchInput.value = '';
+          renderPracticeProgressMatrix();
+        }
+      });
     }
 
     // 7. Modals: Open & Close bindings

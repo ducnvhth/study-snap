@@ -1160,6 +1160,133 @@ select.form-control {
   gap: 8px;
 }
 
+/* Tab 1: Bảng tổng hợp tiến độ Bài luyện tập cuối buổi */
+.practice-progress-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  margin-bottom: 14px;
+}
+
+.practice-progress-control-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.practice-progress-control-item label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-primary-deep);
+  white-space: nowrap;
+}
+
+.practice-progress-search-wrap {
+  margin-left: auto;
+  min-width: 220px;
+  flex: 1 1 220px;
+  max-width: 300px;
+}
+
+.practice-matrix-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 176px;
+  max-width: 235px;
+}
+
+.practice-matrix-score-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.practice-matrix-score-val {
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+.practice-matrix-meta-time {
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+}
+
+.practice-matrix-col-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.practice-matrix-col-btn:hover {
+  color: var(--pink-contrast);
+  text-decoration: underline;
+}
+
+.practice-matrix-col-btn:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.practice-matrix-col-meta {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+  margin-top: 4px;
+}
+
+.practice-missing-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  margin-top: 12px;
+  margin-bottom: 14px;
+}
+
+.practice-missing-bar-info {
+  font-size: 0.875rem;
+  color: var(--color-foreground);
+  line-height: 1.5;
+  flex: 1 1 280px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Vocabulary Module: Lesson Selector ("Bài 1", "Bài 2", ..., "Tổng hợp") */
 .lesson-selector-bar {
   display: flex;
@@ -3427,6 +3554,15 @@ body:has(.ss-scroll-top-btn.is-visible) .toast-banner {
   }
   h1 {
     font-size: 1.5rem;
+  }
+  .progress-matrix-table th:first-child,
+  .progress-matrix-table td:first-child {
+    min-width: 156px;
+  }
+  .practice-progress-search-wrap {
+    margin-left: 0;
+    max-width: none;
+    flex: 1 1 100%;
   }
 }
 
