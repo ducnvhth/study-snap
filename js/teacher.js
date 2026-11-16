@@ -768,7 +768,10 @@
       if (studentMediaBox) {
         studentMediaBox.innerHTML =
           '<div class="assignment-brief-box">' +
-            '<span class="status-badge status-missing">' + ICONS.alert + '<span>Lớp này chưa có học sinh hoặc BVN nào. Hãy chọn lớp khác hoặc tạo tài khoản/BVN mới.</span></span>' +
+            '<div class="grade-empty-alert">' +
+              ICONS.alert +
+              '<span>Lớp này chưa có học sinh hoặc BVN nào. Hãy chọn lớp khác hoặc tạo tài khoản/BVN mới.</span>' +
+            '</div>' +
           '</div>';
       }
       if (scoreInput) scoreInput.value = '';

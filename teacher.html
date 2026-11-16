@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css?v=20261116i">
+  <link rel="stylesheet" href="styles/main.css?v=20261116k">
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -449,28 +449,28 @@
               <span class="status-badge status-submitted" id="grading-target-badge">Nguyễn Minh Anh • Bài 1</span>
             </div>
 
-            <div class="form-row-2">
+            <div class="form-row-2 grade-target-row">
               <div class="form-group">
                 <label class="form-label" for="grade-student-select">Chọn Học sinh cần chữa</label>
                 <select id="grade-student-select" class="form-control"></select>
               </div>
               <div class="form-group">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                  <label class="form-label" for="grade-assignment-select" style="margin:0;">Chọn Bài tập về nhà (BVN)</label>
-                  <button type="button" class="btn-danger-outline" id="btn-delete-current-asg" title="Xóa BVN này nếu lỡ tạo sai">
+                <label class="form-label" for="grade-assignment-select">Chọn Bài tập về nhà (BVN)</label>
+                <select id="grade-assignment-select" class="form-control"></select>
+                <div class="grade-asg-meta-row">
+                  <span id="grade-assignment-session-hint" class="grade-asg-meta-hint"></span>
+                  <button type="button" class="btn-danger-outline btn-xs" id="btn-delete-current-asg" title="Xóa BVN này nếu lỡ tạo sai">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                     <span>Xóa BVN này</span>
                   </button>
                 </div>
-                <select id="grade-assignment-select" class="form-control"></select>
-                <div id="grade-assignment-session-hint" style="font-size:0.75rem;color:var(--color-muted-foreground);margin-top:3px;"></div>
               </div>
             </div>
 
             <div id="grading-student-media-box"></div>
 
             <form id="teacher-grading-form">
-              <div class="form-row-2">
+              <div class="form-row-2 grade-score-voice-row">
                 <div class="form-group">
                   <label class="form-label" for="teacher-score-input">Điểm số (Thang 10)</label>
                   <input type="text" id="teacher-score-input" class="form-control tabular-nums" placeholder="Ví dụ: 9.5">
@@ -503,7 +503,7 @@
                 <textarea id="teacher-comment-input" class="form-control" placeholder="Nhập nhận xét chi tiết về thanh điệu (thanh 1, 2, 3, 4), âm bật hơi, chữ Hán..."></textarea>
               </div>
 
-              <div class="banner-actions" style="margin-top: 4px; gap: 10px; flex-wrap: wrap;">
+              <div class="grade-submit-actions">
                 <button type="submit" class="btn btn-primary">
                   <span>Lưu chữa BVN &amp; Cập nhật Bảng tổng hợp</span>
                 </button>
@@ -588,11 +588,11 @@
 
                 <!-- Thanh chọn giao BVN cho lớp nào -->
                 <div class="asg-assign-action-bar" style="margin-top: 12px;">
-                  <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 220px;">
+                  <div style="display: flex; align-items: center; gap: 8px; flex: 1 1 260px; min-width: 0;">
                     <label for="assign-selected-target-class" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-primary-deep); white-space: nowrap;">
                       Giao BVN đã chọn cho Lớp:
                     </label>
-                    <select id="assign-selected-target-class" class="form-control" style="font-size: 0.8125rem;">
+                    <select id="assign-selected-target-class" class="form-control" style="font-size: 0.8125rem; min-width: 130px; flex: 1;">
                       <!-- Populated by JS -->
                     </select>
                   </div>
@@ -1821,6 +1821,6 @@
   <script src="js/data.js?v=20261116i"></script>
   <script src="js/auth.js?v=20261114c"></script>
   <script src="js/audio.js?v=20261116f"></script>
-  <script src="js/teacher.js?v=20261116i"></script>
+  <script src="js/teacher.js?v=20261116k"></script>
 </body>
 </html>

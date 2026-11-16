@@ -519,6 +519,10 @@ p {
   margin-bottom: 28px;
 }
 
+.bvn-workspace-grid > * {
+  min-width: 0;
+}
+
 .assignment-brief-box {
   padding: 14px 16px;
   margin-bottom: 14px;
@@ -613,6 +617,87 @@ select.form-control {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
+}
+
+.form-row-2 > * {
+  min-width: 0;
+}
+
+.grade-target-row {
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.grade-target-row > .form-group {
+  margin-bottom: 0;
+}
+
+.grade-asg-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.grade-asg-meta-hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+  line-height: 1.4;
+}
+
+.grade-empty-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-destructive-bg);
+  border: 1px solid var(--color-destructive-border);
+  color: var(--color-destructive-text);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.45;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.grade-empty-alert svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.assignment-brief-box .status-badge {
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.grade-score-voice-row {
+  align-items: end;
+  margin-bottom: 16px;
+}
+
+.grade-score-voice-row > .form-group {
+  margin-bottom: 0;
+}
+
+.grade-score-voice-row .btn {
+  min-height: 44px;
+}
+
+.grade-submit-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.grade-submit-actions .btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .practice-progress-bar-wrap {
@@ -2554,6 +2639,12 @@ body:has(.ss-scroll-top-btn.is-visible) .toast-banner {
   background-color: var(--color-surface-muted);
 }
 
+@media (max-width: 1024px) {
+  .bvn-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   .matching-container,
   .mc-options-grid,
@@ -3092,6 +3183,15 @@ body:has(.ss-scroll-top-btn.is-visible) .toast-banner {
   min-height: 36px;
   padding: 6px 14px;
   border-radius: var(--radius-pill);
+}
+
+.btn-danger-outline.btn-xs {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-danger-outline:hover:not(:disabled) {
