@@ -1426,6 +1426,22 @@ export async function handleApiRequest(request, env, ctx) {
       return await buildMutationResponse(db, payload, preVer, { assignment: { assignment_id: asgId } });
     }
 
+    if (action === 'renameAssignmentSession') {
+      const oldName = String(payload.old_session_tag || '').trim();
+      const newName = String(payload.new_session_tag || '').trim();
+      if (!oldName || !newName) {
+        return jsonResponse({ ok: false, error: 'Thiếu tên buổi học cũ hoặc mới.' }, 400);
+      }
+      const res = await db
+        .prepare("UPDATE assignments SET session_tag = ? WHERE TRIM(COALESCE(session_tag, 'Buổi 1')) = ? AND LOWER(TRIM(COALESCE(require_media, 'audio_or_video'))) NOT IN ('practice', 'vocab')")
+        .bind(newName, oldName)
+        .run();
+      const updatedCount = res && res.meta ? Number(res.meta.changes || 0) : 0;
+      return await buildMutationResponse(db, payload, preVer, {
+        renamedSession: { old_session_tag: oldName, new_session_tag: newName, updated_count: updatedCount }
+      });
+    }
+
     if (action === 'assignExercisesToClass' || action === 'unassignAssignment') {
       const targetClass =
         action === 'unassignAssignment'

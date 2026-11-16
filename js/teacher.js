@@ -6702,9 +6702,29 @@
 
     // Quản lý Buổi học & Giao BVN theo Buổi
     const manageSessionPicker = document.getElementById('manage-session-picker');
+    const quickEditSessionRow = document.getElementById('quick-edit-session-row');
+    const editSessionInput = document.getElementById('edit-session-name-input');
+    const btnToggleEditSession = document.getElementById('btn-toggle-edit-session');
+    const btnCancelEditSession = document.getElementById('btn-cancel-edit-session');
+    const btnEditSessionConfirm = document.getElementById('btn-edit-session-confirm');
+
+    function getAllKnownBvnSessions() {
+      const list = [];
+      const addUnique = function (name) {
+        const clean = String(name || '').trim();
+        if (clean && list.indexOf(clean) === -1) list.push(clean);
+      };
+      (state.assignments || []).filter(isNonVocabAssignment).forEach(function (a) {
+        addUnique(a.session_tag || 'Buổi 1');
+      });
+      (ui.customSessions || []).forEach(addUnique);
+      return list;
+    }
+
     if (manageSessionPicker) {
       manageSessionPicker.addEventListener('change', function () {
         ui.manageSelectedSession = manageSessionPicker.value;
+        if (quickEditSessionRow) quickEditSessionRow.style.display = 'none';
         renderSessionManager();
       });
     }
@@ -6716,6 +6736,7 @@
       btnToggleAddSession.addEventListener('click', function () {
         const willOpen = quickAddSessionRow.style.display === 'none' || !quickAddSessionRow.style.display;
         quickAddSessionRow.style.display = willOpen ? 'block' : 'none';
+        if (willOpen && quickEditSessionRow) quickEditSessionRow.style.display = 'none';
         if (willOpen && customSessionInput && typeof customSessionInput.focus === 'function') {
           customSessionInput.focus();
         }
@@ -6737,11 +6758,7 @@
         return;
       }
 
-      const existingSessions = (state.assignments || [])
-        .filter(isNonVocabAssignment)
-        .map(function (a) { return (a.session_tag || 'Buổi 1').trim(); })
-        .concat(ui.customSessions || []);
-      const existingMatch = existingSessions.find(function (s) {
+      const existingMatch = getAllKnownBvnSessions().find(function (s) {
         return s.toLowerCase() === val.toLowerCase();
       });
 
@@ -6775,6 +6792,111 @@
         if (ev.key === 'Enter') {
           ev.preventDefault();
           submitCreateCustomSession();
+        }
+      });
+    }
+
+    if (btnToggleEditSession && quickEditSessionRow) {
+      btnToggleEditSession.addEventListener('click', function () {
+        const willOpen = quickEditSessionRow.style.display === 'none' || !quickEditSessionRow.style.display;
+        quickEditSessionRow.style.display = willOpen ? 'block' : 'none';
+        if (willOpen) {
+          if (quickAddSessionRow) quickAddSessionRow.style.display = 'none';
+          if (editSessionInput) {
+            editSessionInput.value = ui.manageSelectedSession || 'Buổi 1';
+            if (typeof editSessionInput.focus === 'function') editSessionInput.focus();
+            if (typeof editSessionInput.select === 'function') editSessionInput.select();
+          }
+        }
+      });
+    }
+
+    if (btnCancelEditSession && quickEditSessionRow) {
+      btnCancelEditSession.addEventListener('click', function () {
+        quickEditSessionRow.style.display = 'none';
+      });
+    }
+
+    let isRenamingSession = false;
+    async function submitRenameSession() {
+      if (isRenamingSession) return;
+      const oldName = String(ui.manageSelectedSession || '').trim();
+      const newName = editSessionInput ? editSessionInput.value.trim().replace(/\s+/g, ' ') : '';
+      if (!newName) {
+        showToast('Vui lòng nhập tên mới cho buổi học.');
+        if (editSessionInput && typeof editSessionInput.focus === 'function') editSessionInput.focus();
+        return;
+      }
+      if (!oldName || newName === oldName) {
+        if (quickEditSessionRow) quickEditSessionRow.style.display = 'none';
+        return;
+      }
+
+      const duplicateOther = getAllKnownBvnSessions().find(function (s) {
+        return s !== oldName && s.toLowerCase() === newName.toLowerCase();
+      });
+      if (duplicateOther) {
+        showToast('Tên buổi học "' + duplicateOther + '" đã tồn tại. Vui lòng chọn tên khác!');
+        if (editSessionInput && typeof editSessionInput.focus === 'function') editSessionInput.focus();
+        return;
+      }
+
+      const affectedAsgs = (state.assignments || []).filter(function (a) {
+        return isNonVocabAssignment(a) && ((a.session_tag || 'Buổi 1').trim() === oldName);
+      });
+
+      if (affectedAsgs.length > 0) {
+        isRenamingSession = true;
+        let syncRes = null;
+        try {
+          await runWithLoading(btnEditSessionConfirm, 'Đang đổi tên buổi học...', async function () {
+            syncRes = await window.StudySnapStore.syncPostToGas(state, {
+              action: 'renameAssignmentSession',
+              old_session_tag: oldName,
+              new_session_tag: newName
+            });
+          });
+        } finally {
+          isRenamingSession = false;
+        }
+        if (syncRes && syncRes.ok === false) {
+          showToast(syncRes.error || 'Chưa đổi được tên buổi học trên máy chủ — vui lòng thử lại!');
+          return;
+        }
+      }
+
+      const updatedCustom = [];
+      (Array.isArray(ui.customSessions) ? ui.customSessions : []).forEach(function (s) {
+        const mapped = s === oldName ? newName : s;
+        if (mapped && updatedCustom.indexOf(mapped) === -1) updatedCustom.push(mapped);
+      });
+      if (affectedAsgs.length === 0 && updatedCustom.indexOf(newName) === -1) {
+        updatedCustom.push(newName);
+      }
+      ui.customSessions = updatedCustom;
+      saveCustomSessions(ui.customSessions);
+      ui.manageSelectedSession = newName;
+      if (ui.gradingSessionFilter === oldName) {
+        ui.gradingSessionFilter = newName;
+      }
+      affectedAsgs.forEach(function (a) {
+        a.session_tag = newName;
+      });
+      window.StudySnapStore.saveState(state);
+
+      if (quickEditSessionRow) quickEditSessionRow.style.display = 'none';
+      renderAll();
+      showToast('Đã đổi tên buổi "' + oldName + '" thành "' + newName + '"!');
+    }
+
+    if (btnEditSessionConfirm) {
+      btnEditSessionConfirm.addEventListener('click', submitRenameSession);
+    }
+    if (editSessionInput) {
+      editSessionInput.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          return submitRenameSession();
         }
       });
     }

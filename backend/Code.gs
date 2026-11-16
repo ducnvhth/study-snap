@@ -521,6 +521,11 @@ function doPost(e) {
       return buildMutationResponse_(ss, payload, preVer, { assignment: result });
     }
 
+    if (action === 'renameAssignmentSession') {
+      const result = handleRenameAssignmentSession_(ss, payload);
+      return buildMutationResponse_(ss, payload, preVer, { renamedSession: result });
+    }
+
     if (action === 'assignExercisesToClass') {
       const targetClass = String(payload.target_class || 'all').trim();
       const ids = Array.isArray(payload.assignment_ids)
@@ -1440,6 +1445,33 @@ function handleAddAssignment_(ss, payload) {
   });
   sheet.appendRow(rowValues);
   return { assignment_id: assignmentId, class_name: rowMap.class_name };
+}
+
+function handleRenameAssignmentSession_(ss, payload) {
+  const sheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS);
+  const oldName = String(payload.old_session_tag || '').trim();
+  const newName = String(payload.new_session_tag || '').trim();
+  if (!sheet || !oldName || !newName) {
+    return { old_session_tag: oldName, new_session_tag: newName, updated_count: 0 };
+  }
+  const headers = ensureSheetHeaders_(sheet, ASSIGNMENT_HEADERS);
+  const sessionColIdx = headers.indexOf('session_tag');
+  const reqColIdx = headers.indexOf('require_media');
+  if (sessionColIdx === -1) {
+    return { old_session_tag: oldName, new_session_tag: newName, updated_count: 0 };
+  }
+  const values = sheet.getDataRange().getValues();
+  let updatedCount = 0;
+  for (let i = 1; i < values.length; i++) {
+    const reqMedia = reqColIdx >= 0 ? String(values[i][reqColIdx] || 'audio_or_video').trim().toLowerCase() : 'audio_or_video';
+    if (reqMedia === 'practice' || reqMedia === 'vocab') continue;
+    const curSession = String(values[i][sessionColIdx] || 'Buổi 1').trim() || 'Buổi 1';
+    if (curSession === oldName) {
+      sheet.getRange(i + 1, sessionColIdx + 1).setValue(newName);
+      updatedCount++;
+    }
+  }
+  return { old_session_tag: oldName, new_session_tag: newName, updated_count: updatedCount };
 }
 
 function updateAssignmentsClass_(ss, assignmentIds, targetClass) {

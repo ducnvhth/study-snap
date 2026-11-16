@@ -536,9 +536,15 @@
                       <!-- Populated by JS: Buổi 1, Buổi 2... -->
                     </select>
                   </div>
-                  <button type="button" class="btn btn-outline btn-sm" id="btn-toggle-add-session" style="font-weight: 700;">
-                    <span>+ Thêm Buổi mới</span>
-                  </button>
+                  <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-outline btn-sm" id="btn-toggle-edit-session" style="font-weight: 700;" title="Sửa tên buổi học đang chọn">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+                      <span>Sửa tên buổi</span>
+                    </button>
+                    <button type="button" class="btn btn-outline btn-sm" id="btn-toggle-add-session" style="font-weight: 700;">
+                      <span>+ Thêm Buổi mới</span>
+                    </button>
+                  </div>
                 </div>
 
                 <!-- Dòng thêm buổi học mới nếu cần -->
@@ -547,6 +553,15 @@
                     <input type="text" id="new-custom-session-name" class="form-control" placeholder="Tên buổi mới (Ví dụ: Buổi 4, Buổi 5...)">
                     <button type="button" class="btn btn-primary btn-sm" id="btn-create-session-confirm">Tạo</button>
                     <button type="button" class="btn btn-outline btn-sm" id="btn-cancel-add-session">Hủy</button>
+                  </div>
+                </div>
+
+                <!-- Dòng sửa tên buổi học đang chọn -->
+                <div id="quick-edit-session-row" style="display: none; margin-bottom: 12px; padding: 10px; background: var(--color-primary-light); border-radius: var(--radius-md);">
+                  <div style="display: flex; gap: 8px;">
+                    <input type="text" id="edit-session-name-input" class="form-control" placeholder="Nhập tên mới cho buổi học...">
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-edit-session-confirm">Lưu tên</button>
+                    <button type="button" class="btn btn-outline btn-sm" id="btn-cancel-edit-session">Hủy</button>
                   </div>
                 </div>
 
@@ -1734,9 +1749,9 @@
 
   <script src="js/vocab_data.js?v=20261114h"></script>
   <script src="js/vocab_suite.js?v=20261116e"></script></script>
-  <script src="js/data.js?v=20261116f"></script>
+  <script src="js/data.js?v=20261116h"></script>
   <script src="js/auth.js?v=20261114c"></script>
   <script src="js/audio.js?v=20261116f"></script>
-  <script src="js/teacher.js?v=20261116g"></script>
+  <script src="js/teacher.js?v=20261116h"></script>
 </body>
 </html>

@@ -892,6 +892,7 @@ window.StudySnapLoading = (function () {
     deletePracticeExercise: 'Đang xóa đề luyện tập...',
     gradeManualTranslation: 'Đang lưu điểm chấm câu dịch...',
     addAssignment: 'Đang giao bài tập mới...',
+    renameAssignmentSession: 'Đang cập nhật tên buổi học...',
     deleteAssignment: 'Đang xóa bài tập...',
     assignExercisesToClass: 'Đang giao bài tập cho lớp...',
     unassignAssignment: 'Đang hủy giao bài cho lớp...',
@@ -950,6 +951,10 @@ window.StudySnapLoading = (function () {
     addAssignment: {
       title: 'Đang giao bài tập mới...',
       desc: 'Vui lòng đợi hệ thống lưu bài tập và đồng bộ danh sách lớp.'
+    },
+    renameAssignmentSession: {
+      title: 'Đang cập nhật tên buổi học...',
+      desc: 'Hệ thống đang đổi tên buổi học trên các BVN thuộc buổi này.'
     },
     deleteAssignment: {
       title: 'Đang xóa bài tập...',
