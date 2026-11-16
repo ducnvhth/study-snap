@@ -24,11 +24,37 @@
 
   let state = window.StudySnapStore.loadState();
 
+  const CUSTOM_SESSIONS_STORAGE_KEY = 'studysnap_custom_bvn_sessions';
+
+  function loadCustomSessions() {
+    try {
+      if (typeof localStorage === 'undefined') return [];
+      const raw = localStorage.getItem(CUSTOM_SESSIONS_STORAGE_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr)
+        ? arr.map(function (s) { return String(s || '').trim(); }).filter(Boolean)
+        : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveCustomSessions(list) {
+    try {
+      if (typeof localStorage === 'undefined') return;
+      localStorage.setItem(CUSTOM_SESSIONS_STORAGE_KEY, JSON.stringify(list || []));
+    } catch (e) {
+      // ignore
+    }
+  }
+
   let ui = {
     activeTab: 'practice',
     selectedClass: 'all',
     gradingSessionFilter: 'all',
     manageSelectedSession: 'Buổi 1',
+    customSessions: loadCustomSessions(),
     studentAccountsClassFilter: 'all',
     gradingStudentId: state.students[0] ? state.students[0].student_id : 'HS01',
     gradingAssignmentId: state.assignments[0] ? state.assignments[0].assignment_id : 'BVN01_1',
@@ -500,13 +526,18 @@
     const newAsgClassSelect = document.getElementById('new-asg-class');
     const hiddenSessionInput = document.getElementById('new-asg-session');
 
-    // 1. Gather all unique sessions (chỉ lọc các BVN Ghi âm & Video, tách khỏi Ôn từ vựng)
+    // 1. Gather all unique sessions (BVN Ghi âm & Video + các buổi mới tạo chưa có BVN)
     const nonVocabAsgs = (state.assignments || []).filter(isNonVocabAssignment);
     const sessions = [];
-    nonVocabAsgs.forEach(function (a) {
-      const s = (a.session_tag || 'Buổi 1').trim();
+    const appendSessionUnique = function (name) {
+      const s = String(name || '').trim();
       if (s && sessions.indexOf(s) === -1) sessions.push(s);
+    };
+    nonVocabAsgs.forEach(function (a) {
+      appendSessionUnique(a.session_tag || 'Buổi 1');
     });
+    (ui.customSessions || []).forEach(appendSessionUnique);
+    if (sessions.length === 0) appendSessionUnique('Buổi 1');
     if (sessions.indexOf(ui.manageSelectedSession) === -1 && sessions.length > 0) {
       ui.manageSelectedSession = sessions[0];
     }
@@ -520,6 +551,7 @@
         const sel = s === ui.manageSelectedSession ? ' selected' : '';
         return '<option value="' + escapeHtml(s) + '"' + sel + '>' + escapeHtml(s) + ' (' + count + ' BVN)</option>';
       }).join('');
+      picker.value = ui.manageSelectedSession;
     }
 
     // 2. Render subtasks in selected session
@@ -6679,9 +6711,14 @@
 
     const btnToggleAddSession = document.getElementById('btn-toggle-add-session');
     const quickAddSessionRow = document.getElementById('quick-add-session-row');
+    const customSessionInput = document.getElementById('new-custom-session-name');
     if (btnToggleAddSession && quickAddSessionRow) {
       btnToggleAddSession.addEventListener('click', function () {
-        quickAddSessionRow.style.display = quickAddSessionRow.style.display === 'none' ? 'block' : 'none';
+        const willOpen = quickAddSessionRow.style.display === 'none' || !quickAddSessionRow.style.display;
+        quickAddSessionRow.style.display = willOpen ? 'block' : 'none';
+        if (willOpen && customSessionInput && typeof customSessionInput.focus === 'function') {
+          customSessionInput.focus();
+        }
       });
     }
 
@@ -6692,17 +6729,53 @@
       });
     }
 
+    function submitCreateCustomSession() {
+      const val = customSessionInput ? customSessionInput.value.trim().replace(/\s+/g, ' ') : '';
+      if (!val) {
+        showToast('Vui lòng nhập tên buổi học mới (ví dụ: Buổi 2).');
+        if (customSessionInput && typeof customSessionInput.focus === 'function') customSessionInput.focus();
+        return;
+      }
+
+      const existingSessions = (state.assignments || [])
+        .filter(isNonVocabAssignment)
+        .map(function (a) { return (a.session_tag || 'Buổi 1').trim(); })
+        .concat(ui.customSessions || []);
+      const existingMatch = existingSessions.find(function (s) {
+        return s.toLowerCase() === val.toLowerCase();
+      });
+
+      if (existingMatch) {
+        ui.manageSelectedSession = existingMatch;
+        if (quickAddSessionRow) quickAddSessionRow.style.display = 'none';
+        if (customSessionInput) customSessionInput.value = '';
+        renderSessionManager();
+        showToast('Buổi học "' + existingMatch + '" đã tồn tại — đã chuyển sang buổi này!');
+        return;
+      }
+
+      if (!Array.isArray(ui.customSessions)) ui.customSessions = [];
+      ui.customSessions.push(val);
+      saveCustomSessions(ui.customSessions);
+      ui.manageSelectedSession = val;
+      if (quickAddSessionRow) quickAddSessionRow.style.display = 'none';
+      if (customSessionInput) customSessionInput.value = '';
+      renderSessionManager();
+      showToast('Đã tạo và chuyển sang buổi học mới "' + val + '". Hãy nhập BVN mới để bắt đầu!');
+      const newAsgTagInput = document.getElementById('new-asg-tag');
+      if (newAsgTagInput && typeof newAsgTagInput.focus === 'function') newAsgTagInput.focus();
+    }
+
     const btnCreateSessionConfirm = document.getElementById('btn-create-session-confirm');
     if (btnCreateSessionConfirm) {
-      btnCreateSessionConfirm.addEventListener('click', function () {
-        const input = document.getElementById('new-custom-session-name');
-        const val = input ? input.value.trim() : '';
-        if (!val) return;
-        ui.manageSelectedSession = val;
-        if (quickAddSessionRow) quickAddSessionRow.style.display = 'none';
-        if (input) input.value = '';
-        showToast('Đã tạo và chuyển sang buổi học mới "' + val + '". Hãy nhập BVN mới để bắt đầu!');
-        renderSessionManager();
+      btnCreateSessionConfirm.addEventListener('click', submitCreateCustomSession);
+    }
+    if (customSessionInput) {
+      customSessionInput.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          submitCreateCustomSession();
+        }
       });
     }
 
