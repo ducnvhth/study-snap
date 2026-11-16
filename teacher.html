@@ -1216,20 +1216,22 @@
     </main>
   </div>
 
-  <!-- MODAL 1: CHẤM DỊCH THỦ CÔNG (MANUAL GRADING MODAL) -->
+  <!-- MODAL 1: XEM CHI TIẾT BÀI LÀM, CHẤM CÂU DỊCH & SỬA ĐIỂM -->
   <div class="modal-backdrop" id="modal-manual-grading" role="dialog" aria-modal="true" aria-labelledby="manual-grading-title">
-    <div class="modal-dialog" style="max-width: 680px;">
+    <div class="modal-dialog" style="max-width: 780px;">
       <div class="panel-header" style="margin-bottom: 16px;">
         <div class="panel-title-row">
-          <h2 id="manual-grading-title">Chấm điểm câu Dịch thủ công (zh &rarr; vi)</h2>
+          <h2 id="manual-grading-title">Chi tiết bài làm &amp; Sửa điểm học sinh</h2>
         </div>
-        <button type="button" class="btn btn-outline btn-sm" id="btn-close-manual-modal">✕</button>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-manual-modal" aria-label="Đóng hộp thoại">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
       </div>
       <div id="manual-grading-student-info" style="font-size:0.9375rem;margin-bottom:14px;color:var(--color-foreground);"></div>
       <form id="manual-grading-form">
-        <div id="manual-grading-questions-container" style="display:flex;flex-direction:column;gap:16px;max-height:60vh;overflow-y:auto;padding-right:4px;"></div>
+        <div id="manual-grading-questions-container" style="display:flex;flex-direction:column;gap:14px;max-height:62vh;overflow-y:auto;padding-right:4px;"></div>
         <div class="banner-actions" style="margin-top:20px;justify-content:flex-end;">
-          <button type="button" class="btn btn-outline" id="btn-cancel-manual-modal">Hủy</button>
+          <button type="button" class="btn btn-outline" id="btn-cancel-manual-modal">Đóng</button>
           <button type="submit" class="btn btn-primary">Lưu điểm &amp; Nhận xét</button>
         </div>
       </form>
@@ -1706,9 +1708,9 @@
 
   <script src="js/vocab_data.js?v=20261114h"></script>
   <script src="js/vocab_suite.js?v=20261114j"></script>
-  <script src="js/data.js?v=20261114h"></script>
+  <script src="js/data.js?v=20261116b"></script>
   <script src="js/auth.js?v=20261114c"></script>
   <script src="js/audio.js?v=20261114j"></script>
-  <script src="js/teacher.js?v=20261116a"></script>
+  <script src="js/teacher.js?v=20261116b"></script>
 </body>
 </html>

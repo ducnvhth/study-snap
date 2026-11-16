@@ -193,8 +193,12 @@
     return Boolean(asg && String(asg.require_media || '').trim().toLowerCase() === 'vocab');
   }
 
+  function isPracticeAssignment(asg) {
+    return Boolean(asg && String(asg.require_media || '').trim().toLowerCase() === 'practice');
+  }
+
   function isNonVocabAssignment(asg) {
-    return !isVocabAssignment(asg);
+    return !isVocabAssignment(asg) && !isPracticeAssignment(asg);
   }
 
   function slugifyLessonId(rawTitle) {
@@ -2218,6 +2222,13 @@
       totalScore += Number(s.max_score || 0);
     });
     ex.total_score = totalScore;
+    if (
+      totalScore > 0 &&
+      window.StudySnapStore &&
+      typeof window.StudySnapStore.getEffectivePracticeThresholds === 'function'
+    ) {
+      ex.thresholds = window.StudySnapStore.getEffectivePracticeThresholds(ex.thresholds, totalScore);
+    }
   }
 
   function getExerciseDeliveries(exerciseId) {
@@ -3969,10 +3980,12 @@
   }
 
   function findPracticeSubmission(exerciseId, studentId) {
+    const targetExId = String(exerciseId || '').trim();
+    const targetStuId = String(studentId || '').trim().toUpperCase();
     return (state.practiceSubmissions || []).find(function (s) {
       return (
-        String(s.exercise_id || '') === String(exerciseId || '') &&
-        String(s.student_id || '') === String(studentId || '')
+        String((s && s.exercise_id) || '').trim() === targetExId &&
+        String((s && s.student_id) || '').trim().toUpperCase() === targetStuId
       );
     }) || null;
   }
@@ -3993,14 +4006,27 @@
     return pending;
   }
 
-  function getPracticeRatingMeta(rating) {
-    if (rating === 'good') {
-      return { label: 'Khá', badgeClass: 'status-submitted', icon: ICONS.check };
+  function getPracticeRatingMeta(subOrRating, ex) {
+    let rawRating = subOrRating;
+    let score = 0;
+    let maxScore = Number(ex && ex.total_score) || 0;
+    if (subOrRating && typeof subOrRating === 'object') {
+      rawRating = subOrRating.rating;
+      score = Number(subOrRating.total_score || 0) || 0;
+      maxScore = Number(subOrRating.max_score || maxScore) || 0;
     }
-    if (rating === 'needs_review') {
-      return { label: 'Cần ôn', badgeClass: 'status-missing', icon: ICONS.alert };
+    const key =
+      window.StudySnapStore && typeof window.StudySnapStore.resolvePracticeRatingKey === 'function'
+        ? window.StudySnapStore.resolvePracticeRatingKey(rawRating, score, maxScore, ex && ex.thresholds)
+        : String(rawRating || '').trim();
+
+    if (key === 'good') {
+      return { key: 'good', label: 'Khá', badgeClass: 'status-submitted', icon: ICONS.check };
     }
-    return { label: 'Rất tốt', badgeClass: 'status-graded', icon: ICONS.check };
+    if (key === 'needs_review') {
+      return { key: 'needs_review', label: 'Cần ôn', badgeClass: 'status-missing', icon: ICONS.alert };
+    }
+    return { key: 'very_good', label: 'Rất tốt', badgeClass: 'status-graded', icon: ICONS.check };
   }
 
   function getPracticeExerciseDeliveriesForClass(ex, targetClass) {
@@ -4049,7 +4075,10 @@
     const exercises = scope === 'all'
       ? allExercises
       : allExercises.filter(function (ex) {
-          return getPracticeExerciseDeliveriesForClass(ex, selectedClass).length > 0;
+          if (getPracticeExerciseDeliveriesForClass(ex, selectedClass).length > 0) return true;
+          return classStudents.some(function (st) {
+            return Boolean(findPracticeSubmission(ex.exercise_id, st.student_id));
+          });
         });
 
     const exStats = {};
@@ -4260,7 +4289,7 @@
             ? (deliveries.some(function (d) { return String(d.class_name || '').toLowerCase() === 'all'; })
               ? 'Tất cả lớp'
               : deliveries.map(function (d) { return d.class_name; }).join(', '))
-            : 'Chưa giao lớp';
+            : (st.doneCount > 0 ? 'Đã đóng giao' : 'Chưa giao lớp');
           return (
             '<th>' +
               '<button type="button" class="practice-matrix-col-btn" data-jump-practice-ex="' + escapeHtml(ex.exercise_id) + '" title="Bấm để mở đề luyện tập này">' +
@@ -4342,7 +4371,7 @@
         const maxScore = Number(sub.max_score || ex.total_score || 0) || 0;
         const score = Number(sub.total_score || 0) || 0;
         const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : null;
-        const ratingMeta = getPracticeRatingMeta(sub.rating);
+        const ratingMeta = getPracticeRatingMeta(sub, ex);
         const btnLabel = cell.pendingManual ? 'Chấm câu Dịch' : 'Xem &amp; sửa điểm';
         const btnClass = cell.pendingManual ? 'btn-primary' : 'btn-outline';
 
@@ -4445,7 +4474,7 @@
         }
         const sub = cell.sub;
         const maxScore = sub.max_score || ex.total_score || 0;
-        const ratingLabel = getPracticeRatingMeta(sub.rating).label;
+        const ratingLabel = getPracticeRatingMeta(sub, ex).label;
         const statusLabel = cell.pendingManual ? 'Chờ chấm câu Dịch' : 'Đã hoàn thành';
         line.push(String(sub.total_score || 0) + (maxScore ? '/' + maxScore : ''), ratingLabel, statusLabel);
       });
@@ -4538,7 +4567,7 @@
         const totalScore = sub.total_score || 0;
         const maxScore = sub.max_score || ex.total_score || 35;
 
-        const ratingMeta = getPracticeRatingMeta(sub.rating);
+        const ratingMeta = getPracticeRatingMeta(sub, ex);
         const ratingBadge = '<span class="status-badge ' + ratingMeta.badgeClass + '">' +
           ratingMeta.icon + '<span>' + ratingMeta.label + '</span></span>';
 
@@ -4608,6 +4637,206 @@
     });
   }
 
+  function hasManualItemsInSection(sec) {
+    if (!sec || sec.type !== 'translation') return false;
+    return ((sec.data && sec.data.items) || []).some(function (it) {
+      return it && it.mode === 'manual';
+    });
+  }
+
+  function renderTeacherSectionReviewHtml(sec, sub) {
+    const studentAns = (sub && sub.answers && sub.answers[sec.section_id]) || {};
+    const manualGrades = (sub && sub.manual_grades) || {};
+    const secScores = (sub && sub.section_scores) || {};
+    const currentSecScore = secScores[sec.section_id] !== undefined ? Number(secScores[sec.section_id]) : 0;
+    const isManualSec = hasManualItemsInSection(sec);
+
+    let itemsHtml = '';
+
+    if (sec.type === 'matching') {
+      const leftItems = (sec.data && sec.data.left) || [];
+      const rightItems = (sec.data && sec.data.right) || [];
+      const answerKey = (sec.data && sec.data.answer) || {};
+      itemsHtml = leftItems.map(function (l, idx) {
+        const userKey = studentAns[String(l.id)] || '';
+        const expectedKey = answerKey[String(l.id)] || '';
+        const userRight = rightItems.find(function (r) { return String(r.id) === String(userKey); });
+        const expRight = rightItems.find(function (r) { return String(r.id) === String(expectedKey); });
+        const isCorrect = Boolean(userKey && String(userKey) === String(expectedKey));
+        return (
+          '<div class="trans-item-card ' + (isCorrect ? 'is-correct' : 'is-wrong') + '" style="padding:10px 12px;border-radius:var(--radius-md);margin-bottom:8px;">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">' +
+              '<div style="font-weight:700;color:var(--ink);">' +
+                (idx + 1) + '. ' + escapeHtml(l.hanzi || '') +
+                (l.pinyin ? ' <span style="font-weight:500;color:var(--color-muted-foreground);">(' + escapeHtml(l.pinyin) + ')</span>' : '') +
+              '</div>' +
+              '<span class="status-badge ' + (isCorrect ? 'status-graded' : 'status-missing') + '">' +
+                (isCorrect ? ICONS.check + '<span>Đúng (+1đ)</span>' : ICONS.alert + '<span>Sai</span>') +
+              '</span>' +
+            '</div>' +
+            '<div style="font-size:0.875rem;margin-top:4px;color:var(--color-foreground);">' +
+              'HS nối: <strong>' + escapeHtml(userRight ? userRight.text : 'Chưa nối') + '</strong>' +
+              (!isCorrect ? (' • Đáp án đúng: <strong style="color:var(--color-success-text);">' + escapeHtml(expRight ? expRight.text : expectedKey) + '</strong>') : '') +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+    } else if (sec.type === 'multiple_choice' || sec.type === 'listening_mc') {
+      const items = (sec.data && sec.data.items) || [];
+      const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+      itemsHtml = items.map(function (item, idx) {
+        const options = item.options || [];
+        const rawVal = studentAns[item.id];
+        const hasAns = rawVal !== undefined && rawVal !== null && rawVal !== '';
+        const userIdx = hasAns ? Number(rawVal) : -1;
+        const correctIdx = Number(item.correctIndex || 0);
+        const isCorrect = hasAns && userIdx === correctIdx;
+        const userLabel = (userIdx >= 0 && options[userIdx] !== undefined)
+          ? ((letters[userIdx] || userIdx) + '. ' + options[userIdx])
+          : 'Chưa chọn';
+        const correctLabel = (correctIdx >= 0 && options[correctIdx] !== undefined)
+          ? ((letters[correctIdx] || correctIdx) + '. ' + options[correctIdx])
+          : '—';
+        return (
+          '<div class="trans-item-card ' + (isCorrect ? 'is-correct' : 'is-wrong') + '" style="padding:10px 12px;border-radius:var(--radius-md);margin-bottom:8px;">' +
+            '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">' +
+              '<div style="font-weight:700;color:var(--ink);">Câu ' + (idx + 1) + ': ' + escapeHtml(item.prompt || '(Câu nghe hiểu)') + '</div>' +
+              '<span class="status-badge ' + (isCorrect ? 'status-graded' : 'status-missing') + '">' +
+                (isCorrect ? ICONS.check + '<span>Đúng</span>' : ICONS.alert + '<span>Sai</span>') +
+              '</span>' +
+            '</div>' +
+            '<div style="font-size:0.875rem;margin-top:4px;color:var(--color-foreground);">' +
+              'HS chọn: <strong>' + escapeHtml(userLabel) + '</strong>' +
+              (!isCorrect ? (' • Đáp án đúng: <strong style="color:var(--color-success-text);">' + escapeHtml(correctLabel) + '</strong>') : '') +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+    } else if (sec.type === 'fill_blank_wordbank') {
+      const items = (sec.data && sec.data.items) || [];
+      itemsHtml = items.map(function (item, idx) {
+        const userVal = studentAns[item.id] || '';
+        const isCorrect = window.StudySnapStore.isAnswerMatch(userVal, [item.answer]);
+        const blankPrompt = String(item.text || item.prompt || '').replace(/____+/g, '[' + (userVal || '___') + ']');
+        return (
+          '<div class="trans-item-card ' + (isCorrect ? 'is-correct' : 'is-wrong') + '" style="padding:10px 12px;border-radius:var(--radius-md);margin-bottom:8px;">' +
+            '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">' +
+              '<div style="font-weight:700;color:var(--ink);">Câu ' + (idx + 1) + ': ' + escapeHtml(blankPrompt) + '</div>' +
+              '<span class="status-badge ' + (isCorrect ? 'status-graded' : 'status-missing') + '">' +
+                (isCorrect ? ICONS.check + '<span>Đúng (+1đ)</span>' : ICONS.alert + '<span>Sai</span>') +
+              '</span>' +
+            '</div>' +
+            '<div style="font-size:0.875rem;margin-top:4px;color:var(--color-foreground);">' +
+              'HS điền: <strong>' + escapeHtml(userVal || 'Chưa điền') + '</strong>' +
+              (!isCorrect ? (' • Đáp án đúng: <strong style="color:var(--color-success-text);">' + escapeHtml(item.answer || '') + '</strong>') : '') +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+    } else if (sec.type === 'error_correction') {
+      const items = (sec.data && sec.data.items) || [];
+      itemsHtml = items.map(function (item, idx) {
+        const userVal = studentAns[item.id] || '';
+        const isCorrect = window.StudySnapStore.isAnswerMatch(userVal, item.accepted || []);
+        return (
+          '<div class="trans-item-card ' + (isCorrect ? 'is-correct' : 'is-wrong') + '" style="padding:10px 12px;border-radius:var(--radius-md);margin-bottom:8px;">' +
+            '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">' +
+              '<div style="font-weight:700;color:var(--ink);">Câu ' + (idx + 1) + (item.situation ? (' — ' + escapeHtml(item.situation)) : '') + '</div>' +
+              '<span class="status-badge ' + (isCorrect ? 'status-graded' : 'status-missing') + '">' +
+                (isCorrect ? ICONS.check + '<span>Đúng (+1đ)</span>' : ICONS.alert + '<span>Sai</span>') +
+              '</span>' +
+            '</div>' +
+            '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-top:2px;">Câu sai: ' + escapeHtml(item.wrong || '') + '</div>' +
+            '<div style="font-size:0.875rem;margin-top:4px;color:var(--color-foreground);">' +
+              'HS sửa thành: <strong>' + escapeHtml(userVal || 'Chưa nhập') + '</strong>' +
+              (!isCorrect ? (' • Đáp án mẫu: <strong style="color:var(--color-success-text);">' + escapeHtml((item.accepted || []).slice(0, 3).join(' / ')) + '</strong>') : '') +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+    } else if (sec.type === 'translation') {
+      const items = (sec.data && sec.data.items) || [];
+      itemsHtml = items.map(function (item, idx) {
+        const userVal = studentAns[item.id] || '';
+        if (item.mode === 'manual') {
+          const mg = manualGrades[item.id] || {};
+          const currentScore = mg.score !== undefined ? mg.score : 1;
+          const currentComment = mg.comment || '';
+          return (
+            '<div class="trans-item-card is-pending" style="padding:12px;border-radius:var(--radius-md);margin-bottom:8px;">' +
+              '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;">' +
+                '<div style="font-weight:700;color:var(--color-foreground);font-size:0.9375rem;">' +
+                  'Câu Dịch ' + (idx + 1) + ': <span style="font-size:1.125rem;color:var(--color-primary-deep);">' + escapeHtml(item.prompt || '') + '</span>' +
+                '</div>' +
+                '<span class="status-badge status-submitted" style="font-size:0.75rem;">Chấm thủ công</span>' +
+              '</div>' +
+              (item.grading_note
+                ? '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-bottom:8px;">Gợi ý chấm: ' + escapeHtml(item.grading_note) + '</div>'
+                : '') +
+              '<div style="background:var(--white);padding:8px 10px;border-radius:var(--radius-sm);margin-bottom:10px;border:1px solid var(--color-border-soft);">' +
+                '<div style="font-size:0.75rem;color:var(--color-muted-foreground);font-weight:700;">Bản dịch của học sinh:</div>' +
+                '<div style="font-size:0.9375rem;font-weight:700;color:var(--color-foreground);margin-top:2px;">' +
+                  (userVal ? escapeHtml(userVal) : '<em style="color:var(--color-destructive);">Chưa nhập câu dịch</em>') +
+                '</div>' +
+              '</div>' +
+              '<div class="form-row-2">' +
+                '<div class="form-group" style="margin-bottom:0;">' +
+                  '<label class="form-label" style="font-size:0.8125rem;" for="manual-score-' + escapeHtml(item.id) + '">Điểm câu này (0 đến 1):</label>' +
+                  '<input type="number" id="manual-score-' + escapeHtml(item.id) + '" class="form-control tabular-nums" min="0" max="1" step="0.5" value="' + currentScore + '" data-manual-item-score="' + escapeHtml(item.id) + '" required>' +
+                '</div>' +
+                '<div class="form-group" style="margin-bottom:0;">' +
+                  '<label class="form-label" style="font-size:0.8125rem;" for="manual-comment-' + escapeHtml(item.id) + '">Nhận xét cho học sinh:</label>' +
+                  '<input type="text" id="manual-comment-' + escapeHtml(item.id) + '" class="form-control" placeholder="Ví dụ: Dịch tự nhiên, đúng ngữ cảnh..." value="' + escapeHtml(currentComment) + '" data-manual-item-comment="' + escapeHtml(item.id) + '">' +
+                '</div>' +
+              '</div>' +
+            '</div>'
+          );
+        }
+
+        const isCorrect = item.mode === 'keywords'
+          ? window.StudySnapStore.isKeywordsMatch(userVal, item.required_keywords || [])
+          : window.StudySnapStore.isAnswerMatch(userVal, item.accepted || []);
+        const expectedHint = item.mode === 'keywords'
+          ? ((item.required_keywords || []).join(', '))
+          : ((item.accepted || []).slice(0, 3).join(' / '));
+
+        return (
+          '<div class="trans-item-card ' + (isCorrect ? 'is-correct' : 'is-wrong') + '" style="padding:10px 12px;border-radius:var(--radius-md);margin-bottom:8px;">' +
+            '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">' +
+              '<div style="font-weight:700;color:var(--ink);">Câu ' + (idx + 1) + ': ' + escapeHtml(item.prompt || '') + '</div>' +
+              '<span class="status-badge ' + (isCorrect ? 'status-graded' : 'status-missing') + '">' +
+                (isCorrect ? ICONS.check + '<span>Đúng (+1đ)</span>' : ICONS.alert + '<span>Sai</span>') +
+              '</span>' +
+            '</div>' +
+            '<div style="font-size:0.875rem;margin-top:4px;color:var(--color-foreground);">' +
+              'HS dịch: <strong>' + escapeHtml(userVal || 'Chưa nhập') + '</strong>' +
+              (!isCorrect && expectedHint ? (' • Đáp án gợi ý: <strong style="color:var(--color-success-text);">' + escapeHtml(expectedHint) + '</strong>') : '') +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+    }
+
+    const secMax = Number(sec.max_score || 0) || 0;
+    const scoreEditorHtml = isManualSec
+      ? '<span class="status-badge status-submitted tabular-nums">' + currentSecScore + '/' + secMax + ' đ</span>'
+      : '<div style="display:flex;align-items:center;gap:6px;">' +
+          '<label for="sec-score-edit-' + escapeHtml(sec.section_id) + '" style="font-size:0.8125rem;font-weight:700;color:var(--color-muted-foreground);">Điểm phần:</label>' +
+          '<input type="number" id="sec-score-edit-' + escapeHtml(sec.section_id) + '" class="form-control tabular-nums" style="width:76px;padding:4px 8px;font-weight:700;" min="0" max="' + (secMax || 100) + '" step="0.5" value="' + currentSecScore + '" data-section-score-edit="' + escapeHtml(sec.section_id) + '">' +
+          '<span class="tabular-nums" style="font-size:0.875rem;font-weight:700;color:var(--color-muted-foreground);">/ ' + secMax + ' đ</span>' +
+        '</div>';
+
+    return (
+      '<div class="surface-panel" style="padding:14px;border:1px solid var(--color-border-soft);box-shadow:none;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--color-surface-muted);">' +
+          '<div style="font-weight:800;color:var(--ink);font-size:0.9375rem;">' + escapeHtml(sec.title || ('Phần ' + (sec.section_num || ''))) + '</div>' +
+          scoreEditorHtml +
+        '</div>' +
+        (itemsHtml || '<p style="margin:0;font-size:0.875rem;color:var(--color-muted-foreground);">Phần này không có dữ liệu câu hỏi chi tiết.</p>') +
+      '</div>'
+    );
+  }
+
   function openManualGradingModal(submissionId) {
     const sub = (state.practiceSubmissions || []).find(function (s) {
       return s.submission_id === submissionId;
@@ -4623,112 +4852,52 @@
 
     const student = findStudent(sub.student_id);
     const studentName = student ? student.full_name : sub.student_name;
+    const maxScore = Number(sub.max_score || (ex && ex.total_score) || 35) || 35;
+    const ratingMeta = getPracticeRatingMeta(sub, ex);
+
+    const hasPendingManual = hasPendingManualTranslation(ex, sub);
+    const titleEl = document.getElementById('manual-grading-title');
+    if (titleEl) {
+      titleEl.textContent = hasPendingManual
+        ? 'Chi tiết bài làm & Chấm câu Dịch'
+        : 'Chi tiết bài làm & Sửa điểm học sinh';
+    }
 
     const infoEl = document.getElementById('manual-grading-student-info');
     if (infoEl) {
       infoEl.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--color-surface-muted);padding:10px 14px;border-radius:var(--radius-md);">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;background:var(--color-surface-muted);padding:10px 14px;border-radius:var(--radius-md);">' +
         '<div><strong>Học sinh:</strong> ' +
         escapeHtml(studentName) +
         ' (' +
         escapeHtml(sub.student_id) +
-        ') • Nộp lúc: ' +
-        escapeHtml(sub.submitted_at) +
+        ')' +
+        (student && student.class_name ? (' • ' + escapeHtml(student.class_name)) : '') +
+        ' • Nộp lúc: ' +
+        escapeHtml(sub.submitted_at || '') +
         '</div>' +
-        '<div><strong>Điểm hiện tại:</strong> <span class="tabular-nums" style="color:var(--color-primary-deep);font-weight:700;">' +
-        sub.total_score +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<strong>Điểm:</strong> <span class="tabular-nums" style="color:var(--color-primary-deep);font-weight:800;">' +
+        (sub.total_score || 0) +
         '/' +
-        (sub.max_score || 35) +
-        ' đ</span></div>' +
+        maxScore +
+        ' đ</span>' +
+        '<span class="status-badge ' + ratingMeta.badgeClass + '">' + ratingMeta.icon + '<span>' + ratingMeta.label + '</span></span>' +
+        '</div>' +
         '</div>';
     }
-
-    const manualItems = [];
-    let translationSecId = null;
-    (ex.sections || []).forEach(function (sec) {
-      if (sec.type === 'translation') {
-        translationSecId = sec.section_id;
-        ((sec.data && sec.data.items) || []).forEach(function (item) {
-          if (item.mode === 'manual') {
-            manualItems.push({ secId: sec.section_id, item: item });
-          }
-        });
-      }
-    });
 
     const container = document.getElementById('manual-grading-questions-container');
     if (!container) return;
 
-    if (manualItems.length === 0) {
+    const sections = (ex && Array.isArray(ex.sections)) ? ex.sections : [];
+    if (sections.length === 0) {
       container.innerHTML =
-        '<p style="margin:0 auto;color:var(--color-muted-foreground);text-align:center;">Bài tập này không có câu Dịch nào cần chấm thủ công.</p>';
+        '<p style="margin:0 auto;color:var(--color-muted-foreground);text-align:center;">Không tìm thấy chi tiết câu hỏi cho bài tập này.</p>';
     } else {
-      const studentTransAns = (sub.answers && sub.answers[translationSecId]) || {};
-      const manualGrades = sub.manual_grades || {};
-
-      container.innerHTML = manualItems
-        .map(function (entry, idx) {
-          const item = entry.item;
-          const userAns = studentTransAns[item.id] || '';
-          const mg = manualGrades[item.id] || {};
-          const currentScore = mg.score !== undefined ? mg.score : 1;
-          const currentComment = mg.comment || '';
-
-          return (
-            '<div class="surface-panel" style="padding:14px;border:1px solid var(--color-border-soft);">' +
-            '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;">' +
-            '<div style="font-weight:700;color:var(--color-foreground);font-size:0.9375rem;">' +
-            'Câu Dịch ' +
-            (idx + 1) +
-            ': <span style="font-size:1.125rem;color:var(--color-primary-deep);">' +
-            escapeHtml(item.prompt) +
-            '</span>' +
-            '</div>' +
-            '<span class="status-badge status-submitted" style="font-size:0.75rem;">Trung &rarr; Việt (zh&rarr;vi)</span>' +
-            '</div>' +
-            (item.grading_note
-              ? '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-bottom:8px;font-style:italic;">💡 <strong>Gợi ý chấm của đề:</strong> ' +
-                escapeHtml(item.grading_note) +
-                '</div>'
-              : '') +
-            '<div style="background:var(--color-background);padding:10px 12px;border-radius:var(--radius-md);margin-bottom:12px;border:1px solid var(--color-border-soft);">' +
-            '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);font-weight:600;">Bản dịch của học sinh:</div>' +
-            '<div style="font-size:1rem;font-weight:700;color:var(--color-foreground);margin-top:2px;">' +
-            (userAns
-              ? escapeHtml(userAns)
-              : '<em style="color:var(--color-destructive);">Chưa nhập câu dịch</em>') +
-            '</div>' +
-            '</div>' +
-            '<div class="form-row-2">' +
-            '<div class="form-group" style="margin-bottom:0;">' +
-            '<label class="form-label" style="font-size:0.8125rem;" for="manual-score-' +
-            escapeHtml(item.id) +
-            '">Điểm câu này (0 đến 1 điểm):</label>' +
-            '<input type="number" id="manual-score-' +
-            escapeHtml(item.id) +
-            '" class="form-control tabular-nums" min="0" max="1" step="0.5" value="' +
-            currentScore +
-            '" data-manual-item-score="' +
-            escapeHtml(item.id) +
-            '" required>' +
-            '</div>' +
-            '<div class="form-group" style="margin-bottom:0;">' +
-            '<label class="form-label" style="font-size:0.8125rem;" for="manual-comment-' +
-            escapeHtml(item.id) +
-            '">Lời nhận xét cho học sinh:</label>' +
-            '<input type="text" id="manual-comment-' +
-            escapeHtml(item.id) +
-            '" class="form-control" placeholder="Ví dụ: Dịch tự nhiên, đúng ngữ cảnh..." value="' +
-            escapeHtml(currentComment) +
-            '" data-manual-item-comment="' +
-            escapeHtml(item.id) +
-            '">' +
-            '</div>' +
-            '</div>' +
-            '</div>'
-          );
-        })
-        .join('');
+      container.innerHTML = sections.map(function (sec) {
+        return renderTeacherSectionReviewHtml(sec, sub);
+      }).join('');
     }
 
     const modal = document.getElementById('modal-manual-grading');
@@ -4784,12 +4953,7 @@
         else if (idx === 4) p5 = sc;
       });
 
-      const ratingText =
-        sub.rating === 'very_good'
-          ? 'Rất tốt'
-          : sub.rating === 'good'
-          ? 'Khá'
-          : 'Cần ôn';
+      const ratingText = getPracticeRatingMeta(sub, ex).label;
 
       rows.push([
         sub.student_id,
@@ -5646,36 +5810,51 @@
           manualSum += score;
         });
 
-        // Recalculate translation section score:
+        const nextSectionScores = Object.assign({}, sub.section_scores || {});
+        document.querySelectorAll('[data-section-score-edit]').forEach(function (inp) {
+          const secId = inp.getAttribute('data-section-score-edit');
+          if (!secId) return;
+          const parsed = parseFloat(inp.value);
+          const safeVal = Number.isFinite(parsed) ? Math.max(0, Math.round(parsed * 10) / 10) : 0;
+          nextSectionScores[secId] = safeVal;
+        });
+
+        // Recalculate translation section score if it contains manual items:
         let autoTransScore = 0;
         let transSecId = null;
-        (ex.sections || []).forEach(function (sec) {
-          if (sec.type === 'translation') {
+        let hasManualTrans = false;
+        ((ex && ex.sections) || []).forEach(function (sec) {
+          if (sec.type === 'translation' && hasManualItemsInSection(sec)) {
             transSecId = sec.section_id;
+            hasManualTrans = true;
             ((sec.data && sec.data.items) || []).forEach(function (item) {
               if (item.mode !== 'manual') {
                 const userVal =
                   sub.answers && sub.answers[sec.section_id] && sub.answers[sec.section_id][item.id];
-                if (window.StudySnapStore.isAnswerMatch(userVal, item.accepted || [])) {
-                  autoTransScore += 1;
-                }
+                const ok = item.mode === 'keywords'
+                  ? window.StudySnapStore.isKeywordsMatch(userVal, item.required_keywords || [])
+                  : window.StudySnapStore.isAnswerMatch(userVal, item.accepted || []);
+                if (ok) autoTransScore += 1;
               }
             });
           }
         });
 
-        if (transSecId) {
-          if (!sub.section_scores) sub.section_scores = {};
-          sub.section_scores[transSecId] = autoTransScore + manualSum;
+        if (transSecId && hasManualTrans) {
+          nextSectionScores[transSecId] = Math.round((autoTransScore + manualSum) * 10) / 10;
         }
+        sub.section_scores = nextSectionScores;
 
         // Recalculate total score
         let newTotal = 0;
-        Object.keys(sub.section_scores || {}).forEach(function (k) {
-          newTotal += Number(sub.section_scores[k] || 0);
+        Object.keys(nextSectionScores).forEach(function (k) {
+          newTotal += Number(nextSectionScores[k] || 0);
         });
+        newTotal = Math.round(newTotal * 10) / 10;
 
-        const newRating = window.StudySnapStore.calculateRating(newTotal, ex.thresholds);
+        const maxForRating = Number(sub.max_score || (ex && ex.total_score) || 35) || 35;
+        const ratingObj = window.StudySnapStore.calculateRating(newTotal, ex && ex.thresholds, maxForRating);
+        const newRatingKey = ratingObj && ratingObj.key ? ratingObj.key : 'needs_review';
 
         const submitManualBtn = manualForm.querySelector('button[type="submit"]');
         await runWithLoading(submitManualBtn, 'Đang lưu điểm...', async function () {
@@ -5684,13 +5863,14 @@
             sub.submission_id,
             manualGrades,
             newTotal,
-            newRating
+            newRatingKey,
+            nextSectionScores
           );
         });
 
         if (modalManual) modalManual.classList.remove('is-open', 'is-visible');
         renderTeacherPracticeTab();
-        showToast('Đã lưu điểm và nhận xét cho câu Dịch của học sinh thành công!');
+        showToast('Đã lưu điểm và cập nhật chi tiết bài làm của học sinh!');
       });
     }
   }

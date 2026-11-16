@@ -1475,7 +1475,13 @@ export async function handleApiRequest(request, env, ctx) {
       const subId = existing && existing.submission_id ? String(existing.submission_id) : makeShortId('PRAC_SUB');
       const totalScore = payload.total_score !== undefined ? Number(payload.total_score) : 0;
       const maxScore = payload.max_score !== undefined ? Number(payload.max_score) : 35;
-      const rating = String(payload.rating || '');
+      const rawRating = payload.rating && typeof payload.rating === 'object' && payload.rating.key
+        ? payload.rating.key
+        : payload.rating;
+      const ratingStr = String(rawRating || '').trim();
+      const rating = (ratingStr === 'very_good' || ratingStr === 'good' || ratingStr === 'needs_review')
+        ? ratingStr
+        : '';
       const secScoresJson =
         typeof payload.section_scores === 'object'
           ? JSON.stringify(payload.section_scores)
@@ -1521,15 +1527,25 @@ export async function handleApiRequest(request, env, ctx) {
         return await buildMutationResponse(db, payload, preVer, { practiceSubmission: null });
       }
       const nextScore = payload.total_score !== undefined ? Number(payload.total_score) : Number(existing.total_score || 0);
-      const nextRating = payload.rating ? String(payload.rating) : String(existing.rating || '');
+      const rawNextRating = payload.rating && typeof payload.rating === 'object' && payload.rating.key
+        ? payload.rating.key
+        : payload.rating;
+      const nextRatingStr = String(rawNextRating || existing.rating || '').trim();
+      const nextRating = nextRatingStr === '[object Object]' ? '' : nextRatingStr;
       const nextManualGrades =
         typeof payload.manual_grades === 'object'
           ? JSON.stringify(payload.manual_grades)
           : String(payload.manual_grades_json || existing.manual_grades_json || '{}');
+      const nextSectionScores =
+        typeof payload.section_scores === 'object' && payload.section_scores !== null
+          ? JSON.stringify(payload.section_scores)
+          : (typeof payload.section_scores_json === 'string' && payload.section_scores_json
+            ? payload.section_scores_json
+            : String(existing.section_scores_json || '{}'));
 
       await db
-        .prepare("UPDATE practice_submissions SET total_score = ?, rating = ?, manual_grades_json = ?, status = 'graded' WHERE submission_id = ?")
-        .bind(nextScore, nextRating, nextManualGrades, subId)
+        .prepare("UPDATE practice_submissions SET total_score = ?, rating = ?, section_scores_json = ?, manual_grades_json = ?, status = 'graded' WHERE submission_id = ?")
+        .bind(nextScore, nextRating, nextSectionScores, nextManualGrades, subId)
         .run();
 
       return await buildMutationResponse(db, payload, preVer, {

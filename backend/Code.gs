@@ -1604,6 +1604,13 @@ function handleSubmitPracticeExercise_(ss, payload) {
   }
 
   const subId = foundRowIndex > 0 ? values[foundRowIndex - 1][0] : ('PRAC_SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase());
+  const rawSubmitRating = payload.rating && typeof payload.rating === 'object' && payload.rating.key
+    ? payload.rating.key
+    : payload.rating;
+  const cleanSubmitRating = String(rawSubmitRating || '').trim();
+  const safeSubmitRating = (cleanSubmitRating === 'very_good' || cleanSubmitRating === 'good' || cleanSubmitRating === 'needs_review')
+    ? cleanSubmitRating
+    : '';
   const rowData = [
     subId,
     exerciseId,
@@ -1611,7 +1618,7 @@ function handleSubmitPracticeExercise_(ss, payload) {
     payload.student_name || '',
     payload.total_score !== undefined ? payload.total_score : 0,
     payload.max_score || 35,
-    payload.rating || '',
+    safeSubmitRating,
     nowStr,
     typeof payload.section_scores === 'object' ? JSON.stringify(payload.section_scores) : String(payload.section_scores_json || '{}'),
     typeof payload.answers === 'object' ? JSON.stringify(payload.answers) : String(payload.answers_json || '{}'),
@@ -1635,6 +1642,17 @@ function handleGradeManualTranslation_(ss, payload) {
   for (let i = 1; i < values.length; i++) {
     if (String(values[i][0]) === subId) {
       const existing = values[i];
+      const rawUpdatedRating = payload.rating && typeof payload.rating === 'object' && payload.rating.key
+        ? payload.rating.key
+        : payload.rating;
+      const cleanUpdatedRating = String(rawUpdatedRating || existing[6] || '').trim();
+      const safeUpdatedRating = cleanUpdatedRating === '[object Object]' ? '' : cleanUpdatedRating;
+      const nextSectionScoresJson =
+        typeof payload.section_scores === 'object' && payload.section_scores !== null
+          ? JSON.stringify(payload.section_scores)
+          : (typeof payload.section_scores_json === 'string' && payload.section_scores_json
+            ? payload.section_scores_json
+            : existing[8]);
       const updatedRow = [
         existing[0],
         existing[1],
@@ -1642,9 +1660,9 @@ function handleGradeManualTranslation_(ss, payload) {
         existing[3],
         payload.total_score !== undefined ? payload.total_score : existing[4],
         existing[5],
-        payload.rating || existing[6],
+        safeUpdatedRating,
         existing[7],
-        existing[8],
+        nextSectionScoresJson,
         existing[9],
         typeof payload.manual_grades === 'object' ? JSON.stringify(payload.manual_grades) : String(payload.manual_grades_json || existing[10]),
         'graded'

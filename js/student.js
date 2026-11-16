@@ -201,10 +201,15 @@
 
     const visiblePracticeExercises = getVisiblePracticeExercises(student);
     const totalPracticeCount = visiblePracticeExercises.length;
+    const targetStuKey = String((student && student.student_id) || '').trim().toUpperCase();
     let submittedPracticeCount = 0;
     visiblePracticeExercises.forEach(function (ex) {
+      const targetExId = String((ex && ex.exercise_id) || '').trim();
       const hasSubmitted = (state.practiceSubmissions || []).some(function (sub) {
-        return String(sub.exercise_id) === String(ex.exercise_id) && String(sub.student_id) === String(student.student_id);
+        return (
+          String((sub && sub.exercise_id) || '').trim() === targetExId &&
+          String((sub && sub.student_id) || '').trim().toUpperCase() === targetStuKey
+        );
       });
       if (hasSubmitted) {
         submittedPracticeCount++;
@@ -249,9 +254,19 @@
     }
     if (elPracticeRating) {
       if (practiceSub) {
-        const r = practiceSub.rating;
+        const resolvedRatingKey =
+          typeof window !== 'undefined' &&
+          window.StudySnapStore &&
+          typeof window.StudySnapStore.resolvePracticeRatingKey === 'function'
+            ? window.StudySnapStore.resolvePracticeRatingKey(
+                practiceSub.rating,
+                practiceSub.total_score,
+                practiceSub.max_score || (currentEx && currentEx.total_score),
+                currentEx && currentEx.thresholds
+              )
+            : practiceSub.rating;
         elPracticeRating.textContent =
-          r === 'very_good' ? 'Rất tốt 🌟' : r === 'good' ? 'Khá 👍' : 'Cần ôn 📚';
+          resolvedRatingKey === 'very_good' ? 'Rất tốt' : resolvedRatingKey === 'good' ? 'Khá' : 'Cần ôn';
       } else {
         elPracticeRating.textContent = 'Chưa làm';
       }
@@ -264,6 +279,7 @@
   function getStudentAssignments(student) {
     const activeList = (state.assignments || []).filter(function (asg) {
       if (String(asg.require_media || '').trim().toLowerCase() === 'vocab') return false;
+      if (String(asg.require_media || '').trim().toLowerCase() === 'practice') return false;
       const clsLower = String(asg.class_name || '').trim().toLowerCase();
       return Boolean(clsLower && clsLower !== 'unassigned');
     });
@@ -1280,14 +1296,29 @@
   function getVisiblePracticeExercises(student) {
     const activeStudent = student || getActiveStudent();
     const sClass = activeStudent ? String(activeStudent.class_name || '').trim().toLowerCase() : '';
+    const sIdUpper = activeStudent ? String(activeStudent.student_id || '').trim().toUpperCase() : '';
     const exercises = state.practiceExercises || [];
     const assignments = state.assignments || [];
+    const practiceSubs = Array.isArray(state.practiceSubmissions) ? state.practiceSubmissions : [];
 
     return exercises.filter(function (ex) {
+      const exId = String((ex && ex.exercise_id) || '').trim();
+      const hasSubmitted = Boolean(
+        sIdUpper &&
+        exId &&
+        practiceSubs.some(function (sub) {
+          return (
+            String((sub && sub.exercise_id) || '').trim() === exId &&
+            String((sub && sub.student_id) || '').trim().toUpperCase() === sIdUpper
+          );
+        })
+      );
+      if (hasSubmitted) return true;
+
       const deliveries = assignments.filter(function (a) {
-        return a.require_media === 'practice' && String(a.exercise_id || '') === String(ex.exercise_id || '');
+        return a.require_media === 'practice' && String(a.exercise_id || '').trim() === exId;
       });
-      // Đề chưa từng được giao cho lớp nào (Chưa giao lớp nào) không hiển thị cho học sinh
+      // Đề chưa từng được giao cho lớp nào (Chưa giao lớp nào) không hiển thị cho học sinh chưa nộp
       if (deliveries.length === 0) return false;
       return deliveries.some(function (d) {
         const clsLower = String(d.class_name || '').trim().toLowerCase();
@@ -1295,6 +1326,20 @@
         if (clsLower === 'all') return true;
         return Boolean(sClass && clsLower === sClass);
       });
+    });
+  }
+
+  function isPracticeExerciseActivelyAssignedToStudent(ex, student) {
+    if (!ex || !ex.exercise_id) return false;
+    const activeStudent = student || getActiveStudent();
+    const sClass = activeStudent ? String(activeStudent.class_name || '').trim().toLowerCase() : '';
+    const exId = String(ex.exercise_id || '').trim();
+    return (state.assignments || []).some(function (a) {
+      if (a.require_media !== 'practice' || String(a.exercise_id || '').trim() !== exId) return false;
+      const clsLower = String(a.class_name || '').trim().toLowerCase();
+      if (!clsLower || clsLower === 'unassigned') return false;
+      if (clsLower === 'all') return true;
+      return Boolean(sClass && clsLower === sClass);
     });
   }
 
@@ -1308,8 +1353,13 @@
 
   function findStudentPracticeSubmission(exerciseId) {
     const student = getActiveStudent();
+    const targetExId = String(exerciseId || '').trim();
+    const targetStuId = String((student && student.student_id) || '').trim().toUpperCase();
     return (state.practiceSubmissions || []).find(function (sub) {
-      return sub.exercise_id === exerciseId && sub.student_id === student.student_id;
+      return (
+        String((sub && sub.exercise_id) || '').trim() === targetExId &&
+        String((sub && sub.student_id) || '').trim().toUpperCase() === targetStuId
+      );
     }) || null;
   }
 
@@ -1429,11 +1479,20 @@
     alert: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>'
   };
 
-  function getStudentPracticeRatingMeta(rating) {
-    if (rating === 'good') {
+  function getStudentPracticeRatingMeta(sub, ex) {
+    const maxScore = Number((sub && sub.max_score) || (ex && ex.total_score) || 0) || 0;
+    const score = Number((sub && sub.total_score) || 0) || 0;
+    const key =
+      typeof window !== 'undefined' &&
+      window.StudySnapStore &&
+      typeof window.StudySnapStore.resolvePracticeRatingKey === 'function'
+        ? window.StudySnapStore.resolvePracticeRatingKey(sub && sub.rating, score, maxScore, ex && ex.thresholds)
+        : (sub && sub.rating);
+
+    if (key === 'good') {
       return { label: 'Khá', badgeClass: 'status-submitted', icon: PRACTICE_SUMMARY_ICONS.check };
     }
-    if (rating === 'needs_review') {
+    if (key === 'needs_review') {
       return { label: 'Cần ôn', badgeClass: 'status-missing', icon: PRACTICE_SUMMARY_ICONS.alert };
     }
     return { label: 'Rất tốt', badgeClass: 'status-graded', icon: PRACTICE_SUMMARY_ICONS.check };
@@ -1575,9 +1634,12 @@
       const sub = row.sub;
       const isActiveRow = Boolean(activeEx && activeEx.exercise_id === ex.exercise_id);
 
+      const isClosedAssigned = row.isDone && !isPracticeExerciseActivelyAssignedToStudent(ex, student);
+
       let statusHtml = '';
       if (row.isDone) {
-        statusHtml = '<span class="status-badge status-graded">' + PRACTICE_SUMMARY_ICONS.check + '<span>Đã hoàn thành</span></span>';
+        statusHtml = '<span class="status-badge status-graded">' + PRACTICE_SUMMARY_ICONS.check + '<span>Đã hoàn thành</span></span>' +
+          (isClosedAssigned ? '<div style="margin-top:4px;"><span class="status-badge status-unassigned" style="font-size:0.75rem;">Đã đóng giao • Giữ điểm</span></div>' : '');
       } else if (row.isDraft) {
         statusHtml = '<span class="status-badge status-submitted">' + PRACTICE_SUMMARY_ICONS.clock + '<span>Đang làm dở (đã lưu nháp)</span></span>';
       } else {
@@ -1591,7 +1653,7 @@
 
       let ratingHtml = '<span style="font-size:0.8125rem;color:var(--color-muted-foreground);">Chưa có</span>';
       if (row.isDone && sub) {
-        const rm = getStudentPracticeRatingMeta(sub.rating);
+        const rm = getStudentPracticeRatingMeta(sub, ex);
         ratingHtml = '<span class="status-badge ' + rm.badgeClass + '">' + rm.icon + '<span>' + rm.label + '</span></span>';
       }
 
@@ -2589,20 +2651,33 @@
     const maxScore = sub.max_score || exercise.total_score || 35;
     const percent = Math.round((totalScore / maxScore) * 100);
 
-    const thresholds = exercise.thresholds || { very_good: 31, good: 25 };
-    let ratingBadgeClass = 'status-badge status-graded';
-    let ratingLabel = 'Cần ôn lại 📚 (Dưới ' + thresholds.good + ' điểm)';
+    const rawThresholds = exercise.thresholds || { very_good: 31, good: 25 };
+    const thresholds =
+      typeof window !== 'undefined' &&
+      window.StudySnapStore &&
+      typeof window.StudySnapStore.getEffectivePracticeThresholds === 'function'
+        ? window.StudySnapStore.getEffectivePracticeThresholds(rawThresholds, maxScore)
+        : rawThresholds;
+    const ratingKey =
+      typeof window !== 'undefined' &&
+      window.StudySnapStore &&
+      typeof window.StudySnapStore.resolvePracticeRatingKey === 'function'
+        ? window.StudySnapStore.resolvePracticeRatingKey(sub.rating, totalScore, maxScore, thresholds)
+        : (totalScore >= thresholds.very_good ? 'very_good' : (totalScore >= thresholds.good ? 'good' : 'needs_review'));
+
+    let ratingBadgeClass = 'status-badge status-missing';
+    let ratingLabel = 'Cần ôn lại (Dưới ' + thresholds.good + ' điểm)';
     let ratingMessage =
       'Em đã rất nỗ lực hoàn thành bài tập! Hãy xem kỹ lời giải thích chi tiết bên dưới để củng cố các chữ Hán và ngữ pháp cần ôn lại nhé.';
 
-    if (totalScore >= thresholds.very_good) {
+    if (ratingKey === 'very_good') {
       ratingBadgeClass = 'status-badge status-graded';
-      ratingLabel = 'Rất tốt 🌟 (' + thresholds.very_good + '–' + maxScore + ' điểm)';
+      ratingLabel = 'Rất tốt (' + thresholds.very_good + '–' + maxScore + ' điểm)';
       ratingMessage =
         'Xuất sắc! Em nắm rất vững ngữ âm, chữ Hán, quy tắc biến điệu thanh điệu và giao tiếp thực tế của bài học!';
-    } else if (totalScore >= thresholds.good) {
+    } else if (ratingKey === 'good') {
       ratingBadgeClass = 'status-badge status-submitted';
-      ratingLabel = 'Khá 👍 (' + thresholds.good + '–' + (thresholds.very_good - 1) + ' điểm)';
+      ratingLabel = 'Khá (' + thresholds.good + '–' + Math.max(thresholds.good, thresholds.very_good - 0.5) + ' điểm)';
       ratingMessage =
         'Khá tốt! Em đã hiểu hầu hết nội dung trọng tâm. Cần chú ý thêm một số điểm ngữ pháp nhỏ và quy tắc biến điệu.';
     }
@@ -3181,10 +3256,12 @@
           totalEarnedScore += secScore;
         });
 
-        const rating = window.StudySnapStore.calculateRating(
+        const ratingObj = window.StudySnapStore.calculateRating(
           totalEarnedScore,
-          exercise.thresholds
+          exercise.thresholds,
+          exercise.total_score
         );
+        const ratingKey = ratingObj && ratingObj.key ? ratingObj.key : 'needs_review';
 
         const newSubmission = {
           submission_id:
@@ -3194,7 +3271,7 @@
           student_name: student.full_name,
           total_score: totalEarnedScore,
           max_score: exercise.total_score || 35,
-          rating: rating,
+          rating: ratingKey,
           submitted_at: new Date().toLocaleString('vi-VN'),
           section_scores: sectionScores,
           answers: JSON.parse(JSON.stringify(ui.practiceAnswers)),

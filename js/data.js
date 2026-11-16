@@ -2030,7 +2030,7 @@ window.StudySnapStore = (function () {
           student_name: ps.student_name,
           total_score: Number(ps.total_score) || 0,
           max_score: Number(ps.max_score) || 35,
-          rating: ps.rating || '',
+          rating: ps.rating === '[object Object]' ? '' : (ps.rating || ''),
           submitted_at: formatCleanDate(ps.submitted_at),
           section_scores: typeof ps.section_scores_json === 'string' ? JSON.parse(ps.section_scores_json || '{}') : (ps.section_scores || {}),
           answers: typeof ps.answers_json === 'string' ? JSON.parse(ps.answers_json || '{}') : (ps.answers || {}),
@@ -2087,16 +2087,54 @@ window.StudySnapStore = (function () {
     });
   }
 
-  function calculateRating(score, thresholds) {
-    const t = thresholds || { very_good: 31, good: 25 };
+  function getEffectivePracticeThresholds(thresholds, maxScore) {
+    const t = thresholds || {};
+    const max = Number(maxScore) || 0;
+    const rawGood = Number(t.good) || 0;
+    const rawVeryGood = Number(t.very_good) || 0;
+
+    if (max > 0) {
+      const hasValidCustom =
+        rawGood > 0 &&
+        rawVeryGood >= rawGood &&
+        rawVeryGood <= max &&
+        !(rawVeryGood <= 1 && max > 2);
+      if (hasValidCustom) {
+        return { good: rawGood, very_good: rawVeryGood };
+      }
+      return {
+        good: max <= 1 ? 1 : Math.max(1, Math.round(max * 0.7 * 10) / 10),
+        very_good: max <= 1 ? 1 : Math.max(1, Math.round(max * 0.85 * 10) / 10)
+      };
+    }
+
+    return {
+      good: rawGood > 0 ? rawGood : 25,
+      very_good: rawVeryGood > 0 ? rawVeryGood : 31
+    };
+  }
+
+  function calculateRating(score, thresholds, maxScore) {
+    const t = getEffectivePracticeThresholds(thresholds, maxScore);
     const num = Number(score) || 0;
-    if (num >= (t.very_good || 31)) {
+    if (num >= t.very_good) {
       return { key: 'very_good', label: 'Rất tốt 🌟', badgeClass: 'status-graded' };
     }
-    if (num >= (t.good || 25)) {
+    if (num >= t.good) {
       return { key: 'good', label: 'Khá 👍', badgeClass: 'status-submitted' };
     }
     return { key: 'needs_review', label: 'Cần ôn tập lại 📚', badgeClass: 'status-missing' };
+  }
+
+  function resolvePracticeRatingKey(rawRating, score, maxScore, thresholds) {
+    if (rawRating && typeof rawRating === 'object' && rawRating.key) {
+      rawRating = rawRating.key;
+    }
+    const clean = String(rawRating || '').trim();
+    if (clean === 'very_good' || clean === 'good' || clean === 'needs_review') {
+      return clean;
+    }
+    return calculateRating(score, thresholds, maxScore).key;
   }
 
   async function fetchWithTimeout(url, options, timeoutMs) {
@@ -2729,7 +2767,10 @@ window.StudySnapStore = (function () {
     });
   }
 
-  async function gradeManualTranslation(stateObj, submissionId, manualGrades, totalScore, rating) {
+  async function gradeManualTranslation(stateObj, submissionId, manualGrades, totalScore, rating, sectionScores) {
+    const cleanRating = (rating && typeof rating === 'object' && rating.key)
+      ? rating.key
+      : String(rating || '');
     if (!stateObj.practiceSubmissions) return;
     const sub = stateObj.practiceSubmissions.find(function (s) {
       return s.submission_id === submissionId;
@@ -2737,17 +2778,24 @@ window.StudySnapStore = (function () {
     if (sub) {
       sub.manual_grades = manualGrades;
       sub.total_score = totalScore;
-      sub.rating = rating;
+      sub.rating = cleanRating;
+      if (sectionScores && typeof sectionScores === 'object') {
+        sub.section_scores = sectionScores;
+      }
       sub.status = 'graded';
       saveState(stateObj);
     }
-    return await syncPostToGas(stateObj, {
+    const payload = {
       action: 'gradeManualTranslation',
       submission_id: submissionId,
       manual_grades: manualGrades,
       total_score: totalScore,
-      rating: rating
-    });
+      rating: cleanRating
+    };
+    if (sectionScores && typeof sectionScores === 'object') {
+      payload.section_scores = sectionScores;
+    }
+    return await syncPostToGas(stateObj, payload);
   }
 
   async function deleteAssignment(stateObj, assignmentId) {
@@ -3274,7 +3322,9 @@ window.StudySnapStore = (function () {
     normalizeChineseSentence: normalizeChineseSentence,
     isAnswerMatch: isAnswerMatch,
     isKeywordsMatch: isKeywordsMatch,
+    getEffectivePracticeThresholds: getEffectivePracticeThresholds,
     calculateRating: calculateRating,
+    resolvePracticeRatingKey: resolvePracticeRatingKey,
     submitPracticeExercise: submitPracticeExercise,
     savePracticeExercise: savePracticeExercise,
     deletePracticeExercise: deletePracticeExercise,
