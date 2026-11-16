@@ -517,6 +517,179 @@
     };
   }
 
+  const FIREWORK_COLORS = ['#FF6B9D', '#FF9A6C', '#FFD166', '#06D6A0', '#74C9F0', '#A78BFA'];
+  const fwEngine = {
+    canvas: null,
+    ctx2d: null,
+    particles: [],
+    rafId: null,
+    burstTimers: [],
+    lastFrameTs: 0,
+    totalBurstCalls: 0
+  };
+
+  function prefersReducedMotion() {
+    return Boolean(
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    );
+  }
+
+  function clearVocabFireworks() {
+    if (fwEngine.rafId && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(fwEngine.rafId);
+    }
+    fwEngine.rafId = null;
+    while (fwEngine.burstTimers.length) {
+      clearTimeout(fwEngine.burstTimers.pop());
+    }
+    fwEngine.particles = [];
+    if (fwEngine.canvas && fwEngine.canvas.parentNode) {
+      fwEngine.canvas.parentNode.removeChild(fwEngine.canvas);
+    }
+    fwEngine.canvas = null;
+    fwEngine.ctx2d = null;
+  }
+
+  function spawnFireworkBurst(cxRatio, cyRatio, count) {
+    if (!fwEngine.canvas || !fwEngine.ctx2d) return;
+    const width = fwEngine.canvas._cssW || 1200;
+    const height = fwEngine.canvas._cssH || 800;
+    const cx = width * cxRatio;
+    const cy = height * cyRatio;
+
+    for (let i = 0; i < count; i++) {
+      if (fwEngine.particles.length >= 260) break;
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.28;
+      const speed = 130 + Math.random() * 250;
+      const isRibbon = i % 3 === 0;
+      fwEngine.particles.push({
+        x: cx,
+        y: cy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 65,
+        gravity: isRibbon ? 230 : 320,
+        drag: isRibbon ? 0.96 : 0.94,
+        color: FIREWORK_COLORS[(i + Math.floor(Math.random() * FIREWORK_COLORS.length)) % FIREWORK_COLORS.length],
+        size: isRibbon ? (6 + Math.random() * 4) : (2.6 + Math.random() * 2.4),
+        isRibbon: isRibbon,
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 9,
+        alpha: 1,
+        life: 0,
+        maxLife: 1.05 + Math.random() * 0.65
+      });
+    }
+  }
+
+  function stepVocabFireworks(nowTs) {
+    if (!fwEngine.canvas || !fwEngine.ctx2d || (typeof document !== 'undefined' && document.hidden)) {
+      clearVocabFireworks();
+      return;
+    }
+    const ctx2d = fwEngine.ctx2d;
+    const dt = fwEngine.lastFrameTs ? Math.min(0.05, Math.max(0.008, (nowTs - fwEngine.lastFrameTs) / 1000)) : 0.016;
+    fwEngine.lastFrameTs = nowTs;
+
+    const w = fwEngine.canvas._cssW || 1200;
+    const h = fwEngine.canvas._cssH || 800;
+    ctx2d.clearRect(0, 0, w, h);
+
+    const alive = [];
+    for (let i = 0; i < fwEngine.particles.length; i++) {
+      const p = fwEngine.particles[i];
+      p.life += dt;
+      if (p.life >= p.maxLife) continue;
+
+      const dragFactor = Math.pow(p.drag, dt * 60);
+      p.vx *= dragFactor;
+      p.vy = p.vy * dragFactor + p.gravity * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.rotation += p.rotSpeed * dt;
+      p.alpha = Math.max(0, 1 - Math.pow(p.life / p.maxLife, 1.45));
+
+      ctx2d.save();
+      ctx2d.globalAlpha = p.alpha;
+      ctx2d.fillStyle = p.color;
+      ctx2d.translate(p.x, p.y);
+      if (p.isRibbon) {
+        ctx2d.rotate(p.rotation);
+        ctx2d.fillRect(-p.size * 0.5, -p.size * 0.25, p.size, p.size * 0.48);
+      } else {
+        ctx2d.beginPath();
+        ctx2d.arc(0, 0, p.size, 0, Math.PI * 2);
+        ctx2d.fill();
+      }
+      ctx2d.restore();
+      alive.push(p);
+    }
+
+    fwEngine.particles = alive;
+    if (fwEngine.particles.length === 0 && fwEngine.burstTimers.length === 0) {
+      clearVocabFireworks();
+      return;
+    }
+    fwEngine.rafId = requestAnimationFrame(stepVocabFireworks);
+  }
+
+  function launchVocabFireworks(intensity) {
+    if (adapter.isTeacher) return false;
+    fwEngine.totalBurstCalls++;
+    if (prefersReducedMotion()) return false;
+    if (typeof document === 'undefined' || !document.body || typeof document.createElement !== 'function') {
+      return false;
+    }
+
+    const canvas = fwEngine.canvas || document.createElement('canvas');
+    const ctx2d = typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
+    if (!ctx2d) return false;
+
+    const w = Math.max(320, (typeof window !== 'undefined' && window.innerWidth) || 1200);
+    const h = Math.max(320, (typeof window !== 'undefined' && window.innerHeight) || 800);
+    const dpr = Math.min(2, Math.max(1, (typeof window !== 'undefined' && window.devicePixelRatio) || 1));
+
+    canvas.id = 'vocab-fireworks-canvas';
+    canvas.className = 'vocab-fireworks-canvas';
+    canvas.setAttribute('aria-hidden', 'true');
+    canvas._cssW = w;
+    canvas._cssH = h;
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+    }
+    if (typeof ctx2d.setTransform === 'function') {
+      ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    if (!fwEngine.canvas && typeof document.body.appendChild === 'function') {
+      document.body.appendChild(canvas);
+    }
+    fwEngine.canvas = canvas;
+    fwEngine.ctx2d = ctx2d;
+
+    const mode = intensity === 'spark' ? 'spark' : 'celebration';
+    if (mode === 'spark') {
+      spawnFireworkBurst(0.5, 0.34, 34);
+    } else {
+      spawnFireworkBurst(0.28, 0.32, 46);
+      spawnFireworkBurst(0.72, 0.28, 46);
+      const t = setTimeout(function () {
+        const idx = fwEngine.burstTimers.indexOf(t);
+        if (idx !== -1) fwEngine.burstTimers.splice(idx, 1);
+        spawnFireworkBurst(0.5, 0.24, 58);
+      }, 240);
+      fwEngine.burstTimers.push(t);
+    }
+
+    if (!fwEngine.rafId && typeof requestAnimationFrame === 'function') {
+      fwEngine.lastFrameTs = 0;
+      fwEngine.rafId = requestAnimationFrame(stepVocabFireworks);
+    }
+    return true;
+  }
+
   function renderVocabCheerCard(ctx, pCountsOverride) {
     const card = document.getElementById('vocab-progress-cheer-card');
     if (!card) return;
@@ -1061,6 +1234,7 @@
           'Em đã ôn bộ này ' + cheer.currentSrcCount + ' lần · Hoàn thành ' + cheer.pct + '% (' + cheer.masteredWords + '/' + cheer.totalWords + ' từ)!';
       }
       renderSourceStrip(updatedCtx);
+      launchVocabFireworks('celebration');
     }
   }
 
@@ -1434,9 +1608,14 @@
         if (masteryBtn) {
           const mKey = masteryBtn.getAttribute('data-mastery-key') || masteryBtn.getAttribute('data-vlist-mastery');
           if (mKey && typeof adapter.onToggleMastered === 'function') {
+            const beforePct = computeVocabCheerState(computeActiveItems(true)).pct;
             vs.pendingCheerPop = true;
             adapter.onToggleMastered(mKey);
             renderVocabSuite(false);
+            const afterState = computeVocabCheerState(computeActiveItems(true));
+            if (beforePct < 100 && afterState.pct === 100 && afterState.totalWords > 0) {
+              launchVocabFireworks('celebration');
+            }
           }
           return;
         }
@@ -1518,6 +1697,7 @@
               sourceLabel: ctx.sourceLabel,
               totalCards: ctx.items.length
             });
+            launchVocabFireworks('celebration');
           }
           buildFlashcardOrder(ctx.items, true);
           const refreshedCtx = computeActiveItems(true);
@@ -1720,6 +1900,7 @@
                   char: vs.strokeChar,
                   mistakes: summaryData && typeof summaryData.totalMistakes === 'number' ? summaryData.totalMistakes : 0
                 });
+                launchVocabFireworks('spark');
               }
               renderSourceStrip(computeActiveItems(true));
             }
@@ -1790,6 +1971,7 @@
     render: renderVocabSuite,
     selectSource: selectSource,
     switchSubTab: switchVocabSubTab,
-    getState: getStateSnapshot
+    getState: getStateSnapshot,
+    launchFireworks: launchVocabFireworks
   };
 })();
