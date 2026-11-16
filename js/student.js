@@ -248,7 +248,7 @@
     if (tabName === 'practice') {
       renderPracticeSection();
     } else if (tabName === 'vocabulary') {
-      if (typeof fcRender === 'function') fcRender();
+      renderVocabularySection();
     }
   }
 
@@ -322,12 +322,26 @@
     });
 
     const avgScore = scoreCount > 0 ? (scoreTotal / scoreCount).toFixed(1) : '—';
-    const totalVocab = state.vocabulary.length;
-    const validMasteredCount = ui.masteredIds.filter(function (id) {
-      return state.vocabulary.some(function (v) {
+    const customVocabList = Array.isArray(state.vocabulary) ? state.vocabulary : [];
+    const hskBanks = (typeof window !== 'undefined' && window.StudySnapHskBanks && typeof window.StudySnapHskBanks === 'object')
+      ? window.StudySnapHskBanks
+      : {};
+    const hskTotal = ['hsk-1', 'hsk-2', 'hsk-3'].reduce(function (sum, lvl) {
+      return sum + (Array.isArray(hskBanks[lvl]) ? hskBanks[lvl].length : 0);
+    }, 0);
+    const totalVocab = customVocabList.length + hskTotal;
+    const customMasteredCount = ui.masteredIds.filter(function (id) {
+      return customVocabList.some(function (v) {
         return v.vocab_id === id;
       });
     }).length;
+    const hskMasteredCount = hskTotal > 0
+      ? ui.masteredIds.filter(function (id) {
+          const s = String(id || '');
+          return s.indexOf('HSK1_') === 0 || s.indexOf('HSK2_') === 0 || s.indexOf('HSK3_') === 0;
+        }).length
+      : 0;
+    const validMasteredCount = Math.min(totalVocab, customMasteredCount + hskMasteredCount);
 
     const elSubmitted = document.getElementById('student-stat-hw-submitted');
     const elGraded = document.getElementById('student-stat-hw-graded');

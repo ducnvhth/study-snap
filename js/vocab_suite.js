@@ -150,6 +150,10 @@
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
   const ICON_BOOK =
     '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>';
+  const ICON_TROPHY =
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>';
+  const ICON_SPARKLES =
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"></path></svg>';
 
   const adapter = {
     isTeacher: false,
@@ -187,7 +191,9 @@
     strokeChar: '',
     strokeCharIdx: 0,
     writerInstance: null,
-    eventsBound: false
+    eventsBound: false,
+    pendingCheerPop: false,
+    cheerTimer: null
   };
 
   function getLessonVocabItemsNormalized() {
@@ -434,6 +440,140 @@
     };
   }
 
+  function computeVocabCheerState(ctx, pCountsOverride) {
+    const pCounts = pCountsOverride ||
+      (!adapter.isTeacher && typeof adapter.getPracticeCounts === 'function' ? adapter.getPracticeCounts() : null) ||
+      {};
+    const bySrc = pCounts.bySource || {};
+    const srcEntry = bySrc[vs.sourceKey];
+    const currentSrcCount = srcEntry ? Math.max(0, Number(srcEntry.count || 0) || 0) : 0;
+    const totalPracticeCount = Math.max(0, Number(pCounts.totalCount || 0) || 0);
+
+    const list = (ctx && Array.isArray(ctx.baseList)) ? ctx.baseList : [];
+    const totalWords = list.length;
+    const masteredMap = (ctx && ctx.masteredMap) ? ctx.masteredMap : getMasteredSet();
+    const masteredWords = totalWords > 0
+      ? list.filter(function (v) { return isItemMastered(v, masteredMap); }).length
+      : 0;
+    const remainingWords = Math.max(0, totalWords - masteredWords);
+    const pct = totalWords > 0 ? Math.round((masteredWords / totalWords) * 100) : 0;
+    const sourceName = (ctx && ctx.sourceLabel) ? ctx.sourceLabel : 'bộ từ vựng này';
+
+    let tierClass = 'is-ready';
+    let badgeText = 'Sẵn sàng bứt phá!';
+    let headline = 'Sẵn sàng chinh phục ' + totalWords + ' từ vựng cùng StudySnap!';
+    let subtext = 'Hoàn thành lượt Flashcard, làm Trắc nghiệm hoặc Tập viết nét chữ để hệ thống ghi nhận số lần ôn và tăng % hoàn thành nhé!';
+    let iconHtml = ICON_SPARKLES;
+
+    if (totalWords === 0) {
+      badgeText = 'Chờ thêm từ vựng';
+      headline = 'Bộ "' + sourceName + '" hiện chưa có từ vựng';
+      subtext = 'Em hãy chọn bài học khác hoặc chuyển sang kho HSK 1, HSK 2, HSK 3 ở ngay bên dưới để luyện tập nhé!';
+    } else if (pct === 100) {
+      tierClass = 'is-complete';
+      badgeText = 'Hoàn thành 100% · Xuất sắc!';
+      headline = 'Chúc mừng em đã hoàn thành 100% từ vựng "' + sourceName + '"!';
+      subtext = 'Đã thuộc trọn vẹn ' + masteredWords + '/' + totalWords + ' từ và ôn ' + currentSrcCount + ' lần (Tổng toàn khóa ' + totalPracticeCount + ' lần) — Quá đỉnh, giữ vững phong độ nhé!';
+      iconHtml = ICON_TROPHY;
+    } else if (pct >= 75) {
+      tierClass = 'is-high';
+      badgeText = 'Sắp cán đích 100%!';
+      headline = 'Tuyệt vời! Chúc mừng em đã hoàn thành ' + pct + '% số từ vựng!';
+      subtext = 'Đã thuộc ' + masteredWords + '/' + totalWords + ' từ · Ôn bộ này ' + currentSrcCount + ' lần — chỉ còn ' + remainingWords + ' từ nữa thôi, cố lên nhé!';
+      iconHtml = ICON_TROPHY;
+    } else if (pct >= 40) {
+      tierClass = 'is-mid';
+      badgeText = 'Tiến bộ rất tốt!';
+      headline = 'Làm tốt lắm! Chúc mừng em đã hoàn thành ' + pct + '% từ vựng "' + sourceName + '"!';
+      subtext = 'Em đã ghi nhớ ' + masteredWords + '/' + totalWords + ' từ và ôn ' + currentSrcCount + ' lần. Tiếp tục giữ nhịp học đều đặn nhé!';
+    } else if (pct > 0) {
+      tierClass = 'is-start';
+      badgeText = 'Khởi đầu thuận lợi!';
+      headline = 'Cố lên nhé! Chúc mừng em đã hoàn thành ' + pct + '% số từ vựng rồi!';
+      subtext = 'Đã nhớ ' + masteredWords + '/' + totalWords + ' từ' + (currentSrcCount > 0 ? (' · Đã ôn ' + currentSrcCount + ' lần') : '') + '. Mỗi ngày thêm vài từ là sẽ nhớ cực lâu đó!';
+    } else if (currentSrcCount > 0) {
+      tierClass = 'is-practicing';
+      badgeText = 'Chăm chỉ ôn tập!';
+      headline = 'Chăm chỉ quá! Em đã ôn bộ "' + sourceName + '" được ' + currentSrcCount + ' lần rồi!';
+      subtext = 'Hãy bấm "Đánh dấu đã thuộc" trên thẻ Flashcard hoặc Bảng tra cứu để ghi nhận % hoàn thành trong ' + totalWords + ' từ nhé!';
+    } else if (totalPracticeCount > 0) {
+      badgeText = 'Tiếp tục chuỗi ôn tập!';
+      headline = 'Em đã ôn tổng cộng ' + totalPracticeCount + ' lần rồi — sẵn sàng chinh phục bộ này nhé!';
+    }
+
+    return {
+      currentSrcCount: currentSrcCount,
+      totalPracticeCount: totalPracticeCount,
+      totalWords: totalWords,
+      masteredWords: masteredWords,
+      remainingWords: remainingWords,
+      pct: pct,
+      sourceName: sourceName,
+      tierClass: tierClass,
+      badgeText: badgeText,
+      headline: headline,
+      subtext: subtext,
+      iconHtml: iconHtml
+    };
+  }
+
+  function renderVocabCheerCard(ctx, pCountsOverride) {
+    const card = document.getElementById('vocab-progress-cheer-card');
+    if (!card) return;
+    if (adapter.isTeacher) {
+      card.style.display = 'none';
+      card.innerHTML = '';
+      return;
+    }
+
+    const state = computeVocabCheerState(ctx, pCountsOverride);
+    card.style.display = 'block';
+    card.className = 'vocab-cheer-card ' + state.tierClass;
+    card.innerHTML =
+      '<div class="vocab-cheer-top">' +
+        '<div class="vocab-cheer-lead">' +
+          '<div class="vocab-cheer-icon">' + state.iconHtml + '</div>' +
+          '<div>' +
+            '<span class="vocab-cheer-tier-badge">' + escapeHtml(state.badgeText) + '</span>' +
+            '<h3 class="vocab-cheer-headline">' + escapeHtml(state.headline) + '</h3>' +
+            '<p class="vocab-cheer-subtext">' + escapeHtml(state.subtext) + '</p>' +
+          '</div>' +
+        '</div>' +
+        '<div class="vocab-cheer-metrics">' +
+          '<div class="vocab-cheer-metric">' +
+            '<span class="vocab-cheer-metric-val">' + state.currentSrcCount + ' lần</span>' +
+            '<span class="vocab-cheer-metric-label">Bộ này đã ôn</span>' +
+          '</div>' +
+          '<div class="vocab-cheer-metric">' +
+            '<span class="vocab-cheer-metric-val">' + state.totalPracticeCount + ' lần</span>' +
+            '<span class="vocab-cheer-metric-label">Tổng đã ôn tất cả</span>' +
+          '</div>' +
+          '<div class="vocab-cheer-metric is-highlight">' +
+            '<span class="vocab-cheer-metric-val">' + state.pct + '% (' + state.masteredWords + '/' + state.totalWords + ')</span>' +
+            '<span class="vocab-cheer-metric-label">Đã hoàn thành bộ này</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="vocab-cheer-bar-wrap">' +
+        '<div class="vocab-cheer-bar-meta tabular-nums">' +
+          '<span>Tiến độ chinh phục: ' + escapeHtml(state.sourceName) + '</span>' +
+          '<span>' + state.masteredWords + '/' + state.totalWords + ' từ đã thuộc (' + state.pct + '%)</span>' +
+        '</div>' +
+        '<div class="vocab-cheer-bar-track" role="progressbar" aria-valuenow="' + state.pct + '" aria-valuemin="0" aria-valuemax="100" aria-label="Phần trăm từ vựng đã hoàn thành">' +
+          '<div class="vocab-cheer-bar-fill" style="width: ' + state.pct + '%;"></div>' +
+        '</div>' +
+      '</div>';
+
+    if (vs.pendingCheerPop) {
+      vs.pendingCheerPop = false;
+      card.classList.add('is-cheering');
+      if (vs.cheerTimer) clearTimeout(vs.cheerTimer);
+      vs.cheerTimer = setTimeout(function () {
+        card.classList.remove('is-cheering');
+      }, 560);
+    }
+  }
+
   function ensureSourceStripMounted() {
     let strip = document.getElementById('vocab-source-strip');
     if (strip) return strip;
@@ -515,9 +655,10 @@
       ? '<span class="vocab-strip-caption" style="font-weight:500;">(Chưa có bài từ tab Luyện tập cuối buổi — tạo bài bên Luyện cuối buổi hoặc chọn "+ Tạo bài học mới..." khi thêm từ)</span>'
       : '';
 
+    let pCounts = null;
     let practiceCounterHtml = '';
     if (!adapter.isTeacher && typeof adapter.getPracticeCounts === 'function') {
-      const pCounts = adapter.getPracticeCounts() || {};
+      pCounts = adapter.getPracticeCounts() || {};
       const bySrc = pCounts.bySource || {};
       const srcEntry = bySrc[vs.sourceKey];
       const currentSrcCount = srcEntry ? Math.max(0, Number(srcEntry.count || 0) || 0) : 0;
@@ -528,6 +669,8 @@
           '<span>Bài này đã luyện: <strong>' + currentSrcCount + '</strong> lần · Tổng: <strong>' + totalPracticeCount + '</strong> lần</span>' +
         '</span>';
     }
+
+    renderVocabCheerCard(ctx, pCounts);
 
     strip.innerHTML =
       '<div class="vocab-source-header">' +
@@ -902,6 +1045,7 @@
 
     if (!vs.quizCompletionReported && typeof adapter.onQuizComplete === 'function') {
       vs.quizCompletionReported = true;
+      vs.pendingCheerPop = true;
       adapter.onQuizComplete({
         sourceKey: vs.sourceKey,
         sourceLabel: ctx.sourceLabel,
@@ -909,7 +1053,14 @@
         total: total,
         pct: pct
       });
-      renderSourceStrip(computeActiveItems(true));
+      const updatedCtx = computeActiveItems(true);
+      const cheer = computeVocabCheerState(updatedCtx);
+      if (descEl) {
+        descEl.textContent =
+          'Đã trả lời đúng ' + vs.quizCorrect + ' / ' + total + ' câu (' + updatedCtx.sourceLabel + '). ' +
+          'Em đã ôn bộ này ' + cheer.currentSrcCount + ' lần · Hoàn thành ' + cheer.pct + '% (' + cheer.masteredWords + '/' + cheer.totalWords + ' từ)!';
+      }
+      renderSourceStrip(updatedCtx);
     }
   }
 
@@ -1283,6 +1434,7 @@
         if (masteryBtn) {
           const mKey = masteryBtn.getAttribute('data-mastery-key') || masteryBtn.getAttribute('data-vlist-mastery');
           if (mKey && typeof adapter.onToggleMastered === 'function') {
+            vs.pendingCheerPop = true;
             adapter.onToggleMastered(mKey);
             renderVocabSuite(false);
           }
@@ -1360,6 +1512,7 @@
           updateFlashcardUI(ctx);
         } else {
           if (ctx.items.length > 0 && typeof adapter.onFlashcardCycleComplete === 'function') {
+            vs.pendingCheerPop = true;
             adapter.onFlashcardCycleComplete({
               sourceKey: vs.sourceKey,
               sourceLabel: ctx.sourceLabel,
@@ -1559,6 +1712,7 @@
               }
               const ctx = computeActiveItems(true);
               if (typeof adapter.onStrokeComplete === 'function') {
+                vs.pendingCheerPop = true;
                 adapter.onStrokeComplete({
                   sourceKey: vs.sourceKey,
                   sourceLabel: ctx.sourceLabel,
