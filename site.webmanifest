@@ -1,0 +1,29 @@
+{
+  "name": "StudySnap — Học Tiếng Trung Tương Tác",
+  "short_name": "StudySnap",
+  "description": "Nền tảng làm bài luyện tập cuối buổi, nộp BVN đa phương tiện nhận phản hồi giọng nói và ôn từ vựng Tiếng Trung.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF9FB",
+  "theme_color": "#FF99BE",
+  "lang": "vi",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

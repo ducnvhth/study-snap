@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="StudySnap Icon">
+  <defs>
+    <linearGradient id="ss-bg" x1="6" y1="4" x2="58" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF85B3"/>
+      <stop offset="52%" stop-color="#FF99BE"/>
+      <stop offset="100%" stop-color="#FFB596"/>
+    </linearGradient>
+    <linearGradient id="ss-sheen" x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.32"/>
+      <stop offset="48%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="ss-clip">
+      <rect x="2" y="2" width="60" height="60" rx="18"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#ss-clip)">
+    <rect x="2" y="2" width="60" height="60" rx="18" fill="url(#ss-bg)"/>
+    <rect x="3" y="3" width="58" height="58" rx="17" fill="url(#ss-sheen)" stroke="#FFFFFF" stroke-opacity="0.65" stroke-width="1.6"/>
+  </g>
+
+  <!-- Smooth twin-page Open Book -->
+  <rect x="12.4" y="16.6" width="21.2" height="27.8" rx="5" fill="#2D1B4E"/>
+  <rect x="30.4" y="16.6" width="21.2" height="27.8" rx="5" fill="#2D1B4E"/>
+  <rect x="29" y="19" width="6" height="25.2" fill="#2D1B4E"/>
+
+  <rect x="15.6" y="19.6" width="15" height="21.4" rx="2.8" fill="#FFF9FB"/>
+  <rect x="33.4" y="19.6" width="15" height="21.4" rx="2.8" fill="#FFFFFF"/>
+
+  <!-- Left page study lines -->
+  <path d="M19.2 25.8H26.8M19.2 31.8H25.5" stroke="#2D1B4E" stroke-width="2.6" stroke-linecap="round"/>
+
+  <!-- Right page Mint progress check badge -->
+  <circle cx="41.2" cy="29.8" r="5.6" fill="#06D6A0" stroke="#2D1B4E" stroke-width="2.1"/>
+  <path d="M38.9 29.9L40.7 31.7L43.8 28.2" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
