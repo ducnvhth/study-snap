@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css?v=20261116k">
+  <link rel="stylesheet" href="styles/main.css?v=20261116n">
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
 </head>
 <body>
@@ -499,7 +499,7 @@
               </div>
 
               <!-- Navigation Controls -->
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px;">
+              <div class="fc-nav-row">
                 <button type="button" class="btn btn-outline" id="btn-fc-prev-card">
                   <span>← Từ trước</span>
                 </button>
@@ -594,7 +594,7 @@
           <!-- SUB-PANEL 3: TẬP VIẾT NÉT CHỮ (STROKE) -->
           <div id="vpanel-stroke" class="vocab-panel">
             <div style="margin-bottom: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <input type="search" id="stroke-search-input" class="form-control" style="flex: 1; min-width: 200px;" placeholder="Tìm chữ Hán hoặc Pinyin để xem nét viết...">
+              <input type="search" id="stroke-search-input" class="form-control" style="flex: 1; min-width: min(200px, 100%);" placeholder="Tìm chữ Hán hoặc Pinyin để xem nét viết...">
               <button type="button" class="btn btn-primary btn-sm" id="btn-stroke-search-action">
                 <span>Xem chữ</span>
               </button>
@@ -636,7 +636,7 @@
           <!-- SUB-PANEL 4: DANH SÁCH TRA CỨU TOÀN BỘ -->
           <div id="vpanel-list" class="vocab-panel">
             <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 14px;">
-              <input type="search" id="vlist-search-input" class="form-control" style="flex: 1; min-width: 220px;" placeholder="🔍 Tìm kiếm chữ Hán, Pinyin hoặc nghĩa tiếng Việt...">
+              <input type="search" id="vlist-search-input" class="form-control" style="flex: 1; min-width: min(220px, 100%);" placeholder="🔍 Tìm kiếm chữ Hán, Pinyin hoặc nghĩa tiếng Việt...">
               <select id="vlist-range-select" class="form-control" style="width: auto; padding: 8px 12px;">
                 <option value="all">Tất cả các từ</option>
                 <option value="1-50">Từ 1 – 50</option>
@@ -648,13 +648,13 @@
             </div>
 
             <div class="matrix-scroll-wrapper">
-              <table class="progress-matrix-table" style="font-size: 0.875rem;">
+              <table class="progress-matrix-table vocab-lookup-table" style="font-size: 0.875rem;">
                 <thead>
                   <tr>
-                    <th style="width: 50px;">STT</th>
-                    <th style="width: 130px;">Chữ Hán</th>
+                    <th class="vlist-col-idx">STT</th>
+                    <th class="vlist-col-word">Chữ Hán</th>
                     <th>Pinyin &amp; Nghĩa Tiếng Việt</th>
-                    <th style="width: 140px; text-align: center;">Thao tác</th>
+                    <th class="vlist-col-actions">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody id="vlist-table-body">
@@ -676,6 +676,6 @@
   <script src="js/data.js?v=20261116i"></script>
   <script src="js/auth.js?v=20261114c"></script>
   <script src="js/audio.js?v=20261116f"></script>
-  <script src="js/student.js?v=20261116f"></script>
+  <script src="js/student.js?v=20261116l"></script>
 </body>
 </html>

@@ -1424,7 +1424,7 @@
     if (active.length === 0) {
       bar.innerHTML =
         '<span class="status-badge status-unassigned">Chưa giao lớp nào</span>' +
-        '<span style="font-size:0.8125rem;color:var(--color-muted-foreground);flex:1;min-width:180px;">' +
+        '<span style="font-size:0.8125rem;color:var(--color-muted-foreground);flex:1;min-width:min(180px, 100%);">' +
           'Bộ <strong>' + escapeHtml(suiteState.sourceLabel || sourceKey) + '</strong> hiện chưa giao làm nhiệm vụ cho lớp nào.' +
         '</span>' +
         '<button type="button" class="btn btn-outline btn-sm" id="btn-vocab-bar-assign" data-vocab-assign-key="' + escapeHtml(sourceKey) + '">Giao bài ôn từ này</button>';
@@ -2562,7 +2562,7 @@
         : 'Đề luyện tập này chưa được giao cho lớp nào.';
       bar.innerHTML =
         '<span class="status-badge status-unassigned">Chưa giao lớp nào</span>' +
-        '<span style="font-size:0.8125rem;color:var(--color-muted-foreground);flex:1;min-width:180px;">' + hintText + '</span>' +
+        '<span style="font-size:0.8125rem;color:var(--color-muted-foreground);flex:1;min-width:min(180px, 100%);">' + hintText + '</span>' +
         '<button type="button" class="btn btn-outline btn-sm" id="btn-delivery-bar-reassign" data-ex-id="' + escapeHtml(ex.exercise_id) + '">Giao bài cho lớp</button>';
       return;
     }

@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css?v=20261116k">
+  <link rel="stylesheet" href="styles/main.css?v=20261116n">
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -89,7 +89,7 @@
           <!-- Trái: Chọn bài tập & Nút thêm bài mới -->
           <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <label for="teacher-practice-select" style="font-weight: 700; color: var(--color-primary-deep);">Bài tập:</label>
-            <select id="teacher-practice-select" class="form-control" style="min-width: 260px; width: auto; font-weight: 600;"></select>
+            <select id="teacher-practice-select" class="form-control" style="min-width: min(260px, 100%); width: auto; flex: 1 1 220px; font-weight: 600;"></select>
             <button type="button" class="btn btn-primary btn-sm" id="btn-create-practice-ex">
               <span>+ Tạo bài tập mới</span>
             </button>
@@ -141,11 +141,11 @@
             <!-- Form Header Card (Giống tiêu đề đầu đề Google Form) -->
             <div class="surface-panel" style="margin-bottom: 20px;">
               <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 260px;">
+                <div style="flex: 1 1 260px; min-width: min(260px, 100%);">
                   <label class="form-label" for="ex-meta-title" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground); text-transform: uppercase; letter-spacing: 0.05em;">Tiêu đề bài tập</label>
                   <input type="text" id="ex-meta-title" class="form-control" style="font-size: 1.125rem; font-weight: 800; color: var(--ink);" placeholder="Ví dụ: Bài luyện tập cuối buổi — HSK 1: Bài 1" required>
                 </div>
-                <div style="width: 160px;">
+                <div style="flex: 0 1 160px; min-width: min(140px, 100%);">
                   <label class="form-label" for="ex-meta-tag" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-muted-foreground); text-transform: uppercase; letter-spacing: 0.05em;">Thuộc bài</label>
                   <input type="text" id="ex-meta-tag" list="practice-lesson-tag-datalist" class="form-control" style="font-weight: 600;" placeholder="Ví dụ: Bài 1" required>
                   <datalist id="practice-lesson-tag-datalist"></datalist>
@@ -210,7 +210,7 @@
 
             <!-- Nút Lưu Cuối Trang -->
             <div class="banner-actions" style="margin-top: 24px; justify-content: center; gap: 14px;">
-              <button type="submit" class="btn btn-primary" id="btn-save-exercise-meta" style="min-width: 240px; font-size: 1rem; font-weight: 700; padding: 12px 24px;">
+              <button type="submit" class="btn btn-primary" id="btn-save-exercise-meta" style="min-width: min(240px, 100%); font-size: 1rem; font-weight: 700; padding: 12px 24px;">
                 <span>💾 Lưu Toàn Bộ Bài Tập</span>
               </button>
             </div>
@@ -319,18 +319,18 @@
             <div class="practice-progress-controls">
               <div class="practice-progress-control-item">
                 <label for="practice-progress-class-filter">Chọn Lớp học:</label>
-                <select id="practice-progress-class-filter" class="form-control" style="min-width:210px;width:auto;font-weight:700;color:var(--color-primary-deep);"></select>
+                <select id="practice-progress-class-filter" class="form-control" style="min-width:min(210px, 100%);width:auto;font-weight:700;color:var(--color-primary-deep);"></select>
               </div>
               <div class="practice-progress-control-item">
                 <label for="practice-progress-scope-filter">Phạm vi bài:</label>
-                <select id="practice-progress-scope-filter" class="form-control" style="min-width:210px;width:auto;font-weight:600;">
+                <select id="practice-progress-scope-filter" class="form-control" style="min-width:min(210px, 100%);width:auto;font-weight:600;">
                   <option value="assigned">Bài đã giao cho lớp</option>
                   <option value="all">Tất cả bài trong kho đề</option>
                 </select>
               </div>
               <div class="practice-progress-control-item">
                 <label for="practice-progress-sort">Sắp xếp:</label>
-                <select id="practice-progress-sort" class="form-control" style="min-width:210px;width:auto;font-weight:600;">
+                <select id="practice-progress-sort" class="form-control" style="min-width:min(210px, 100%);width:auto;font-weight:600;">
                   <option value="default">Mặc định (theo danh sách)</option>
                   <option value="name_asc">Tên học sinh (A &rarr; Z)</option>
                   <option value="name_desc">Tên học sinh (Z &rarr; A)</option>
@@ -360,7 +360,7 @@
             </div>
 
             <div class="matrix-scroll-wrapper">
-              <table class="progress-matrix-table" aria-label="Bảng tự động tổng hợp tiến độ làm bài luyện tập cuối buổi">
+              <table class="progress-matrix-table is-matrix-grid" aria-label="Bảng tự động tổng hợp tiến độ làm bài luyện tập cuối buổi">
                 <thead id="practice-matrix-thead"></thead>
                 <tbody id="practice-matrix-tbody"></tbody>
               </table>
@@ -417,7 +417,7 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
               <span>Chọn Lớp học:</span>
             </label>
-            <select id="teacher-class-filter" class="form-control" style="min-width:240px;width:auto;font-weight:700;color:var(--color-primary-deep);"></select>
+            <select id="teacher-class-filter" class="form-control" style="min-width:min(240px, 100%);width:auto;max-width:100%;font-weight:700;color:var(--color-primary-deep);"></select>
             <span class="status-badge status-submitted" id="teacher-class-count-badge">6 học sinh</span>
 
             <!-- Bộ lọc theo Buổi học (Buổi 1, Buổi 2... tránh 60 bài rối mắt) -->
@@ -425,7 +425,7 @@
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
               <span>Buổi học:</span>
             </label>
-            <select id="teacher-grading-session-filter" class="form-control" style="min-width:160px;width:auto;font-weight:700;color:var(--color-primary-deep);">
+            <select id="teacher-grading-session-filter" class="form-control" style="min-width:min(160px, 100%);width:auto;font-weight:700;color:var(--color-primary-deep);">
               <option value="all">Tất cả các buổi</option>
             </select>
           </div>
@@ -588,11 +588,11 @@
 
                 <!-- Thanh chọn giao BVN cho lớp nào -->
                 <div class="asg-assign-action-bar" style="margin-top: 12px;">
-                  <div style="display: flex; align-items: center; gap: 8px; flex: 1 1 260px; min-width: 0;">
-                    <label for="assign-selected-target-class" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-primary-deep); white-space: nowrap;">
+                  <div style="display: flex; align-items: center; gap: 8px; flex: 1 1 320px; min-width: min(320px, 100%); flex-wrap: wrap;">
+                    <label for="assign-selected-target-class" style="font-size: 0.8125rem; font-weight: 700; color: var(--color-primary-deep);">
                       Giao BVN đã chọn cho Lớp:
                     </label>
-                    <select id="assign-selected-target-class" class="form-control" style="font-size: 0.8125rem; min-width: 130px; flex: 1;">
+                    <select id="assign-selected-target-class" class="form-control" style="font-size: 0.8125rem; min-width: min(140px, 100%); flex: 1 1 140px;">
                       <!-- Populated by JS -->
                     </select>
                   </div>
@@ -678,7 +678,7 @@
             </div>
             <div class="practice-progress-control-item">
               <label for="bvn-matrix-sort">Sắp xếp:</label>
-              <select id="bvn-matrix-sort" class="form-control" style="min-width:190px;width:auto;font-weight:600;padding:6px 10px;font-size:0.875rem;">
+              <select id="bvn-matrix-sort" class="form-control" style="min-width:min(190px, 100%);width:auto;font-weight:600;padding:6px 10px;font-size:0.875rem;">
                 <option value="default">Mặc định</option>
                 <option value="name_asc">Tên học sinh (A &rarr; Z)</option>
                 <option value="name_desc">Tên học sinh (Z &rarr; A)</option>
@@ -692,7 +692,7 @@
           </div>
 
           <div class="matrix-scroll-wrapper">
-            <table class="progress-matrix-table">
+            <table class="progress-matrix-table is-matrix-grid">
               <thead id="matrix-thead"></thead>
               <tbody id="matrix-tbody"></tbody>
             </table>
@@ -730,7 +730,7 @@
               </button>
               <button type="button" class="btn btn-primary btn-sm" id="btn-toggle-manual-add-vocab" style="font-weight: 700;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                <span>+ Thêm từ thủ công</span>
+                <span>Thêm từ thủ công</span>
               </button>
             </div>
           </div>
@@ -757,9 +757,9 @@
 
             <div id="teacher-vocab-progress-body" style="display: none; margin-top: 14px;">
               <div class="vocab-progress-controls">
-                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1; min-width: 240px;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1; min-width: min(240px, 100%);">
                   <label for="teacher-vocab-assign-filter" style="font-size: 0.8125rem; font-weight: 700; color: var(--ink);">Bài ôn từ:</label>
-                  <select id="teacher-vocab-assign-filter" class="form-control" style="width: auto; min-width: 220px; max-width: 100%; padding: 6px 10px; font-size: 0.8125rem;"></select>
+                  <select id="teacher-vocab-assign-filter" class="form-control" style="width: auto; min-width: min(220px, 100%); max-width: 100%; padding: 6px 10px; font-size: 0.8125rem;"></select>
                   <button type="button" class="btn btn-danger-outline btn-sm" id="btn-revoke-selected-vocab-task" title="Hủy giao bài ôn từ đang chọn">Hủy giao bài này</button>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -955,7 +955,7 @@
               </div>
 
               <!-- Navigation Controls -->
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px;">
+              <div class="fc-nav-row">
                 <button type="button" class="btn btn-outline" id="btn-fc-prev-card">
                   <span>← Từ trước</span>
                 </button>
@@ -1049,7 +1049,7 @@
           <!-- SUB-PANEL 3: TẬP VIẾT NÉT CHỮ (STROKE) -->
           <div id="vpanel-stroke" class="vocab-panel">
             <div style="margin-bottom: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <input type="search" id="stroke-search-input" class="form-control" style="flex: 1; min-width: 200px;" placeholder="Tìm chữ Hán hoặc Pinyin để xem nét viết...">
+              <input type="search" id="stroke-search-input" class="form-control" style="flex: 1; min-width: min(200px, 100%);" placeholder="Tìm chữ Hán hoặc Pinyin để xem nét viết...">
               <button type="button" class="btn btn-primary btn-sm" id="btn-stroke-search-action">
                 <span>Xem chữ</span>
               </button>
@@ -1090,7 +1090,7 @@
           <!-- SUB-PANEL 4: DANH SÁCH TRA CỨU TOÀN BỘ -->
           <div id="vpanel-list" class="vocab-panel">
             <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 14px;">
-              <input type="search" id="vlist-search-input" class="form-control" style="flex: 1; min-width: 220px;" placeholder="🔍 Tìm kiếm chữ Hán, Pinyin hoặc nghĩa tiếng Việt...">
+              <input type="search" id="vlist-search-input" class="form-control" style="flex: 1; min-width: min(220px, 100%);" placeholder="🔍 Tìm kiếm chữ Hán, Pinyin hoặc nghĩa tiếng Việt...">
               <select id="vlist-range-select" class="form-control" style="width: auto; padding: 8px 12px;">
                 <option value="all">Tất cả các từ</option>
                 <option value="1-50">Từ 1 – 50</option>
@@ -1101,13 +1101,13 @@
             </div>
 
             <div class="matrix-scroll-wrapper">
-              <table class="progress-matrix-table" style="font-size: 0.875rem;">
+              <table class="progress-matrix-table vocab-lookup-table" style="font-size: 0.875rem;">
                 <thead>
                   <tr>
-                    <th style="width: 50px;">STT</th>
-                    <th style="width: 130px;">Chữ Hán</th>
+                    <th class="vlist-col-idx">STT</th>
+                    <th class="vlist-col-word">Chữ Hán</th>
                     <th>Pinyin &amp; Nghĩa Tiếng Việt</th>
-                    <th style="width: 140px; text-align: center;">Thao tác</th>
+                    <th class="vlist-col-actions">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody id="vlist-table-body">
@@ -1141,7 +1141,7 @@
           </p>
 
           <form id="create-class-form" style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 18px; background: var(--color-surface-muted); padding: 14px 18px; border-radius: var(--radius-lg); border: 1px solid var(--color-border-soft);">
-            <div class="form-group" style="flex: 1; min-width: 260px; margin-bottom: 0;">
+            <div class="form-group" style="flex: 1; min-width: min(260px, 100%); margin-bottom: 0;">
               <label class="form-label" for="new-class-name" style="font-weight: 700;">Tên lớp học mới:</label>
               <input type="text" id="new-class-name" class="form-control" placeholder="Ví dụ: Lớp Tiếng Trung HSK 3 - K25" required>
             </div>
@@ -1250,7 +1250,7 @@
                 <h2>Danh sách học sinh theo lớp</h2>
               </div>
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <select id="student-accounts-class-filter" class="form-control" style="font-size: 0.8125rem; font-weight: 600; padding: 4px 10px; width: auto; min-width: 160px;"></select>
+                <select id="student-accounts-class-filter" class="form-control" style="font-size: 0.8125rem; font-weight: 600; padding: 4px 10px; width: auto; min-width: min(160px, 100%);"></select>
                 <span class="status-badge status-submitted" id="student-accounts-count-badge">8 học sinh</span>
               </div>
             </div>
@@ -1821,6 +1821,6 @@
   <script src="js/data.js?v=20261116i"></script>
   <script src="js/auth.js?v=20261114c"></script>
   <script src="js/audio.js?v=20261116f"></script>
-  <script src="js/teacher.js?v=20261116k"></script>
+  <script src="js/teacher.js?v=20261116l"></script>
 </body>
 </html>
