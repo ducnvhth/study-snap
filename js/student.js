@@ -756,6 +756,26 @@
         '</div>';
     }
 
+    const isVideo = typeof window.StudySnapAudio.isVideoSubmission === 'function'
+      ? window.StudySnapAudio.isVideoSubmission(submission.media_url, submission.media_type)
+      : submission.media_type === 'video';
+    const ownMediaHtml = isVideo && typeof window.StudySnapAudio.renderVideoPlayer === 'function'
+      ? window.StudySnapAudio.renderVideoPlayer({
+          id: 'student-own-sub-' + submission.submission_id,
+          url: submission.media_url,
+          duration: submission.media_duration || '01:15',
+          label: mediaLabel
+        })
+      : window.StudySnapAudio.renderVoicePlayer({
+          id: 'student-own-sub-' + submission.submission_id,
+          url: submission.media_url,
+          duration: submission.media_duration || '01:15',
+          label: mediaLabel,
+          fallbackText: '老师好，我是越南学生，这是我的汉语作业录音。',
+          lang: 'zh-CN',
+          variant: 'student'
+        });
+
     bodyEl.innerHTML =
       '<div class="assignment-brief-box">' +
       '<div class="assignment-brief-title">BVN đã nộp của em • ' +
@@ -764,19 +784,14 @@
       '<p class="assignment-brief-desc">Ghi chú của em: "' +
       escapeHtml(submission.student_note || 'Em gửi bài tập về nhà (BVN) ạ.') +
       '"</p>' +
-      '<div class="media-player-box">' +
-      window.StudySnapAudio.renderVoicePlayer({
-        id: 'student-own-sub-' + submission.submission_id,
-        url: submission.media_url,
-        duration: submission.media_duration || '01:15',
-        label: mediaLabel,
-        fallbackText: '老师好，我是越南学生，这是我的汉语作业录音。',
-        lang: 'zh-CN',
-        variant: 'student'
-      }) +
+      '<div class="media-player-box' + (isVideo ? ' media-player-video-box' : '') + '">' +
+      ownMediaHtml +
       '</div>' +
       '</div>' +
       teacherReviewHtml;
+    if (isVideo && typeof window.StudySnapAudio.hydrateVideoPlayers === 'function') {
+      window.StudySnapAudio.hydrateVideoPlayers(bodyEl);
+    }
   }
 
   function isRealTeacherVoiceUrl(url) {
@@ -938,6 +953,22 @@
       previewEl.innerHTML = '';
       return;
     }
+    const isVideo = typeof window.StudySnapAudio.isVideoSubmission === 'function'
+      ? window.StudySnapAudio.isVideoSubmission(ui.pendingMedia.media_url, ui.pendingMedia.media_type, ui.pendingMedia.mimeType)
+      : ui.pendingMedia.media_type === 'video';
+    if (isVideo && typeof window.StudySnapAudio.renderVideoPlayer === 'function') {
+      previewEl.innerHTML = window.StudySnapAudio.renderVideoPlayer({
+        id: 'student-draft-video',
+        url: ui.pendingMedia.media_url,
+        duration: ui.pendingMedia.media_duration || '01:15',
+        label: 'Xem thử Video BVN trước khi nộp',
+        mimeType: ui.pendingMedia.mimeType || 'video/mp4'
+      });
+      if (typeof window.StudySnapAudio.hydrateVideoPlayers === 'function') {
+        window.StudySnapAudio.hydrateVideoPlayers(previewEl);
+      }
+      return;
+    }
     previewEl.innerHTML = window.StudySnapAudio.renderVoicePlayer({
       id: 'student-draft-recording',
       url: ui.pendingMedia.media_url,
@@ -1043,6 +1074,7 @@
             media_type: mediaInfo.mediaType,
             media_url: mediaInfo.dataUrl,
             mimeType: mediaInfo.mimeType || (mediaInfo.mediaType === 'video' ? 'video/mp4' : 'audio/webm'),
+            fileName: mediaInfo.fileName || (file && file.name) || '',
             media_duration: mediaInfo.duration
           };
           if (recStatusText) {
@@ -1091,7 +1123,7 @@
           assignment_id: ui.selectedAssignmentId,
           student_id: student.student_id,
           submitted_at: timestamp,
-          student_note: noteText || 'Em nộp bản thu âm BVN ạ.',
+          student_note: noteText || (mediaData.media_type === 'video' ? 'Em nộp video BVN ạ.' : 'Em nộp bản thu âm BVN ạ.'),
           media_type: mediaData.media_type,
           media_url: mediaData.media_url,
           media_duration: mediaData.media_duration,
@@ -1114,7 +1146,8 @@
               media_url: submissionRecord.media_url,
               media_duration: submissionRecord.media_duration,
               media_base64: hasBinaryMedia ? mediaData.media_url : '',
-              media_mime_type: mediaData.mimeType || (mediaData.media_type === 'video' ? 'video/mp4' : 'audio/webm')
+              media_mime_type: mediaData.mimeType || (mediaData.media_type === 'video' ? 'video/mp4' : 'audio/webm'),
+              media_filename: mediaData.fileName || ''
             });
           };
 

@@ -2365,14 +2365,26 @@ window.StudySnapStore = (function () {
     }
   }
 
-  function inferMimeAndExtFromDataUrl(dataUrl, fallbackMime) {
+  function inferMimeAndExtFromDataUrl(dataUrl, fallbackMime, fallbackFilename) {
     const mimeMatch = String(dataUrl || '').match(/^data:([^;]+);base64,/i);
     const mimeType = (mimeMatch && mimeMatch[1] ? mimeMatch[1] : fallbackMime || 'audio/webm').toLowerCase();
+    const rawExtMatch = String(fallbackFilename || '').trim().match(/(\.[a-z0-9]{2,5})$/i);
+    const rawExt = rawExtMatch ? rawExtMatch[1].toLowerCase() : '';
     let ext = '.webm';
-    if (mimeType.indexOf('wav') >= 0) ext = '.wav';
+    if (mimeType.indexOf('quicktime') >= 0) ext = '.mov';
+    else if (mimeType.indexOf('video/webm') >= 0) ext = '.webm';
+    else if (mimeType.indexOf('x-m4v') >= 0 || mimeType.indexOf('m4v') >= 0) ext = '.m4v';
+    else if (mimeType.indexOf('x-matroska') >= 0 || mimeType.indexOf('matroska') >= 0) ext = '.mkv';
+    else if (mimeType.indexOf('x-msvideo') >= 0 || mimeType.indexOf('msvideo') >= 0) ext = '.avi';
+    else if (mimeType.indexOf('3gpp') >= 0) ext = '.3gp';
+    else if (mimeType.indexOf('wav') >= 0) ext = '.wav';
     else if (mimeType.indexOf('mp3') >= 0 || mimeType.indexOf('mpeg') >= 0) ext = '.mp3';
-    else if (mimeType.indexOf('video') >= 0) ext = '.mp4';
-    else if (mimeType.indexOf('mp4') >= 0 || mimeType.indexOf('m4a') >= 0) ext = '.m4a';
+    else if (mimeType.indexOf('video') >= 0) {
+      ext = (rawExt === '.mov' || rawExt === '.webm' || rawExt === '.m4v' || rawExt === '.mp4' || rawExt === '.3gp' || rawExt === '.mkv' || rawExt === '.avi')
+        ? rawExt
+        : '.mp4';
+    } else if (mimeType.indexOf('mp4') >= 0 || mimeType.indexOf('m4a') >= 0) ext = '.m4a';
+    else if (rawExt && mimeType.indexOf('video') < 0) ext = rawExt;
     return { mimeType: mimeType, ext: ext };
   }
 
@@ -2383,12 +2395,13 @@ window.StudySnapStore = (function () {
     if (actionName === 'submitHomework' && payloadCopy.media_base64 && String(payloadCopy.media_base64).indexOf('data:') === 0) {
       const hwMeta = inferMimeAndExtFromDataUrl(
         payloadCopy.media_base64,
-        payloadCopy.media_mime_type || (payloadCopy.media_type === 'video' ? 'video/mp4' : 'audio/webm')
+        payloadCopy.media_mime_type || (payloadCopy.media_type === 'video' ? 'video/mp4' : 'audio/webm'),
+        payloadCopy.media_filename || ''
       );
       const up = await uploadMediaToDriveViaGas({
         base64_data: payloadCopy.media_base64,
         mime_type: hwMeta.mimeType,
-        filename: payloadCopy.media_filename || ('BVN_' + (payloadCopy.assignment_id || 'EX') + '_' + (payloadCopy.student_id || 'HS') + '_' + Date.now() + hwMeta.ext)
+        filename: 'BVN_' + (payloadCopy.assignment_id || 'EX') + '_' + (payloadCopy.student_id || 'HS') + '_' + Date.now() + hwMeta.ext
       });
       if (!up.ok) return { errorResponse: up };
       cacheUploadedDriveMedia(up.media_url, payloadCopy.media_base64, payloadCopy.media_filename);

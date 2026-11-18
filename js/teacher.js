@@ -791,11 +791,18 @@
 
     if (studentMediaBox) {
       if (sub && (sub.status === 'submitted' || sub.status === 'graded') && sub.media_url) {
-        const typeText = sub.media_type === 'video' ? 'Video BVN học sinh nộp' : 'Ghi âm BVN học sinh nộp';
-        studentMediaBox.innerHTML =
-          '<div class="assignment-brief-box">' +
-            '<p class="assignment-brief-desc" style="margin-bottom:6px;">Lời nhắn của học sinh: "' + escapeHtml(sub.student_note || 'Em nộp BVN ạ.') + '"</p>' +
-            window.StudySnapAudio.renderVoicePlayer({
+        const isVideo = typeof window.StudySnapAudio.isVideoSubmission === 'function'
+          ? window.StudySnapAudio.isVideoSubmission(sub.media_url, sub.media_type)
+          : sub.media_type === 'video';
+        const typeText = isVideo ? 'Video BVN học sinh nộp' : 'Ghi âm BVN học sinh nộp';
+        const mediaPlayerHtml = isVideo && typeof window.StudySnapAudio.renderVideoPlayer === 'function'
+          ? window.StudySnapAudio.renderVideoPlayer({
+              id: 'grading-student-' + sub.submission_id,
+              url: sub.media_url,
+              duration: sub.media_duration || '01:15',
+              label: st.full_name + ' — ' + typeText
+            })
+          : window.StudySnapAudio.renderVoicePlayer({
               id: 'grading-student-' + sub.submission_id,
               url: sub.media_url,
               duration: sub.media_duration || '01:15',
@@ -803,8 +810,15 @@
               fallbackText: '老师好！我是越南留学生，我每天都很努力学习汉语。',
               lang: 'zh-CN',
               variant: 'student'
-            }) +
+            });
+        studentMediaBox.innerHTML =
+          '<div class="assignment-brief-box">' +
+            '<p class="assignment-brief-desc" style="margin-bottom:6px;">Lời nhắn của học sinh: "' + escapeHtml(sub.student_note || 'Em nộp BVN ạ.') + '"</p>' +
+            mediaPlayerHtml +
           '</div>';
+        if (isVideo && typeof window.StudySnapAudio.hydrateVideoPlayers === 'function') {
+          window.StudySnapAudio.hydrateVideoPlayers(studentMediaBox);
+        }
       } else {
         studentMediaBox.innerHTML =
           '<div class="assignment-brief-box">' +
@@ -1105,18 +1119,34 @@
 
         const voicePlayersHtml = [];
         if (sub && sub.media_url) {
-          voicePlayersHtml.push(
-            window.StudySnapAudio.renderVoicePlayer({
-              id: 'matrix-student-' + sub.submission_id,
-              url: sub.media_url,
-              duration: sub.media_duration || '01:10',
-              label: sub.media_type === 'video' ? 'Video HS' : 'Bài HS',
-              fallbackText: '老师好！我是越南留学生，我每天都很努力学习汉语。',
-              lang: 'zh-CN',
-              compact: true,
-              variant: 'student'
-            })
-          );
+          const isVideo = typeof window.StudySnapAudio.isVideoSubmission === 'function'
+            ? window.StudySnapAudio.isVideoSubmission(sub.media_url, sub.media_type)
+            : sub.media_type === 'video';
+          if (isVideo && typeof window.StudySnapAudio.renderVideoPlayer === 'function') {
+            voicePlayersHtml.push(
+              window.StudySnapAudio.renderVideoPlayer({
+                id: 'matrix-student-' + sub.submission_id,
+                url: sub.media_url,
+                duration: sub.media_duration || '01:10',
+                label: st.full_name + ' — ' + (asg ? asg.title : 'Video BVN'),
+                compact: true,
+                gradeKey: asg.assignment_id + ':' + st.student_id
+              })
+            );
+          } else {
+            voicePlayersHtml.push(
+              window.StudySnapAudio.renderVoicePlayer({
+                id: 'matrix-student-' + sub.submission_id,
+                url: sub.media_url,
+                duration: sub.media_duration || '01:10',
+                label: sub.media_type === 'video' ? 'Video HS' : 'Bài HS',
+                fallbackText: '老师好！我是越南留学生，我每天都很努力学习汉语。',
+                lang: 'zh-CN',
+                compact: true,
+                variant: 'student'
+              })
+            );
+          }
         }
         if (hasRealTeacherVoice) {
           voicePlayersHtml.push(
@@ -9436,6 +9466,28 @@
         } else {
           showToast('Chưa có bản thu giọng nói thật của giáo viên.');
         }
+        return;
+      }
+
+      const videoCompactBtn = ev.target.closest('[data-video-compact-open]');
+      if (videoCompactBtn && typeof window.StudySnapAudio.openVideoModal === 'function') {
+        ev.stopPropagation();
+        const gradeKey = videoCompactBtn.getAttribute('data-video-grade-key') || '';
+        window.StudySnapAudio.openVideoModal({
+          url: videoCompactBtn.getAttribute('data-video-url') || '',
+          label: videoCompactBtn.getAttribute('data-video-label') || 'Video BVN học sinh',
+          duration: videoCompactBtn.getAttribute('data-video-duration') || '01:15',
+          mimeType: videoCompactBtn.getAttribute('data-video-mime') || 'video/mp4',
+          onGrade: gradeKey ? function () {
+            const parts = gradeKey.split(':');
+            ui.gradingAssignmentId = parts[0];
+            ui.gradingStudentId = parts[1];
+            resetGradingDraftInputs();
+            renderGradingPanel();
+            const panel = document.getElementById('teacher-grading-panel');
+            if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          } : null
+        });
         return;
       }
 

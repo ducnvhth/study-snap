@@ -679,12 +679,72 @@ function formatPracticeAssignmentTitle(rawTitle) {
   );
 }
 
-function normalizeProxyMediaMime(rawContentType) {
+function inferMimeFromFilenameOrHint(fileNameOrDisposition, fallbackMime) {
+  const src = String(fileNameOrDisposition || '');
+  const extMatch = src.match(/\.([a-z0-9]{2,5})(?:["';\s?]|$)/i);
+  const ext = extMatch ? extMatch[1].toLowerCase() : '';
+  const extMap = {
+    mp4: 'video/mp4',
+    m4v: 'video/mp4',
+    mov: 'video/quicktime',
+    avi: 'video/x-msvideo',
+    mkv: 'video/x-matroska',
+    m4a: 'audio/mp4',
+    m4b: 'audio/mp4',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    aac: 'audio/aac',
+    ogg: 'audio/ogg',
+    oga: 'audio/ogg',
+    opus: 'audio/opus',
+    flac: 'audio/flac',
+    webm: (fallbackMime && String(fallbackMime).toLowerCase().indexOf('video/') === 0) ? 'video/webm' : 'audio/webm'
+  };
+  if (ext && extMap[ext]) return extMap[ext];
+  return '';
+}
+
+function normalizeProxyMediaMime(rawContentType, contentDisposition, hintMime) {
   const ct = String(rawContentType || '').split(';')[0].trim().toLowerCase();
-  if (!ct) return 'audio/webm';
+  const cleanHint = String(hintMime || '').split(';')[0].trim().toLowerCase();
   if (ct === 'audio/x-m4a' || ct === 'audio/m4a') return 'audio/mp4';
   if (ct === 'audio/mp3') return 'audio/mpeg';
+  if (!ct || ct === 'application/octet-stream' || ct === 'binary/octet-stream') {
+    const byName = inferMimeFromFilenameOrHint(contentDisposition, cleanHint);
+    if (byName) return byName;
+    if (cleanHint && (cleanHint.indexOf('video/') === 0 || cleanHint.indexOf('audio/') === 0)) {
+      return cleanHint;
+    }
+    return 'audio/webm';
+  }
   return ct;
+}
+
+function parseByteRangeHeader(rangeHeader, totalBytes) {
+  const clean = String(rangeHeader || '').trim();
+  const match = clean.match(/^bytes=(\d*)-(\d*)$/i);
+  if (!match || !totalBytes || totalBytes <= 0) return null;
+  const startStr = match[1];
+  const endStr = match[2];
+  let start = 0;
+  let end = totalBytes - 1;
+  if (startStr === '' && endStr !== '') {
+    const suffix = parseInt(endStr, 10);
+    if (!isFinite(suffix) || suffix <= 0) return null;
+    start = Math.max(0, totalBytes - suffix);
+  } else if (startStr !== '') {
+    start = parseInt(startStr, 10);
+    if (!isFinite(start) || start < 0 || start >= totalBytes) return null;
+    if (endStr !== '') {
+      const parsedEnd = parseInt(endStr, 10);
+      if (isFinite(parsedEnd) && parsedEnd >= start) {
+        end = Math.min(totalBytes - 1, parsedEnd);
+      }
+    }
+  } else {
+    return null;
+  }
+  return { start: start, end: end };
 }
 
 async function handleDriveMediaProxy(request, url, ctx) {
@@ -692,6 +752,8 @@ async function handleDriveMediaProxy(request, url, ctx) {
   if (!/^[a-zA-Z0-9_-]{10,120}$/.test(fileId)) {
     return jsonResponse({ ok: false, error: 'Thiếu hoặc sai định dạng fileId.' }, 400);
   }
+  const hintMime = url.searchParams.get('mime') || '';
+  const rangeHeader = request && request.headers ? request.headers.get('range') : null;
 
   const edgeCache = typeof caches !== 'undefined' && caches.default ? caches.default : null;
   const cacheKey = new Request('https://studysnap-drive-edge.internal/media/v2/' + encodeURIComponent(fileId), {
@@ -699,7 +761,26 @@ async function handleDriveMediaProxy(request, url, ctx) {
   });
   if (edgeCache) {
     const cached = await edgeCache.match(cacheKey);
-    if (cached) return cached;
+    if (cached) {
+      if (rangeHeader) {
+        try {
+          const fullBuf = await cached.arrayBuffer();
+          const range = parseByteRangeHeader(rangeHeader, fullBuf.byteLength);
+          if (range) {
+            const sliceBuf = fullBuf.slice(range.start, range.end + 1);
+            const partialHeaders = new Headers(cached.headers);
+            partialHeaders.set('Accept-Ranges', 'bytes');
+            partialHeaders.set('Content-Range', 'bytes ' + range.start + '-' + range.end + '/' + fullBuf.byteLength);
+            partialHeaders.set('Content-Length', String(sliceBuf.byteLength));
+            partialHeaders.set('Access-Control-Allow-Origin', '*');
+            return new Response(sliceBuf, { status: 206, headers: partialHeaders });
+          }
+        } catch (rangeErr) {
+          // Fall back to serving cached full response
+        }
+      }
+      return cached;
+    }
   }
 
   const driveUrls = [
@@ -710,32 +791,40 @@ async function handleDriveMediaProxy(request, url, ctx) {
 
   for (let i = 0; i < driveUrls.length; i++) {
     try {
+      const fetchHeaders = {
+        'User-Agent': 'Mozilla/5.0 (compatible; StudySnapMediaProxy/1.0)'
+      };
+      if (rangeHeader) {
+        fetchHeaders.Range = rangeHeader;
+      }
       const upstream = await fetch(driveUrls[i], {
         method: 'GET',
         redirect: 'follow',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; StudySnapMediaProxy/1.0)'
-        }
+        headers: fetchHeaders
       });
       const contentType = String(upstream.headers.get('content-type') || '').toLowerCase();
       if (
-        upstream.ok &&
+        (upstream.status === 200 || upstream.status === 206) &&
         upstream.body &&
         contentType.indexOf('text/html') === -1 &&
         contentType.indexOf('application/json') === -1
       ) {
         const headers = new Headers();
-        headers.set('Content-Type', normalizeProxyMediaMime(contentType));
+        const disp = upstream.headers.get('content-disposition') || '';
+        headers.set('Content-Type', normalizeProxyMediaMime(contentType, disp, hintMime));
+        headers.set('Accept-Ranges', 'bytes');
         const contentLen = upstream.headers.get('content-length');
         if (contentLen) headers.set('Content-Length', contentLen);
+        const contentRange = upstream.headers.get('content-range');
+        if (contentRange) headers.set('Content-Range', contentRange);
         headers.set('Cache-Control', 'public, max-age=604800, immutable');
         headers.set('Access-Control-Allow-Origin', '*');
 
         const responseToServe = new Response(upstream.body, {
-          status: 200,
+          status: upstream.status,
           headers: headers
         });
-        if (edgeCache && responseToServe.body) {
+        if (edgeCache && upstream.status === 200 && responseToServe.body) {
           const cloned = responseToServe.clone();
           if (ctx && typeof ctx.waitUntil === 'function') {
             ctx.waitUntil(edgeCache.put(cacheKey, cloned).catch(function () {}));

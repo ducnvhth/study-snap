@@ -291,8 +291,19 @@ function doGet(e) {
         } catch (err) {}
       }
       const file = DriveApp.getFileById(fileId);
-      const blob = file.getBlob();
+      const fileSize = typeof file.getSize === 'function' ? Number(file.getSize() || 0) : 0;
       const fileName = typeof file.getName === 'function' ? file.getName() : '';
+      if (fileSize > 24 * 1024 * 1024) {
+        return jsonResponse({
+          ok: false,
+          tooLarge: true,
+          fileId: fileId,
+          fileName: fileName,
+          mimeType: inferMediaMimeType_(fileName, file.getMimeType ? file.getMimeType() : ''),
+          error: 'Tệp video quá lớn cho cầu nối JSON trực tiếp — đang phát qua Google Drive.'
+        });
+      }
+      const blob = file.getBlob();
       const mimeType = inferMediaMimeType_(fileName, blob.getContentType());
       const base64 = Utilities.base64Encode(blob.getBytes());
       const resObj = {
@@ -1105,10 +1116,21 @@ function handleSubmitHomework_(ss, payload) {
 
   let mediaUrl = payload.media_url || '';
   if (payload.media_base64 && payload.media_mime_type) {
+    const rawExtMatch = String(payload.media_filename || '').trim().match(/(\.[a-z0-9]{2,5})$/i);
+    let driveExt = rawExtMatch ? rawExtMatch[1].toLowerCase() : '';
+    if (!driveExt) {
+      const mLower = String(payload.media_mime_type || '').toLowerCase();
+      if (mLower.indexOf('quicktime') >= 0) driveExt = '.mov';
+      else if (mLower.indexOf('video/webm') >= 0) driveExt = '.webm';
+      else if (mLower.indexOf('video/') >= 0) driveExt = '.mp4';
+      else if (mLower.indexOf('wav') >= 0) driveExt = '.wav';
+      else if (mLower.indexOf('mp4') >= 0 || mLower.indexOf('m4a') >= 0) driveExt = '.m4a';
+      else driveExt = '.webm';
+    }
     mediaUrl = saveBase64MediaToDrive_(
       payload.media_base64,
       payload.media_mime_type,
-      payload.media_filename || ('BVN_' + assignmentId + '_' + studentId + '_' + Date.now())
+      'BVN_' + assignmentId + '_' + studentId + '_' + Date.now() + driveExt
     );
   }
 
@@ -1748,8 +1770,15 @@ function inferMediaMimeType_(fileName, rawMime) {
     weba: 'audio/webm',
     webm: 'audio/webm',
     '3gp': 'audio/3gpp',
-    mp4: 'video/mp4'
+    mp4: 'video/mp4',
+    m4v: 'video/mp4',
+    mov: 'video/quicktime',
+    avi: 'video/x-msvideo',
+    mkv: 'video/x-matroska'
   };
+  if (mime.indexOf('video/') === 0 && ext !== 'm4a' && ext !== 'm4b') {
+    return mime;
+  }
   if (ext && extMap[ext] && ext !== 'webm' && ext !== 'mp4') {
     if (!mime || mime === 'application/octet-stream' || mime === 'binary/octet-stream' || mime === 'audio/x-m4a' || mime === 'audio/m4a' || mime === 'audio/mp3' || (ext === 'm4a' && mime === 'video/mp4')) {
       return extMap[ext];

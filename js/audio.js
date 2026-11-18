@@ -35,6 +35,28 @@ window.StudySnapAudio = (function () {
     '3gp': 'audio/3gpp'
   };
 
+  const VIDEO_EXT_MIME_MAP = {
+    mp4: 'video/mp4',
+    m4v: 'video/mp4',
+    mov: 'video/quicktime',
+    avi: 'video/x-msvideo',
+    mkv: 'video/x-matroska',
+    ogv: 'video/ogg',
+    webm: 'video/webm',
+    '3gp': 'video/3gpp'
+  };
+
+  function isVideoSubmission(url, mediaType, mimeType) {
+    const cleanType = String(mediaType || '').trim().toLowerCase();
+    const cleanMime = String(mimeType || '').trim().toLowerCase();
+    const cleanUrl = String(url || '').trim().toLowerCase();
+    if (cleanType === 'video' || cleanMime.indexOf('video/') === 0 || cleanUrl.indexOf('data:video/') === 0) {
+      return true;
+    }
+    if (cleanType === 'audio') return false;
+    return /(?:[?&]mime=video(?:%2f|\/))|\.(?:mp4|mov|m4v|avi|mkv|ogv)(?:$|[?#])/i.test(cleanUrl);
+  }
+
   function showGlobalAudioToast(msg) {
     if (typeof document === 'undefined' || !msg) return;
     const toast = document.getElementById('toast-banner');
@@ -60,14 +82,21 @@ window.StudySnapAudio = (function () {
     if (clean === 'audio/mp3') return 'audio/mpeg';
     if (clean === 'video/mp4' && (ext === 'm4a' || ext === 'm4b' || fallbackMime === 'audio/mp4')) return 'audio/mp4';
     if (!clean || clean === 'application/octet-stream' || clean === 'binary/octet-stream') {
+      if (fallbackMime && String(fallbackMime).toLowerCase().indexOf('video/') === 0) {
+        return (ext && VIDEO_EXT_MIME_MAP[ext]) || fallbackMime;
+      }
       if (ext && AUDIO_EXT_MIME_MAP[ext]) return AUDIO_EXT_MIME_MAP[ext];
+      if (ext && VIDEO_EXT_MIME_MAP[ext]) return VIDEO_EXT_MIME_MAP[ext];
       return fallbackMime || 'audio/webm';
     }
     return clean;
   }
 
-  function sniffAudioMimeFromBytes(bytes, currentMime) {
-    const normalizedCur = normalizePlayableMime(currentMime, '', '');
+  function sniffAudioMimeFromBytes(bytes, currentMime, expectVideo) {
+    const normalizedCur = normalizePlayableMime(currentMime, expectVideo ? 'video/mp4' : '', '');
+    const prefersVideo = Boolean(
+      expectVideo || (currentMime && String(currentMime).toLowerCase().indexOf('video/') === 0)
+    );
     if (bytes && bytes.length >= 12) {
       // RIFF....WAVE -> WAV
       if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
@@ -79,9 +108,12 @@ window.StudySnapAudio = (function () {
           (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)) {
         return 'audio/mpeg';
       }
-      // ISO Base Media (.m4a / .mp4) -> ....ftyp
+      // ISO Base Media (.m4a / .mp4 / .mov) -> ....ftyp + major brand
       if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
-        return currentMime && String(currentMime).toLowerCase().indexOf('video/') === 0 ? 'video/mp4' : 'audio/mp4';
+        const brand = String.fromCharCode(bytes[8] || 0, bytes[9] || 0, bytes[10] || 0, bytes[11] || 0).toLowerCase();
+        if (brand === 'm4a ' || brand === 'm4b ') return 'audio/mp4';
+        if (brand === 'qt  ') return 'video/quicktime';
+        return prefersVideo ? 'video/mp4' : 'audio/mp4';
       }
       // OggS
       if (bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) {
@@ -93,13 +125,13 @@ window.StudySnapAudio = (function () {
       }
       // EBML / WebM
       if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) {
-        return currentMime && String(currentMime).toLowerCase().indexOf('video/') === 0 ? 'video/webm' : 'audio/webm';
+        return prefersVideo ? 'video/webm' : 'audio/webm';
       }
     }
-    return normalizedCur || 'audio/webm';
+    return normalizedCur || (prefersVideo ? 'video/mp4' : 'audio/webm');
   }
 
-  async function ensurePlayableAudioBlob(blob, hintName) {
+  async function ensurePlayableAudioBlob(blob, hintName, expectVideo) {
     if (!blob || blob.size === 0) return null;
     const rawType = String(blob.type || '').trim().toLowerCase();
     const needsSniff =
@@ -108,13 +140,14 @@ window.StudySnapAudio = (function () {
       rawType === 'binary/octet-stream' ||
       rawType === 'audio/x-m4a' ||
       rawType === 'audio/m4a' ||
-      rawType === 'audio/mp3';
+      rawType === 'audio/mp3' ||
+      (expectVideo && rawType.indexOf('audio/') === 0);
     if (!needsSniff) return blob;
-    let detected = normalizePlayableMime(rawType, '', hintName);
+    let detected = normalizePlayableMime(rawType, expectVideo ? 'video/mp4' : '', hintName);
     if (typeof blob.slice === 'function') {
       try {
         const headerBuf = await blob.slice(0, 16).arrayBuffer();
-        detected = sniffAudioMimeFromBytes(new Uint8Array(headerBuf), rawType);
+        detected = sniffAudioMimeFromBytes(new Uint8Array(headerBuf), rawType, expectVideo);
       } catch (e) {}
     }
     if (detected && detected !== rawType && typeof Blob !== 'undefined') {
@@ -175,14 +208,14 @@ window.StudySnapAudio = (function () {
     return '';
   }
 
-  async function readBrowserCachedMedia(fileId) {
+  async function readBrowserCachedMedia(fileId, expectVideo) {
     if (!fileId || typeof caches === 'undefined') return '';
     try {
       const cache = await caches.open(MEDIA_CACHE_NAME);
       const cached = await cache.match('https://studysnap-media-cache.local/drive/' + encodeURIComponent(fileId));
       if (!cached) return '';
       const rawBlob = await cached.blob();
-      const blob = await ensurePlayableAudioBlob(rawBlob, '');
+      const blob = await ensurePlayableAudioBlob(rawBlob, '', expectVideo);
       if (!blob || blob.size === 0) return '';
       if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
         return URL.createObjectURL(blob);
@@ -218,39 +251,50 @@ window.StudySnapAudio = (function () {
     }
   }
 
-  async function resolveDriveMediaSource(driveFileId) {
+  function canStreamViaEdgeMediaProxy() {
+    const backendMode =
+      window.StudySnapStore && typeof window.StudySnapStore.getBackendMode === 'function'
+        ? window.StudySnapStore.getBackendMode()
+        : '';
+    return Boolean(
+      typeof window !== 'undefined' &&
+      window.location &&
+      /^https?:$/i.test(String(window.location.protocol || '')) &&
+      backendMode !== 'gas'
+    );
+  }
+
+  async function resolveDriveMediaSource(driveFileId, opts) {
     if (!driveFileId) return '';
-    if (resolvedMediaCache[driveFileId]) return resolvedMediaCache[driveFileId];
-    if (inflightMediaFetches[driveFileId]) return await inflightMediaFetches[driveFileId];
+    const expectVideo = Boolean(opts && opts.expectVideo);
+    const cacheSlot = expectVideo ? 'video:' + driveFileId : driveFileId;
+    if (resolvedMediaCache[cacheSlot]) return resolvedMediaCache[cacheSlot];
+    if (!expectVideo && resolvedMediaCache[driveFileId]) return resolvedMediaCache[driveFileId];
+    if (inflightMediaFetches[cacheSlot]) return await inflightMediaFetches[cacheSlot];
 
     delete driveMediaErrors[driveFileId];
 
-    inflightMediaFetches[driveFileId] = (async function () {
+    inflightMediaFetches[cacheSlot] = (async function () {
       let lastErrMsg = '';
       try {
-        const cachedObjUrl = await readBrowserCachedMedia(driveFileId);
+        const cachedObjUrl = await readBrowserCachedMedia(driveFileId, expectVideo);
         if (cachedObjUrl) {
-          resolvedMediaCache[driveFileId] = cachedObjUrl;
+          resolvedMediaCache[cacheSlot] = cachedObjUrl;
           return cachedObjUrl;
         }
 
-        const backendMode =
-          window.StudySnapStore && typeof window.StudySnapStore.getBackendMode === 'function'
-            ? window.StudySnapStore.getBackendMode()
-            : '';
-        const canUseEdgeMedia =
-          typeof window !== 'undefined' &&
-          window.location &&
-          /^https?:$/i.test(window.location.protocol) &&
-          backendMode !== 'gas';
-
+        const canUseEdgeMedia = canStreamViaEdgeMediaProxy();
         if (canUseEdgeMedia) {
           try {
-            const edgeRes = await fetch('/api?action=media&fileId=' + encodeURIComponent(driveFileId));
+            const edgeUrl =
+              '/api?action=media&fileId=' +
+              encodeURIComponent(driveFileId) +
+              (expectVideo ? '&mime=video%2Fmp4' : '');
+            const edgeRes = await fetch(edgeUrl);
             const ct = String(edgeRes.headers.get('content-type') || '').toLowerCase();
             if (edgeRes.ok && ct.indexOf('application/json') === -1 && ct.indexOf('text/html') === -1) {
               const rawBlob = await edgeRes.blob();
-              const blob = await ensurePlayableAudioBlob(rawBlob, '');
+              const blob = await ensurePlayableAudioBlob(rawBlob, '', expectVideo);
               if (blob && blob.size > 0) {
                 await writeBrowserCachedMedia(driveFileId, blob);
                 const objUrl =
@@ -258,7 +302,7 @@ window.StudySnapAudio = (function () {
                     ? URL.createObjectURL(blob)
                     : '';
                 if (objUrl) {
-                  resolvedMediaCache[driveFileId] = objUrl;
+                  resolvedMediaCache[cacheSlot] = objUrl;
                   return objUrl;
                 }
               }
@@ -273,7 +317,7 @@ window.StudySnapAudio = (function () {
             ? window.StudySnapStore.getGasUrl()
             : '';
         if (!gasUrl) {
-          driveMediaErrors[driveFileId] = 'Chưa cấu hình cầu nối Google Drive (GAS) để tải âm thanh.';
+          driveMediaErrors[driveFileId] = 'Chưa cấu hình cầu nối Google Drive (GAS) để tải tệp media.';
           return '';
         }
 
@@ -286,37 +330,41 @@ window.StudySnapAudio = (function () {
 
         if (json && json.ok && json.dataUrl) {
           const blob = await dataUrlToBlob(json.dataUrl);
-          if (blob && blob.size > 0) {
-            await writeBrowserCachedMedia(driveFileId, blob);
+          const safeBlob = expectVideo && blob ? await ensurePlayableAudioBlob(blob, json.fileName || '', true) : blob;
+          if (safeBlob && safeBlob.size > 0) {
+            await writeBrowserCachedMedia(driveFileId, safeBlob);
             if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
-              const objUrl = URL.createObjectURL(blob);
-              resolvedMediaCache[driveFileId] = objUrl;
+              const objUrl = URL.createObjectURL(safeBlob);
+              resolvedMediaCache[cacheSlot] = objUrl;
               return objUrl;
             }
           }
-          resolvedMediaCache[driveFileId] = json.dataUrl;
+          resolvedMediaCache[cacheSlot] = json.dataUrl;
           return json.dataUrl;
         }
         if (json && json.error) {
           lastErrMsg = String(json.error);
         }
-        driveMediaErrors[driveFileId] = lastErrMsg || 'Không thể đọc file âm thanh từ Google Drive.';
+        driveMediaErrors[driveFileId] = lastErrMsg || 'Không thể đọc tệp từ Google Drive.';
         return '';
       } catch (err) {
-        driveMediaErrors[driveFileId] = 'Lỗi kết nối khi tải file âm thanh từ Google Drive.';
+        driveMediaErrors[driveFileId] = 'Lỗi kết nối khi tải tệp từ Google Drive.';
         return '';
       } finally {
-        delete inflightMediaFetches[driveFileId];
+        delete inflightMediaFetches[cacheSlot];
       }
     })();
 
-    return await inflightMediaFetches[driveFileId];
+    return await inflightMediaFetches[cacheSlot];
   }
 
   const PLAYER_ICONS = {
     play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>',
     pause: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>',
-    rewind: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>'
+    rewind: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>',
+    video: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 8-6 4 6 4V8Z"></path><rect width="14" height="12" x="2" y="6" rx="2" ry="2"></rect></svg>',
+    external: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>',
+    close: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>'
   };
 
   function escapeAttr(val) {
@@ -444,6 +492,305 @@ window.StudySnapAudio = (function () {
         '</div>' +
       '</div>'
     );
+  }
+
+  function getDriveVideoPreviewUrl(fileId) {
+    return fileId ? 'https://drive.google.com/file/d/' + encodeURIComponent(fileId) + '/preview' : '';
+  }
+
+  function getDriveExternalViewUrl(fileId) {
+    return fileId ? 'https://drive.google.com/file/d/' + encodeURIComponent(fileId) + '/view' : '';
+  }
+
+  function getImmediateVideoSrc(rawUrl, mimeType) {
+    const clean = String(rawUrl || '').trim();
+    if (!clean || clean.indexOf('demo:') === 0) return '';
+    if (clean.indexOf('data:') === 0) {
+      return dataUrlToBlobUrlSync(clean) || clean;
+    }
+    if (clean.indexOf('blob:') === 0) return clean;
+    const driveId = extractDriveFileId(clean);
+    if (driveId) {
+      if (resolvedMediaCache['video:' + driveId]) return resolvedMediaCache['video:' + driveId];
+      if (resolvedMediaCache[driveId]) return resolvedMediaCache[driveId];
+      if (canStreamViaEdgeMediaProxy()) {
+        const cleanMime = String(mimeType || 'video/mp4').split(';')[0].trim();
+        return '/api?action=media&fileId=' + encodeURIComponent(driveId) + (cleanMime ? '&mime=' + encodeURIComponent(cleanMime) : '');
+      }
+      return '';
+    }
+    return clean;
+  }
+
+  /**
+   * Tạo HTML cho trình phát Video BVN (hiển thị hình ảnh + âm thanh trực tiếp cho Giáo viên & Học sinh)
+   */
+  function renderVideoPlayer(opts) {
+    const id = (opts && opts.id) || ('vid-' + Math.random().toString(36).slice(2, 9));
+    const url = opts && opts.url ? String(opts.url).trim() : '';
+    const durationStr = formatDuration(parseDurationToSeconds((opts && opts.duration) || '01:15'));
+    const label = (opts && opts.label) || 'Video BVN học sinh nộp';
+    const mimeType = (opts && opts.mimeType) || 'video/mp4';
+    const gradeKey = (opts && opts.gradeKey) || '';
+    const isDemo = !url || url.indexOf('demo:') === 0;
+    const driveId = extractDriveFileId(url);
+    const driveViewUrl = getDriveExternalViewUrl(driveId);
+
+    if (opts && opts.compact) {
+      if (isDemo) {
+        return (
+          '<div class="video-compact-bar is-demo">' +
+            '<span class="video-compact-label">' + PLAYER_ICONS.video + '<span>' + escapeAttr(label) + ' • ' + escapeAttr(durationStr) + ' (Dữ liệu mẫu)</span></span>' +
+          '</div>'
+        );
+      }
+      return (
+        '<div class="video-compact-bar">' +
+          '<button type="button" class="btn btn-secondary btn-sm video-compact-trigger" data-video-compact-open ' +
+            'data-video-url="' + escapeAttr(url) + '" ' +
+            'data-video-label="' + escapeAttr(label) + '" ' +
+            'data-video-duration="' + escapeAttr(durationStr) + '" ' +
+            'data-video-mime="' + escapeAttr(mimeType) + '"' +
+            (gradeKey ? ' data-video-grade-key="' + escapeAttr(gradeKey) + '"' : '') + '>' +
+            PLAYER_ICONS.video +
+            '<span>Xem Video (' + escapeAttr(durationStr) + ')</span>' +
+          '</button>' +
+          (driveViewUrl
+            ? '<a class="btn btn-outline btn-xs video-drive-ext-link" href="' + escapeAttr(driveViewUrl) + '" target="_blank" rel="noopener noreferrer" title="Mở video gốc trên Google Drive">' + PLAYER_ICONS.external + '<span>Drive</span></a>'
+            : '') +
+        '</div>'
+      );
+    }
+
+    if (isDemo) {
+      return (
+        '<div class="video-player-card is-demo" data-video-player="' + escapeAttr(id) + '">' +
+          '<div class="video-player-header">' +
+            '<div class="video-player-title-wrap">' + PLAYER_ICONS.video + '<span class="video-player-title">' + escapeAttr(label) + '</span></div>' +
+            '<span class="voice-time-badge tabular-nums">' + escapeAttr(durationStr) + '</span>' +
+          '</div>' +
+          '<div class="video-demo-notice">Đây là dữ liệu mẫu minh họa — chưa có tệp video thật do học sinh tải lên.</div>' +
+        '</div>'
+      );
+    }
+
+    const immediateSrc = getImmediateVideoSrc(url, mimeType);
+    const drivePreviewBtn = driveId
+      ? '<button type="button" class="voice-ctrl-btn voice-rewind-btn" data-video-action="drive-embed" title="Chuyển sang trình phát Google Drive nếu trình duyệt không hỗ trợ định dạng video này">Drive Player</button>'
+      : '';
+
+    return (
+      '<div class="video-player-card" data-video-player="' + escapeAttr(id) + '" ' +
+        'data-video-url="' + escapeAttr(url) + '" ' +
+        'data-video-label="' + escapeAttr(label) + '" ' +
+        'data-video-duration="' + escapeAttr(durationStr) + '" ' +
+        'data-video-mime="' + escapeAttr(mimeType) + '"' +
+        (driveId ? ' data-video-drive-id="' + escapeAttr(driveId) + '"' : '') + '>' +
+        '<div class="video-player-header">' +
+          '<div class="video-player-title-wrap">' +
+            PLAYER_ICONS.video +
+            '<span class="video-player-title">' + escapeAttr(label) + '</span>' +
+          '</div>' +
+          '<div class="video-player-controls">' +
+            '<span class="voice-time-badge tabular-nums">' + escapeAttr(durationStr) + '</span>' +
+            '<button type="button" class="voice-ctrl-btn voice-rewind-btn" data-video-action="rewind" title="Tua lại 5 giây">-5s</button>' +
+            '<button type="button" class="voice-ctrl-btn voice-speed-btn" data-video-action="speed" title="Đổi tốc độ phát 1.0x / 0.8x">1.0x</button>' +
+            drivePreviewBtn +
+            (driveViewUrl
+              ? '<a class="voice-ctrl-btn voice-rewind-btn video-drive-link" href="' + escapeAttr(driveViewUrl) + '" target="_blank" rel="noopener noreferrer" title="Mở video trên Google Drive">' + PLAYER_ICONS.external + '<span>Drive</span></a>'
+              : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="video-player-stage" data-video-stage>' +
+          '<video class="ss-video-element" controls playsinline preload="metadata" data-video-el' +
+            (immediateSrc ? ' src="' + escapeAttr(immediateSrc) + '"' : '') + '>' +
+            'Trình duyệt chưa hỗ trợ phát video trực tiếp.' +
+          '</video>' +
+          '<div class="video-player-status" data-video-status hidden></div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function switchVideoCardToDriveEmbed(cardEl, driveId, label) {
+    if (!cardEl || !driveId) return;
+    cardEl.dataset.videoStage = 'embed';
+    const stage = cardEl.querySelector('[data-video-stage]');
+    const prevVideo = cardEl.querySelector('[data-video-el]');
+    if (prevVideo && typeof prevVideo.pause === 'function') {
+      try { prevVideo.pause(); } catch (e) {}
+    }
+    if (stage) {
+      const previewUrl = getDriveVideoPreviewUrl(driveId);
+      stage.innerHTML =
+        '<iframe class="ss-video-iframe" src="' + escapeAttr(previewUrl) + '" ' +
+          'allow="autoplay; fullscreen" allowfullscreen loading="lazy" ' +
+          'title="' + escapeAttr(label || 'Video BVN học sinh trên Google Drive') + '"></iframe>';
+    }
+    cardEl.querySelectorAll('[data-video-action="rewind"], [data-video-action="speed"], [data-video-action="drive-embed"]').forEach(function (b) {
+      b.style.display = 'none';
+    });
+    let caption = cardEl.querySelector('[data-video-caption]');
+    if (!caption && typeof document !== 'undefined' && typeof document.createElement === 'function') {
+      caption = document.createElement('div');
+      caption.className = 'video-player-caption';
+      caption.setAttribute('data-video-caption', '1');
+      cardEl.appendChild(caption);
+    }
+    if (caption) {
+      caption.textContent = 'Đang hiển thị qua trình phát Google Drive (hỗ trợ mọi định dạng video .mp4 / .mov iPhone).';
+    }
+  }
+
+  function hydrateVideoCard(cardEl) {
+    if (!cardEl || cardEl.dataset.videoHydrated === '1') return;
+    cardEl.dataset.videoHydrated = '1';
+    const rawUrl = (cardEl.getAttribute('data-video-url') || '').trim();
+    if (!rawUrl || rawUrl.indexOf('demo:') === 0) return;
+
+    const driveId = cardEl.getAttribute('data-video-drive-id') || extractDriveFileId(rawUrl);
+    const label = cardEl.getAttribute('data-video-label') || 'Video BVN';
+    const videoEl = cardEl.querySelector('[data-video-el]');
+    const statusEl = cardEl.querySelector('[data-video-status]');
+    if (!videoEl) return;
+
+    videoEl.addEventListener('play', function () {
+      pauseAllExcept(null, videoEl);
+    });
+
+    async function tryResolveFallbackFromDrive() {
+      const stageState = cardEl.dataset.videoStage || '';
+      if (stageState === 'embed') return;
+
+      if (driveId && stageState !== 'trying-gas') {
+        cardEl.dataset.videoStage = 'trying-gas';
+        if (statusEl) {
+          statusEl.textContent = 'Đang tải video từ Google Drive...';
+          statusEl.hidden = false;
+        }
+        const resolved = await resolveDriveMediaSource(driveId, { expectVideo: true });
+        if (statusEl) statusEl.hidden = true;
+        if (cardEl.dataset.videoStage === 'embed') return;
+        const currentSrc = videoEl.getAttribute('src') || '';
+        if (resolved && resolved !== currentSrc) {
+          videoEl.setAttribute('src', resolved);
+          try { videoEl.load(); } catch (e) {}
+          return;
+        }
+      }
+
+      if (driveId) {
+        switchVideoCardToDriveEmbed(cardEl, driveId, label);
+      } else if (statusEl) {
+        statusEl.textContent = 'Trình duyệt không giải mã được tệp video này. Khuyên dùng file .mp4 (H.264).';
+        statusEl.hidden = false;
+      }
+    }
+
+    videoEl.addEventListener('error', function () {
+      tryResolveFallbackFromDrive();
+    });
+
+    const curSrc = videoEl.getAttribute('src') || '';
+    if (!curSrc && driveId) {
+      tryResolveFallbackFromDrive();
+    }
+  }
+
+  function hydrateVideoPlayers(rootEl) {
+    if (typeof document === 'undefined') return;
+    const scope = rootEl && typeof rootEl.querySelectorAll === 'function' ? rootEl : document;
+    if (!scope || typeof scope.querySelectorAll !== 'function') return;
+    scope.querySelectorAll('[data-video-player]').forEach(function (cardEl) {
+      hydrateVideoCard(cardEl);
+    });
+  }
+
+  let activeVideoModalEl = null;
+
+  function closeVideoModal() {
+    if (!activeVideoModalEl) return;
+    const body = activeVideoModalEl.querySelector('[data-video-modal-body]');
+    if (body) {
+      body.querySelectorAll('video').forEach(function (v) {
+        try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
+      });
+      body.querySelectorAll('iframe').forEach(function (f) {
+        try { f.setAttribute('src', 'about:blank'); } catch (e) {}
+      });
+      body.innerHTML = '';
+    }
+    activeVideoModalEl.classList.remove('is-open');
+  }
+
+  function openVideoModal(opts) {
+    if (typeof document === 'undefined' || !document.body) return;
+    pauseAllExcept(null, null);
+
+    let modal = document.getElementById('ss-video-preview-modal');
+    if (!modal && typeof document.createElement === 'function') {
+      modal = document.createElement('div');
+      modal.id = 'ss-video-preview-modal';
+      modal.className = 'modal-backdrop';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-labelledby', 'ss-video-modal-title');
+      modal.innerHTML =
+        '<div class="modal-dialog video-modal-dialog">' +
+          '<div class="modal-header">' +
+            '<h3 id="ss-video-modal-title" style="display:flex;align-items:center;gap:8px;min-width:0;">' +
+              PLAYER_ICONS.video +
+              '<span data-video-modal-heading style="overflow:hidden;text-overflow:ellipsis;">Video BVN học sinh</span>' +
+            '</h3>' +
+            '<button type="button" class="btn btn-ghost btn-sm" data-video-modal-close aria-label="Đóng cửa sổ video">' + PLAYER_ICONS.close + '</button>' +
+          '</div>' +
+          '<div data-video-modal-body></div>' +
+          '<div class="banner-actions" style="justify-content:flex-end;gap:10px;margin-top:14px;">' +
+            '<button type="button" class="btn btn-primary btn-sm" data-video-modal-grade style="display:none;">Chấm &amp; Chữa BVN bạn này</button>' +
+            '<button type="button" class="btn btn-outline btn-sm" data-video-modal-close>Đóng</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(modal);
+      modal.addEventListener('click', function (ev) {
+        if (ev.target === modal || ev.target.closest('[data-video-modal-close]')) {
+          closeVideoModal();
+        }
+      });
+    }
+    if (!modal) return;
+    activeVideoModalEl = modal;
+
+    const headingEl = modal.querySelector('[data-video-modal-heading]');
+    if (headingEl) headingEl.textContent = (opts && opts.label) || 'Video BVN học sinh';
+
+    const bodyEl = modal.querySelector('[data-video-modal-body]');
+    if (bodyEl) {
+      bodyEl.innerHTML = renderVideoPlayer({
+        id: 'modal-video-player',
+        url: (opts && opts.url) || '',
+        duration: (opts && opts.duration) || '01:15',
+        label: (opts && opts.label) || 'Video BVN học sinh nộp',
+        mimeType: (opts && opts.mimeType) || 'video/mp4',
+        compact: false
+      });
+      hydrateVideoPlayers(bodyEl);
+    }
+
+    const gradeBtn = modal.querySelector('[data-video-modal-grade]');
+    if (gradeBtn) {
+      if (opts && typeof opts.onGrade === 'function') {
+        gradeBtn.style.display = 'inline-flex';
+        gradeBtn.onclick = function () {
+          closeVideoModal();
+          opts.onGrade();
+        };
+      } else {
+        gradeBtn.style.display = 'none';
+        gradeBtn.onclick = null;
+      }
+    }
+
+    modal.classList.add('is-open');
   }
 
   function syncPlayerDom(playerId) {
@@ -579,12 +926,26 @@ window.StudySnapAudio = (function () {
     syncPlayerDom(playerId);
   }
 
-  function pauseAllExcept(playerId) {
+  function pauseAllVideos(exceptVideoEl) {
+    if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
+    document.querySelectorAll('.ss-video-element').forEach(function (vEl) {
+      if (vEl && vEl !== exceptVideoEl && typeof vEl.pause === 'function' && !vEl.paused) {
+        try {
+          vEl.pause();
+        } catch (e) {
+          // ignore
+        }
+      }
+    });
+  }
+
+  function pauseAllExcept(playerId, exceptVideoEl) {
     Object.keys(playerSessions).forEach(function (id) {
       if (id !== playerId && playerSessions[id] && playerSessions[id].isPlaying) {
         pauseSession(id);
       }
     });
+    pauseAllVideos(exceptVideoEl || null);
   }
 
   function startSimulatedPlayback(session) {
@@ -808,36 +1169,73 @@ window.StudySnapAudio = (function () {
   if (typeof document !== 'undefined') {
     document.addEventListener('click', function (ev) {
       const actionBtn = ev.target.closest('[data-vp-action]');
-      if (!actionBtn) return;
-      const playerEl = actionBtn.closest('[data-voice-player]');
-      if (!playerEl) return;
+      if (actionBtn) {
+        const playerEl = actionBtn.closest('[data-voice-player]');
+        if (!playerEl) return;
 
-      const action = actionBtn.getAttribute('data-vp-action');
-      const session = getOrCreateSession(playerEl);
+        const action = actionBtn.getAttribute('data-vp-action');
+        const session = getOrCreateSession(playerEl);
 
-      if (action === 'toggle') {
-        if (session.isPlaying) {
-          pauseSession(session.id);
-        } else {
-          playSession(session);
-        }
-      } else if (action === 'rewind') {
-        const nextSec = Math.max(0, session.currentSeconds - 5);
-        seekSessionToSeconds(session, nextSec);
-      } else if (action === 'speed') {
-        session.playbackRate = session.playbackRate === 0.8 ? 1 : 0.8;
-        if (session.audioEl) {
-          try {
-            session.audioEl.playbackRate = session.playbackRate;
-          } catch (e) {
-            // ignore
+        if (action === 'toggle') {
+          if (session.isPlaying) {
+            pauseSession(session.id);
+          } else {
+            playSession(session);
+          }
+        } else if (action === 'rewind') {
+          const nextSec = Math.max(0, session.currentSeconds - 5);
+          seekSessionToSeconds(session, nextSec);
+        } else if (action === 'speed') {
+          session.playbackRate = session.playbackRate === 0.8 ? 1 : 0.8;
+          if (session.audioEl) {
+            try {
+              session.audioEl.playbackRate = session.playbackRate;
+            } catch (e) {
+              // ignore
+            }
+          }
+          if (session.isPlaying && !session.isRealAudio) {
+            startSimulatedPlayback(session);
+          } else {
+            syncPlayerDom(session.id);
           }
         }
-        if (session.isPlaying && !session.isRealAudio) {
-          startSimulatedPlayback(session);
-        } else {
-          syncPlayerDom(session.id);
+        return;
+      }
+
+      const vidActionBtn = ev.target.closest('[data-video-action]');
+      if (vidActionBtn) {
+        const vidCard = vidActionBtn.closest('[data-video-player]');
+        if (!vidCard) return;
+        const vidAction = vidActionBtn.getAttribute('data-video-action');
+        const videoEl = vidCard.querySelector('[data-video-el]');
+        if (vidAction === 'rewind' && videoEl) {
+          try {
+            videoEl.currentTime = Math.max(0, (videoEl.currentTime || 0) - 5);
+          } catch (e) {}
+        } else if (vidAction === 'speed' && videoEl) {
+          const nextRate = Math.abs((videoEl.playbackRate || 1) - 0.8) < 0.05 ? 1 : 0.8;
+          try {
+            videoEl.playbackRate = nextRate;
+          } catch (e) {}
+          vidActionBtn.textContent = nextRate === 0.8 ? '0.8x' : '1.0x';
+        } else if (vidAction === 'drive-embed') {
+          const driveId = vidCard.getAttribute('data-video-drive-id') || extractDriveFileId(vidCard.getAttribute('data-video-url') || '');
+          if (driveId) {
+            switchVideoCardToDriveEmbed(vidCard, driveId, vidCard.getAttribute('data-video-label') || '');
+          }
         }
+        return;
+      }
+
+      const compactBtn = ev.target.closest('[data-video-compact-open]');
+      if (compactBtn) {
+        openVideoModal({
+          url: compactBtn.getAttribute('data-video-url') || '',
+          label: compactBtn.getAttribute('data-video-label') || 'Video BVN học sinh',
+          duration: compactBtn.getAttribute('data-video-duration') || '01:15',
+          mimeType: compactBtn.getAttribute('data-video-mime') || 'video/mp4'
+        });
       }
     });
 
@@ -1478,7 +1876,7 @@ window.StudySnapAudio = (function () {
     const ext = extMatch ? extMatch[1].toLowerCase() : '';
     const rawType = String(file && file.type ? file.type : '').trim().toLowerCase();
 
-    if (ext && AUDIO_EXT_MIME_MAP[ext] && ext !== 'webm') {
+    if (ext && AUDIO_EXT_MIME_MAP[ext] && ext !== 'webm' && ext !== '3gp') {
       return {
         isVideo: false,
         mediaType: 'audio',
@@ -1486,10 +1884,14 @@ window.StudySnapAudio = (function () {
       };
     }
 
-    const isVideo = rawType.indexOf('video/') === 0 || ext === 'mp4' || ext === 'mov' || ext === 'm4v' || ext === 'avi';
+    const isVideo =
+      rawType.indexOf('video/') === 0 ||
+      Boolean(ext && VIDEO_EXT_MIME_MAP[ext] && ext !== 'webm');
     const mediaType = isVideo ? 'video' : 'audio';
     const mimeType = isVideo
-      ? (rawType && rawType !== 'application/octet-stream' ? rawType : 'video/mp4')
+      ? (rawType && rawType !== 'application/octet-stream' && rawType !== 'binary/octet-stream'
+          ? rawType
+          : (VIDEO_EXT_MIME_MAP[ext] || 'video/mp4'))
       : normalizePlayableMime(rawType, AUDIO_EXT_MIME_MAP[ext] || 'audio/webm', rawName);
     return { isVideo: isVideo, mediaType: mediaType, mimeType: mimeType };
   }
@@ -1944,13 +2346,18 @@ window.StudySnapAudio = (function () {
     normalizeSpeechText: normalizeSpeechText,
     playMediaOrDemo: playMediaOrDemo,
     renderVoicePlayer: renderVoicePlayer,
+    renderVideoPlayer: renderVideoPlayer,
+    hydrateVideoPlayers: hydrateVideoPlayers,
+    openVideoModal: openVideoModal,
+    closeVideoModal: closeVideoModal,
+    isVideoSubmission: isVideoSubmission,
     cacheDriveMediaFromDataUrl: cacheDriveMediaFromDataUrl,
     extractDriveFileId: extractDriveFileId,
     cleanAndTrimMonoSamples: cleanAndTrimMonoSamples,
     encodeMonoWavBytes: encodeMonoWavBytes,
     pauseAll: function () {
       stopSpeaking();
-      pauseAllExcept(null);
+      pauseAllExcept(null, null);
     }
   };
 })();
