@@ -889,17 +889,20 @@ window.StudySnapAudio = (function () {
         } else {
           const driveViewUrl = 'https://drive.google.com/file/d/' + encodeURIComponent(fbDriveId) + '/view';
           const drivePreviewUrl = getDriveVideoPreviewUrl(fbDriveId);
-          const wantedState = fbDriveId + ':' + (session.showDriveEmbed ? 'embed' : 'bar');
+          const isTinyCorrupt = Boolean(session.tinyCorruptBytes);
+          const wantedState = fbDriveId + ':' + (isTinyCorrupt ? 'tiny' : (session.showDriveEmbed ? 'embed' : 'bar'));
           if (fallbackEl.getAttribute('data-fb-rendered') !== wantedState) {
             fallbackEl.setAttribute('data-fb-rendered', wantedState);
             fallbackEl.innerHTML =
               '<div class="voice-fallback-actions">' +
-                (session.showDriveEmbed
-                  ? '<button type="button" class="voice-ctrl-btn voice-rewind-btn" data-vp-action="close-drive-embed">' + PLAYER_ICONS.close + '<span>Đóng trình phát Drive</span></button>'
-                  : '<button type="button" class="voice-ctrl-btn voice-speed-btn" data-vp-action="drive-embed">' + PLAYER_ICONS.play + '<span>Nghe qua Google Drive</span></button>') +
-                '<a class="voice-ctrl-btn voice-rewind-btn video-drive-link" href="' + escapeAttr(driveViewUrl) + '" target="_blank" rel="noopener noreferrer">' + PLAYER_ICONS.external + '<span>Mở file gốc</span></a>' +
+                (isTinyCorrupt
+                  ? ''
+                  : (session.showDriveEmbed
+                    ? '<button type="button" class="voice-ctrl-btn voice-rewind-btn" data-vp-action="close-drive-embed">' + PLAYER_ICONS.close + '<span>Đóng trình phát Drive</span></button>'
+                    : '<button type="button" class="voice-ctrl-btn voice-speed-btn" data-vp-action="drive-embed">' + PLAYER_ICONS.play + '<span>Nghe qua Google Drive</span></button>')) +
+                '<a class="voice-ctrl-btn voice-rewind-btn video-drive-link" href="' + escapeAttr(driveViewUrl) + '" target="_blank" rel="noopener noreferrer">' + PLAYER_ICONS.external + '<span>' + (isTinyCorrupt ? 'Kiểm tra file trên Drive' : 'Mở file gốc') + '</span></a>' +
               '</div>' +
-              (session.showDriveEmbed
+              (!isTinyCorrupt && session.showDriveEmbed
                 ? '<div class="voice-drive-embed-wrap"><iframe class="voice-drive-iframe" src="' + escapeAttr(drivePreviewUrl) + '" allow="autoplay; encrypted-media" title="Trình phát Google Drive"></iframe></div>'
                 : '');
           }
@@ -976,7 +979,8 @@ window.StudySnapAudio = (function () {
         fetchingDriveMedia: false,
         errorMessage: '',
         driveFallbackId: '',
-        showDriveEmbed: false
+        showDriveEmbed: false,
+        tinyCorruptBytes: 0
       };
     } else {
       playerSessions[id].variant = variant;
@@ -1233,6 +1237,7 @@ window.StudySnapAudio = (function () {
   }
 
   async function tryRecoverAudioPlayback(session, driveFileId) {
+    let tinySize = 0;
     let curBlob = driveFileId ? resolvedBlobCache[driveFileId] : null;
     if (!curBlob && session.url && (session.url.indexOf('blob:') === 0 || session.url.indexOf('data:') === 0) && typeof fetch === 'function') {
       try {
@@ -1240,6 +1245,9 @@ window.StudySnapAudio = (function () {
       } catch (e) {
         curBlob = null;
       }
+    }
+    if (curBlob && curBlob.size > 0 && curBlob.size < 128) {
+      tinySize = curBlob.size;
     }
     if (curBlob && await tryDecodeAndPlayBlob(session, curBlob, driveFileId)) {
       return true;
@@ -1256,6 +1264,9 @@ window.StudySnapAudio = (function () {
           return true;
         } catch (freshErr) {
           const freshBlob = resolvedBlobCache[driveFileId];
+          if (freshBlob && freshBlob.size > 0 && freshBlob.size < 128) {
+            tinySize = freshBlob.size;
+          }
           if (freshBlob && await tryDecodeAndPlayBlob(session, freshBlob, driveFileId)) {
             return true;
           }
@@ -1263,6 +1274,9 @@ window.StudySnapAudio = (function () {
       }
       delete resolvedMediaCache[driveFileId];
       delete resolvedBlobCache[driveFileId];
+    }
+    if (tinySize > 0) {
+      session.tinyCorruptBytes = tinySize;
     }
     return false;
   }
@@ -1272,6 +1286,7 @@ window.StudySnapAudio = (function () {
     session.errorMessage = '';
     session.driveFallbackId = '';
     session.showDriveEmbed = false;
+    session.tinyCorruptBytes = 0;
 
     const rawUrl = String(session.rawUrl || '').trim();
     const isExplicitDemo = rawUrl.indexOf('demo:') === 0;
@@ -1359,6 +1374,8 @@ window.StudySnapAudio = (function () {
       let errMsg = 'Không phát được tệp âm thanh. Hãy kiểm tra lại file đã tải lên hoặc đường dẫn audio.';
       if (finalErrCode === 2) {
         errMsg = 'Lỗi mạng khi tải tệp âm thanh. Vui lòng kiểm tra kết nối rồi bấm Phát lại.';
+      } else if (session.tinyCorruptBytes > 0) {
+        errMsg = 'Tệp của học sinh bị lỗi rỗng dữ liệu (chỉ ' + session.tinyCorruptBytes + ' bytes — 0:00 âm thanh do lỗi lúc thu/tải lên). Hãy nhắc học sinh thu lại hoặc gửi file khác.';
       } else if (driveFileId) {
         errMsg = 'Trình duyệt không giải mã trực tiếp được định dạng tệp này — hãy bấm "Nghe qua Google Drive" bên dưới.';
       } else if (finalErrCode === 4 || (err && err.name === 'NotSupportedError')) {
@@ -2048,8 +2065,21 @@ window.StudySnapAudio = (function () {
           track.stop();
         });
 
+        if (!rawBlob || rawBlob.size < 128) {
+          if (typeof onError === 'function') {
+            onError('Bản thu chưa ghi nhận được âm thanh (tệp trống ' + (rawBlob ? rawBlob.size : 0) + ' bytes). Em hãy kiểm tra Micro hoặc chọn Tải file ghi âm/video từ máy.');
+          }
+          return;
+        }
+
         const processed = await processRecordedAudioBlob(rawBlob, elapsedSeconds);
         const finalBlob = processed.blob || rawBlob;
+        if (!finalBlob || finalBlob.size < 128) {
+          if (typeof onError === 'function') {
+            onError('Dữ liệu bản thu bị lỗi hoặc quá ngắn. Em hãy thử thu lại hoặc tải file từ máy nhé!');
+          }
+          return;
+        }
         const durationText = formatDuration(processed.durationSec || elapsedSeconds);
 
         const reader = new FileReader();
@@ -2075,7 +2105,11 @@ window.StudySnapAudio = (function () {
       };
 
       startTime = Date.now();
-      activeRecorder.start();
+      try {
+        activeRecorder.start(1000);
+      } catch (recStartErr) {
+        activeRecorder.start();
+      }
 
       if (typeof onTick === 'function') {
         onTick('00:00');
@@ -2153,6 +2187,10 @@ window.StudySnapAudio = (function () {
    */
   function readUploadedMediaFile(file, callback) {
     if (!file) return;
+    if (typeof file.size === 'number' && file.size < 128) {
+      showGlobalAudioToast('Tệp chọn bị rỗng hoặc lỗi dữ liệu (chỉ ' + file.size + ' bytes). Vui lòng chọn file âm thanh/video hợp lệ từ máy.');
+      return;
+    }
     const meta = inferUploadedMediaMeta(file);
 
     const reader = new FileReader();

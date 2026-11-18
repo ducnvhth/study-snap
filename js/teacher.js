@@ -53,6 +53,7 @@
     activeTab: 'practice',
     selectedClass: 'all',
     gradingSessionFilter: 'all',
+    gradingPanelSession: '',
     manageSelectedSession: 'Buổi 1',
     customSessions: loadCustomSessions(),
     studentAccountsClassFilter: 'all',
@@ -682,6 +683,45 @@
     if (timerEl) timerEl.textContent = '00:00';
   }
 
+  function compareSessionTagsAsc(a, b) {
+    const na = String(a || '').match(/\d+/);
+    const nb = String(b || '').match(/\d+/);
+    const va = na ? parseInt(na[0], 10) : 999999;
+    const vb = nb ? parseInt(nb[0], 10) : 999999;
+    if (va !== vb) return va - vb;
+    return String(a || '').localeCompare(String(b || ''), 'vi');
+  }
+
+  function stripSessionPrefix(rawTitle) {
+    return String(rawTitle || '').replace(/^\[[^\]]+\]\s*/, '').trim() || String(rawTitle || '');
+  }
+
+  function getStudentAsgStatusSuffix(asg, st) {
+    if (!asg || !st) return '';
+    const sub = findSubmission(asg.assignment_id, st.student_id);
+    if (sub && (sub.status === 'graded' || (sub.score !== undefined && sub.score !== null && String(sub.score).trim() !== ''))) {
+      const sTxt = sub.score !== undefined && sub.score !== null && String(sub.score).trim() !== '' ? (' ' + String(sub.score).trim() + 'đ') : '';
+      return ' • Đã chữa' + sTxt;
+    }
+    if (sub && sub.status === 'submitted') return ' • Chờ chấm';
+    return ' • Chưa nộp';
+  }
+
+  function pickSmartAssignmentInList(list, st) {
+    if (!Array.isArray(list) || list.length === 0) return null;
+    if (!st) return list[0];
+    const ungraded = list.find(function (a) {
+      const sub = findSubmission(a.assignment_id, st.student_id);
+      return sub && sub.status === 'submitted' && !sub.teacher_comment && !sub.teacher_voice_url && (!sub.score || String(sub.score).trim() === '');
+    });
+    if (ungraded) return ungraded;
+    const submitted = list.find(function (a) {
+      const sub = findSubmission(a.assignment_id, st.student_id);
+      return sub && (sub.status === 'submitted' || sub.status === 'graded');
+    });
+    return submitted || list[0];
+  }
+
   function renderGradingPanel() {
     const classFilter = document.getElementById('teacher-class-filter');
     const classBadge = document.getElementById('teacher-class-count-badge');
@@ -736,13 +776,44 @@
     if (!hasStudent && filteredStudents.length > 0) {
       ui.gradingStudentId = filteredStudents[0].student_id;
     }
+    const activeSt = findStudent(ui.gradingStudentId) || filteredStudents[0];
 
-    const hasAsg = filteredAssignments.some(function (asg) { return asg.assignment_id === ui.gradingAssignmentId; });
-    if (!hasAsg && filteredAssignments.length > 0) {
+    const panelSessions = [];
+    filteredAssignments.forEach(function (asg) {
+      const s = (asg.session_tag || 'Buổi 1').trim();
+      if (s && panelSessions.indexOf(s) === -1) panelSessions.push(s);
+    });
+    panelSessions.sort(compareSessionTagsAsc);
+    const newestFirstSessions = panelSessions.slice().reverse();
+
+    let activePanelSession = 'all';
+    if (ui.gradingSessionFilter !== 'all') {
+      activePanelSession = ui.gradingSessionFilter;
+    } else if (ui.gradingPanelSession === 'all' && panelSessions.length > 1) {
+      activePanelSession = 'all';
+    } else if (ui.gradingPanelSession && panelSessions.indexOf(ui.gradingPanelSession) >= 0) {
+      activePanelSession = ui.gradingPanelSession;
+    } else if (newestFirstSessions.length > 0) {
+      activePanelSession = newestFirstSessions[0];
+    }
+    ui.gradingPanelSession = activePanelSession;
+
+    const cascadeAssignments = activePanelSession === 'all'
+      ? filteredAssignments
+      : filteredAssignments.filter(function (a) {
+          return (a.session_tag || 'Buổi 1').trim() === activePanelSession;
+        });
+
+    const hasAsg = cascadeAssignments.some(function (asg) { return asg.assignment_id === ui.gradingAssignmentId; });
+    if (!hasAsg && cascadeAssignments.length > 0) {
+      const smartPicked = pickSmartAssignmentInList(cascadeAssignments, activeSt);
+      ui.gradingAssignmentId = smartPicked ? smartPicked.assignment_id : cascadeAssignments[0].assignment_id;
+    } else if (!hasAsg && filteredAssignments.length > 0) {
       ui.gradingAssignmentId = filteredAssignments[0].assignment_id;
     }
 
     const studentSelect = document.getElementById('grade-student-select');
+    const gradeSessionSelect = document.getElementById('grade-session-select');
     const assignmentSelect = document.getElementById('grade-assignment-select');
 
     if (studentSelect) {
@@ -755,17 +826,55 @@
         : '<option value="">-- Lớp này chưa có học sinh --</option>';
     }
 
-    if (assignmentSelect) {
-      assignmentSelect.innerHTML = filteredAssignments.length > 0
-        ? filteredAssignments.map(function (asg) {
-            const sel = asg.assignment_id === ui.gradingAssignmentId ? ' selected' : '';
-            return '<option value="' + escapeHtml(asg.assignment_id) + '"' + sel + '>' +
-              escapeHtml('[' + (asg.session_tag || 'Buổi 1') + '] ' + asg.title) + '</option>';
-          }).join('')
-        : '<option value="">-- Không có BVN nào --</option>';
+    if (gradeSessionSelect) {
+      if (panelSessions.length === 0) {
+        gradeSessionSelect.innerHTML = '<option value="all">-- Chưa có buổi --</option>';
+        gradeSessionSelect.value = 'all';
+      } else if (ui.gradingSessionFilter !== 'all') {
+        const cntLocked = filteredAssignments.length;
+        gradeSessionSelect.innerHTML = '<option value="' + escapeHtml(activePanelSession) + '" selected>' +
+          escapeHtml(activePanelSession + ' (' + cntLocked + ' bài)') + '</option>';
+        gradeSessionSelect.value = activePanelSession;
+      } else {
+        const sessOpts = newestFirstSessions.map(function (sName) {
+          const cnt = filteredAssignments.filter(function (a) { return (a.session_tag || 'Buổi 1').trim() === sName; }).length;
+          const sel = sName === activePanelSession ? ' selected' : '';
+          return '<option value="' + escapeHtml(sName) + '"' + sel + '>' + escapeHtml(sName + ' (' + cnt + ' bài)') + '</option>';
+        });
+        if (panelSessions.length > 1) {
+          const selAll = activePanelSession === 'all' ? ' selected' : '';
+          sessOpts.push('<option value="all"' + selAll + '>Tất cả (' + filteredAssignments.length + ' bài)</option>');
+        }
+        gradeSessionSelect.innerHTML = sessOpts.join('');
+        gradeSessionSelect.value = activePanelSession;
+      }
     }
 
-    const asg = findAssignment(ui.gradingAssignmentId) || filteredAssignments[0];
+    if (assignmentSelect) {
+      if (cascadeAssignments.length === 0) {
+        assignmentSelect.innerHTML = '<option value="">-- Không có BVN nào --</option>';
+      } else if (activePanelSession === 'all' && panelSessions.length > 1) {
+        assignmentSelect.innerHTML = newestFirstSessions.map(function (sName) {
+          const inSess = cascadeAssignments.filter(function (a) { return (a.session_tag || 'Buổi 1').trim() === sName; });
+          if (inSess.length === 0) return '';
+          return '<optgroup label="' + escapeHtml(sName + ' (' + inSess.length + ' bài)') + '">' +
+            inSess.map(function (asg) {
+              const sel = asg.assignment_id === ui.gradingAssignmentId ? ' selected' : '';
+              const label = stripSessionPrefix(asg.title) + getStudentAsgStatusSuffix(asg, activeSt);
+              return '<option value="' + escapeHtml(asg.assignment_id) + '"' + sel + '>' + escapeHtml(label) + '</option>';
+            }).join('') +
+            '</optgroup>';
+        }).join('');
+      } else {
+        assignmentSelect.innerHTML = cascadeAssignments.map(function (asg) {
+          const sel = asg.assignment_id === ui.gradingAssignmentId ? ' selected' : '';
+          const label = stripSessionPrefix(asg.title) + getStudentAsgStatusSuffix(asg, activeSt);
+          return '<option value="' + escapeHtml(asg.assignment_id) + '"' + sel + '>' + escapeHtml(label) + '</option>';
+        }).join('');
+      }
+    }
+
+    const asg = findAssignment(ui.gradingAssignmentId) || cascadeAssignments[0] || filteredAssignments[0];
     const st = findStudent(ui.gradingStudentId) || filteredStudents[0];
     const targetBadge = document.getElementById('grading-target-badge');
     const studentMediaBox = document.getElementById('grading-student-media-box');
@@ -775,7 +884,20 @@
     const sessionHint = document.getElementById('grade-assignment-session-hint');
 
     if (sessionHint) {
-      sessionHint.textContent = asg ? ('Thuộc: ' + (asg.session_tag || 'Buổi 1') + ' • Hạn nộp: ' + asg.due_date) : '';
+      if (asg) {
+        const curSess = (asg.session_tag || 'Buổi 1').trim();
+        const sessItems = filteredAssignments.filter(function (a) { return (a.session_tag || 'Buổi 1').trim() === curSess; });
+        const submittedInSess = st
+          ? sessItems.filter(function (a) {
+              const sub = findSubmission(a.assignment_id, st.student_id);
+              return sub && (sub.status === 'submitted' || sub.status === 'graded');
+            }).length
+          : 0;
+        sessionHint.textContent = curSess + ' (' + sessItems.length + ' bài) • Hạn nộp: ' + asg.due_date +
+          (st ? (' • HS đã nộp ' + submittedInSess + '/' + sessItems.length) : '');
+      } else {
+        sessionHint.textContent = '';
+      }
     }
 
     if (!asg || !st) {
@@ -6275,6 +6397,7 @@
     if (sessionFilter) {
       sessionFilter.addEventListener('change', function () {
         ui.gradingSessionFilter = sessionFilter.value;
+        ui.gradingPanelSession = ui.gradingSessionFilter === 'all' ? '' : ui.gradingSessionFilter;
         const filteredAsgs = getFilteredAssignments();
         if (filteredAsgs.length > 0 && !filteredAsgs.some(function (a) { return a.assignment_id === ui.gradingAssignmentId; })) {
           ui.gradingAssignmentId = filteredAsgs[0].assignment_id;
@@ -6479,10 +6602,32 @@
       });
     }
 
+    const gradeSessionSelect = document.getElementById('grade-session-select');
+    if (gradeSessionSelect) {
+      gradeSessionSelect.addEventListener('change', function () {
+        ui.gradingPanelSession = gradeSessionSelect.value || 'all';
+        const filteredSts = getFilteredStudents();
+        const activeSt = findStudent(ui.gradingStudentId) || filteredSts[0];
+        const pool = getFilteredAssignments().filter(function (a) {
+          return ui.gradingPanelSession === 'all' || (a.session_tag || 'Buổi 1').trim() === ui.gradingPanelSession;
+        });
+        if (pool.length > 0) {
+          const picked = pickSmartAssignmentInList(pool, activeSt);
+          if (picked) ui.gradingAssignmentId = picked.assignment_id;
+        }
+        resetGradingDraftInputs();
+        renderGradingPanel();
+      });
+    }
+
     const gradeAssignmentSelect = document.getElementById('grade-assignment-select');
     if (gradeAssignmentSelect) {
       gradeAssignmentSelect.addEventListener('change', function () {
         ui.gradingAssignmentId = gradeAssignmentSelect.value;
+        const chosen = findAssignment(ui.gradingAssignmentId);
+        if (chosen && ui.gradingPanelSession !== 'all') {
+          ui.gradingPanelSession = (chosen.session_tag || 'Buổi 1').trim();
+        }
         resetGradingDraftInputs();
         renderGradingPanel();
       });
@@ -7083,6 +7228,7 @@
 
         state.assignments.push(newAsg);
         ui.gradingAssignmentId = newId;
+        ui.gradingPanelSession = newAsg.session_tag;
         if (ui.gradingSessionFilter !== 'all' && ui.gradingSessionFilter !== newAsg.session_tag) {
           ui.gradingSessionFilter = newAsg.session_tag;
         }
@@ -7289,6 +7435,9 @@
       ui.manageSelectedSession = newName;
       if (ui.gradingSessionFilter === oldName) {
         ui.gradingSessionFilter = newName;
+      }
+      if (ui.gradingPanelSession === oldName) {
+        ui.gradingPanelSession = newName;
       }
       affectedAsgs.forEach(function (a) {
         a.session_tag = newName;
@@ -9504,6 +9653,8 @@
             const parts = gradeKey.split(':');
             ui.gradingAssignmentId = parts[0];
             ui.gradingStudentId = parts[1];
+            const pickedAsg = findAssignment(parts[0]);
+            if (pickedAsg) ui.gradingPanelSession = (pickedAsg.session_tag || 'Buổi 1').trim();
             resetGradingDraftInputs();
             renderGradingPanel();
             const panel = document.getElementById('teacher-grading-panel');
@@ -9518,6 +9669,8 @@
         const parts = gradeBtn.getAttribute('data-select-grade').split(':');
         ui.gradingAssignmentId = parts[0];
         ui.gradingStudentId = parts[1];
+        const pickedAsg = findAssignment(parts[0]);
+        if (pickedAsg) ui.gradingPanelSession = (pickedAsg.session_tag || 'Buổi 1').trim();
         resetGradingDraftInputs();
         renderGradingPanel();
         const panel = document.getElementById('teacher-grading-panel');

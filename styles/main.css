@@ -635,6 +635,26 @@ select.form-control {
 
 .grade-target-row > .form-group {
   margin-bottom: 0;
+  min-width: 0;
+}
+
+.grade-asg-cascade {
+  display: grid;
+  grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.grade-session-select {
+  width: auto;
+  min-width: 112px;
+  font-weight: 800;
+  color: var(--color-primary-deep);
+}
+
+.grade-asg-select {
+  min-width: 0;
+  width: 100%;
 }
 
 .grade-asg-meta-row {
@@ -5640,6 +5660,10 @@ body.ss-sync-locked .ss-api-status-chip {
 }
 
 @media (max-width: 640px) {
+  .grade-asg-cascade {
+    grid-template-columns: 1fr;
+  }
+
   .video-player-card {
     padding: 10px;
   }

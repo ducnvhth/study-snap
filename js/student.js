@@ -1044,16 +1044,12 @@
             btnStopRec.style.display = 'none';
             btnStopRec.disabled = false;
             if (recZone) recZone.classList.remove('is-recording');
-            ui.pendingMedia = {
-              media_type: 'audio',
-              media_url: 'demo:student-recorded-' + Date.now(),
-              media_duration: '01:12'
-            };
+            ui.pendingMedia = null;
             if (recStatusText) {
-              recStatusText.textContent = 'Đã tạo bản thu âm (01:12)';
+              recStatusText.textContent = 'Chưa thu được bản thu hợp lệ — hãy kiểm tra micro hoặc tải file lên.';
             }
             renderPendingMediaPreview();
-            showToast(errMsg + ' — Đã gắn bản thu âm giả lập (01:12) để em nộp thử.');
+            showToast(errMsg || 'Không thu được âm thanh. Em hãy kiểm tra quyền Micro hoặc dùng nút Tải file lên.');
           }
         );
       });
@@ -1117,6 +1113,14 @@
         const hasBinaryMedia = Boolean(
           mediaData.media_url && String(mediaData.media_url).indexOf('data:') === 0
         );
+        if (hasBinaryMedia) {
+          const commaPos = String(mediaData.media_url).indexOf(',');
+          const b64Part = commaPos >= 0 ? String(mediaData.media_url).slice(commaPos + 1).replace(/\s+/g, '') : '';
+          if (!b64Part || b64Part.length < 4) {
+            showToast('Tệp thu âm/video bị trống hoặc lỗi dữ liệu. Em hãy thu lại hoặc chọn tệp khác nhé!');
+            return;
+          }
+        }
 
         const submissionRecord = {
           submission_id: existingSub ? existingSub.submission_id : 'SUB_' + Date.now(),
