@@ -1371,6 +1371,13 @@ select.form-control {
   margin-bottom: 16px;
 }
 
+.matrix-toolbar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
 .filter-pill-group {
   display: flex;
   flex-wrap: wrap;
@@ -5843,6 +5850,11 @@ body.ss-sync-locked .ss-api-status-chip {
 }
 
 @media (max-width: 640px) {
+  .matrix-toolbar-controls,
+  .matrix-toolbar-controls .practice-progress-control-item {
+    width: 100%;
+  }
+
   .ss-combo.is-inline {
     width: 100%;
   }

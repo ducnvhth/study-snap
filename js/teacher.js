@@ -54,6 +54,7 @@
     selectedClass: 'all',
     gradingSessionFilter: 'all',
     gradingPanelSession: '',
+    matrixSessionFilter: 'all',
     manageSelectedSession: 'Buổi 1',
     customSessions: loadCustomSessions(),
     studentAccountsClassFilter: 'all',
@@ -1464,13 +1465,76 @@
     return list;
   }
 
+  function getMatrixSessionInfo() {
+    const allClassAsgs = getFilteredAssignments(true);
+    const sessions = [];
+    allClassAsgs.forEach(function (asg) {
+      const s = (asg.session_tag || 'Buổi 1').trim();
+      if (s && sessions.indexOf(s) === -1) sessions.push(s);
+    });
+    sessions.sort(compareSessionTagsAsc);
+    const newestFirst = sessions.slice().reverse();
+
+    let activeSession = 'all';
+    if (ui.gradingSessionFilter !== 'all') {
+      activeSession = ui.gradingSessionFilter;
+    } else if (ui.matrixSessionFilter && ui.matrixSessionFilter !== 'all' && sessions.indexOf(ui.matrixSessionFilter) >= 0) {
+      activeSession = ui.matrixSessionFilter;
+    }
+    return {
+      allClassAsgs: allClassAsgs,
+      sessions: sessions,
+      newestFirst: newestFirst,
+      activeSession: activeSession
+    };
+  }
+
+  function getMatrixAssignments() {
+    const info = getMatrixSessionInfo();
+    const base = getFilteredAssignments();
+    if (info.activeSession === 'all') return base;
+    return base.filter(function (asg) {
+      return (asg.session_tag || 'Buổi 1').trim() === info.activeSession;
+    });
+  }
+
   function renderProgressMatrix() {
     const thead = document.getElementById('matrix-thead');
     const tbody = document.getElementById('matrix-tbody');
     if (!thead || !tbody) return;
 
-    const filteredAssignments = getFilteredAssignments();
+    const sessionInfo = getMatrixSessionInfo();
+    const filteredAssignments = getMatrixAssignments();
     const studentsInClass = getFilteredStudents();
+
+    const matrixSessionSel = document.getElementById('bvn-matrix-session-filter');
+    if (matrixSessionSel) {
+      if (ui.gradingSessionFilter !== 'all') {
+        matrixSessionSel.innerHTML =
+          '<option value="' + escapeHtml(sessionInfo.activeSession) + '" selected>' +
+          escapeHtml(sessionInfo.activeSession + ' (' + filteredAssignments.length + ' BVN)') + '</option>';
+        matrixSessionSel.value = sessionInfo.activeSession;
+      } else {
+        const opts = ['<option value="all">Tất cả các buổi (' + sessionInfo.allClassAsgs.length + ' BVN)</option>'];
+        sessionInfo.newestFirst.forEach(function (sName) {
+          const cnt = sessionInfo.allClassAsgs.filter(function (a) {
+            return (a.session_tag || 'Buổi 1').trim() === sName;
+          }).length;
+          const sel = sName === sessionInfo.activeSession ? ' selected' : '';
+          opts.push('<option value="' + escapeHtml(sName) + '"' + sel + '>' + escapeHtml(sName + ' (' + cnt + ' BVN)') + '</option>');
+        });
+        matrixSessionSel.innerHTML = opts.join('');
+        matrixSessionSel.value = sessionInfo.activeSession;
+      }
+      syncSearchableSelect(matrixSessionSel);
+    }
+
+    const matrixSummaryBadge = document.getElementById('matrix-summary-badge');
+    if (matrixSummaryBadge) {
+      matrixSummaryBadge.textContent = sessionInfo.activeSession === 'all'
+        ? ('Hiển thị đầy đủ ' + filteredAssignments.length + ' BVN')
+        : ('Đang lọc: ' + sessionInfo.activeSession + ' (' + filteredAssignments.length + ' BVN)');
+    }
 
     const sortSelEl = document.getElementById('bvn-matrix-sort');
     if (sortSelEl) {
@@ -2331,16 +2395,18 @@
   }
 
   function exportMatrixToCsv() {
-    const exportAsgs = (state.assignments || []).filter(isNonVocabAssignment);
+    const exportAsgs = getMatrixAssignments();
+    const exportStudents = getFilteredStudents();
     const headers = ['Mã HS', 'Họ và tên', 'Tài khoản'];
     exportAsgs.forEach(function (asg) {
-      headers.push(asg.lesson_tag + ' - Trạng thái');
-      headers.push(asg.lesson_tag + ' - Điểm');
-      headers.push(asg.lesson_tag + ' - Nhận xét của GV');
+      const prefix = '[' + (asg.session_tag || 'Buổi 1') + '] ' + (asg.lesson_tag || asg.title);
+      headers.push(prefix + ' - Trạng thái');
+      headers.push(prefix + ' - Điểm');
+      headers.push(prefix + ' - Nhận xét của GV');
     });
 
     const rows = [headers];
-    state.students.forEach(function (st) {
+    exportStudents.forEach(function (st) {
       const row = [st.student_id, st.full_name, st.username || st.student_id.toLowerCase()];
       exportAsgs.forEach(function (asg) {
         const sub = findSubmission(asg.assignment_id, st.student_id);
@@ -6734,6 +6800,7 @@
       sessionFilter.addEventListener('change', function () {
         ui.gradingSessionFilter = sessionFilter.value;
         ui.gradingPanelSession = ui.gradingSessionFilter === 'all' ? '' : ui.gradingSessionFilter;
+        ui.matrixSessionFilter = ui.gradingSessionFilter;
         const filteredAsgs = getFilteredAssignments();
         if (filteredAsgs.length > 0 && !filteredAsgs.some(function (a) { return a.assignment_id === ui.gradingAssignmentId; })) {
           ui.gradingAssignmentId = filteredAsgs[0].assignment_id;
@@ -7774,6 +7841,9 @@
       }
       if (ui.gradingPanelSession === oldName) {
         ui.gradingPanelSession = newName;
+      }
+      if (ui.matrixSessionFilter === oldName) {
+        ui.matrixSessionFilter = newName;
       }
       affectedAsgs.forEach(function (a) {
         a.session_tag = newName;
@@ -9797,6 +9867,14 @@
         renderProgressMatrix();
       });
     });
+
+    const bvnMatrixSessionEl = document.getElementById('bvn-matrix-session-filter');
+    if (bvnMatrixSessionEl) {
+      bvnMatrixSessionEl.addEventListener('change', function () {
+        ui.matrixSessionFilter = bvnMatrixSessionEl.value || 'all';
+        renderProgressMatrix();
+      });
+    }
 
     const bvnSortEl = document.getElementById('bvn-matrix-sort');
     if (bvnSortEl) {
