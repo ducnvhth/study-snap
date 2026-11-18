@@ -12,10 +12,11 @@ window.StudySnapAudio = (function () {
   // Quản lý các phiên phát âm thanh tương tác (Play / Pause / Seek / Time readout)
   const playerSessions = {};
   const resolvedMediaCache = {};
+  const resolvedBlobCache = {};
   const inflightMediaFetches = {};
   const driveMediaErrors = {};
   const dataBlobUrlCache = {};
-  const MEDIA_CACHE_NAME = 'studysnap-drive-media-v2';
+  const MEDIA_CACHE_NAME = 'studysnap-drive-media-v3';
   let activePlayerId = null;
 
   const AUDIO_EXT_MIME_MAP = {
@@ -78,8 +79,10 @@ window.StudySnapAudio = (function () {
     const clean = String(rawMime || '').split(';')[0].trim().toLowerCase();
     const extMatch = String(fileName || '').match(/\.([a-z0-9]+)$/i);
     const ext = extMatch ? extMatch[1].toLowerCase() : '';
-    if (clean === 'audio/x-m4a' || clean === 'audio/m4a') return 'audio/mp4';
+    if (clean === 'audio/x-m4a' || clean === 'audio/m4a' || clean === 'audio/mp4a-latm') return 'audio/mp4';
     if (clean === 'audio/mp3') return 'audio/mpeg';
+    if (clean === 'audio/x-wav' || clean === 'audio/wave') return 'audio/wav';
+    if (clean === 'audio/x-aac' || clean === 'audio/x-hx-aac-adts' || clean === 'audio/aacp') return 'audio/aac';
     if (clean === 'video/mp4' && (ext === 'm4a' || ext === 'm4b' || fallbackMime === 'audio/mp4')) return 'audio/mp4';
     if (!clean || clean === 'application/octet-stream' || clean === 'binary/octet-stream') {
       if (fallbackMime && String(fallbackMime).toLowerCase().indexOf('video/') === 0) {
@@ -92,27 +95,75 @@ window.StudySnapAudio = (function () {
     return clean;
   }
 
+  function isLikelyTextErrorBytes(bytes) {
+    if (!bytes || bytes.length < 4) return false;
+    let i = 0;
+    while (i < bytes.length && i < 32 && bytes[i] <= 0x20) i++;
+    if (i >= bytes.length) return true;
+    const c0 = bytes[i];
+    if (c0 === 0x3c) {
+      const sample = String.fromCharCode(
+        bytes[i] || 0,
+        bytes[i + 1] || 0,
+        bytes[i + 2] || 0,
+        bytes[i + 3] || 0,
+        bytes[i + 4] || 0
+      ).toLowerCase();
+      if (sample.indexOf('<!doc') === 0 || sample.indexOf('<html') === 0 || sample.indexOf('<?xml') === 0 || sample.indexOf('<err') === 0) {
+        return true;
+      }
+    }
+    if (c0 === 0x7b && (bytes[i + 1] === 0x22 || bytes[i + 1] === 0x7d)) {
+      return true;
+    }
+    return false;
+  }
+
   function sniffAudioMimeFromBytes(bytes, currentMime, expectVideo) {
     const normalizedCur = normalizePlayableMime(currentMime, expectVideo ? 'video/mp4' : '', '');
     const prefersVideo = Boolean(
       expectVideo || (currentMime && String(currentMime).toLowerCase().indexOf('video/') === 0)
     );
-    if (bytes && bytes.length >= 12) {
+    if (bytes && bytes.length >= 4) {
+      if (isLikelyTextErrorBytes(bytes)) {
+        return '';
+      }
       // RIFF....WAVE -> WAV
-      if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      if (bytes.length >= 12 &&
+          bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
           bytes[8] === 0x57 && bytes[9] === 0x41 && bytes[10] === 0x56 && bytes[11] === 0x45) {
         return 'audio/wav';
       }
-      // ID3 or MPEG ADTS/MP3 frame sync
-      if ((bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) ||
-          (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)) {
+      // Apple Core Audio (.caf)
+      if (bytes[0] === 0x63 && bytes[1] === 0x61 && bytes[2] === 0x66 && bytes[3] === 0x66) {
+        return 'audio/x-caf';
+      }
+      // #!AMR voice format
+      if (bytes.length >= 5 &&
+          bytes[0] === 0x23 && bytes[1] === 0x21 && bytes[2] === 0x41 && bytes[3] === 0x4d && bytes[4] === 0x52) {
+        return 'audio/amr';
+      }
+      // ID3 tag -> MP3
+      if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
         return 'audio/mpeg';
       }
-      // ISO Base Media (.m4a / .mp4 / .mov) -> ....ftyp + major brand
-      if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
+      // Distinguish ADTS AAC (layer == 00) from MPEG Layer 1/2/3 (layer != 00)
+      if (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) {
+        if ((bytes[1] & 0xf6) === 0xf0) {
+          return 'audio/aac';
+        }
+        if ((bytes[1] & 0x06) !== 0x00) {
+          return 'audio/mpeg';
+        }
+      }
+      // ISO Base Media (.m4a / .mp4 / .mov / .3gp) -> ....ftyp + major brand
+      if (bytes.length >= 12 && bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
         const brand = String.fromCharCode(bytes[8] || 0, bytes[9] || 0, bytes[10] || 0, bytes[11] || 0).toLowerCase();
         if (brand === 'm4a ' || brand === 'm4b ') return 'audio/mp4';
         if (brand === 'qt  ') return 'video/quicktime';
+        if (brand.indexOf('3gp') === 0 || brand.indexOf('3g2') === 0) {
+          return prefersVideo ? 'video/3gpp' : 'audio/3gpp';
+        }
         return prefersVideo ? 'video/mp4' : 'audio/mp4';
       }
       // OggS
@@ -134,20 +185,16 @@ window.StudySnapAudio = (function () {
   async function ensurePlayableAudioBlob(blob, hintName, expectVideo) {
     if (!blob || blob.size === 0) return null;
     const rawType = String(blob.type || '').trim().toLowerCase();
-    const needsSniff =
-      !rawType ||
-      rawType === 'application/octet-stream' ||
-      rawType === 'binary/octet-stream' ||
-      rawType === 'audio/x-m4a' ||
-      rawType === 'audio/m4a' ||
-      rawType === 'audio/mp3' ||
-      (expectVideo && rawType.indexOf('audio/') === 0);
-    if (!needsSniff) return blob;
     let detected = normalizePlayableMime(rawType, expectVideo ? 'video/mp4' : '', hintName);
     if (typeof blob.slice === 'function') {
       try {
-        const headerBuf = await blob.slice(0, 16).arrayBuffer();
-        detected = sniffAudioMimeFromBytes(new Uint8Array(headerBuf), rawType, expectVideo);
+        const headerBuf = await blob.slice(0, 64).arrayBuffer();
+        const headerBytes = new Uint8Array(headerBuf);
+        if (isLikelyTextErrorBytes(headerBytes)) {
+          return null;
+        }
+        const sniffed = sniffAudioMimeFromBytes(headerBytes, rawType, expectVideo);
+        if (sniffed) detected = sniffed;
       } catch (e) {}
     }
     if (detected && detected !== rawType && typeof Blob !== 'undefined') {
@@ -174,6 +221,7 @@ window.StudySnapAudio = (function () {
         bytes[i] = binary.charCodeAt(i);
       }
       const mimeType = sniffAudioMimeFromBytes(bytes, normalizePlayableMime(rawMime, '', hintName));
+      if (!mimeType) return null;
       return new Blob([bytes], { type: mimeType });
     } catch (e) {
       return null;
@@ -202,6 +250,7 @@ window.StudySnapAudio = (function () {
     if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
       const objUrl = URL.createObjectURL(blob);
       resolvedMediaCache[fileId] = objUrl;
+      resolvedBlobCache[fileId] = blob;
       delete driveMediaErrors[fileId];
       return objUrl;
     }
@@ -217,6 +266,8 @@ window.StudySnapAudio = (function () {
       const rawBlob = await cached.blob();
       const blob = await ensurePlayableAudioBlob(rawBlob, '', expectVideo);
       if (!blob || blob.size === 0) return '';
+      const cacheSlot = expectVideo ? 'video:' + fileId : fileId;
+      resolvedBlobCache[cacheSlot] = blob;
       if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
         return URL.createObjectURL(blob);
       }
@@ -267,20 +318,23 @@ window.StudySnapAudio = (function () {
   async function resolveDriveMediaSource(driveFileId, opts) {
     if (!driveFileId) return '';
     const expectVideo = Boolean(opts && opts.expectVideo);
+    const bypassCache = Boolean(opts && opts.bypassCache);
     const cacheSlot = expectVideo ? 'video:' + driveFileId : driveFileId;
-    if (resolvedMediaCache[cacheSlot]) return resolvedMediaCache[cacheSlot];
-    if (!expectVideo && resolvedMediaCache[driveFileId]) return resolvedMediaCache[driveFileId];
-    if (inflightMediaFetches[cacheSlot]) return await inflightMediaFetches[cacheSlot];
+    if (!bypassCache && resolvedMediaCache[cacheSlot]) return resolvedMediaCache[cacheSlot];
+    if (!bypassCache && !expectVideo && resolvedMediaCache[driveFileId]) return resolvedMediaCache[driveFileId];
+    if (!bypassCache && inflightMediaFetches[cacheSlot]) return await inflightMediaFetches[cacheSlot];
 
     delete driveMediaErrors[driveFileId];
 
-    inflightMediaFetches[cacheSlot] = (async function () {
+    const runResolve = (async function () {
       let lastErrMsg = '';
       try {
-        const cachedObjUrl = await readBrowserCachedMedia(driveFileId, expectVideo);
-        if (cachedObjUrl) {
-          resolvedMediaCache[cacheSlot] = cachedObjUrl;
-          return cachedObjUrl;
+        if (!bypassCache) {
+          const cachedObjUrl = await readBrowserCachedMedia(driveFileId, expectVideo);
+          if (cachedObjUrl) {
+            resolvedMediaCache[cacheSlot] = cachedObjUrl;
+            return cachedObjUrl;
+          }
         }
 
         const canUseEdgeMedia = canStreamViaEdgeMediaProxy();
@@ -289,14 +343,16 @@ window.StudySnapAudio = (function () {
             const edgeUrl =
               '/api?action=media&fileId=' +
               encodeURIComponent(driveFileId) +
-              (expectVideo ? '&mime=video%2Fmp4' : '');
+              (expectVideo ? '&mime=video%2Fmp4' : '') +
+              (bypassCache ? '&nocache=1' : '');
             const edgeRes = await fetch(edgeUrl);
             const ct = String(edgeRes.headers.get('content-type') || '').toLowerCase();
-            if (edgeRes.ok && ct.indexOf('application/json') === -1 && ct.indexOf('text/html') === -1) {
+            if (edgeRes.ok && ct.indexOf('application/json') === -1 && ct.indexOf('text/') === -1 && ct.indexOf('xml') === -1) {
               const rawBlob = await edgeRes.blob();
               const blob = await ensurePlayableAudioBlob(rawBlob, '', expectVideo);
               if (blob && blob.size > 0) {
                 await writeBrowserCachedMedia(driveFileId, blob);
+                resolvedBlobCache[cacheSlot] = blob;
                 const objUrl =
                   typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
                     ? URL.createObjectURL(blob)
@@ -330,9 +386,10 @@ window.StudySnapAudio = (function () {
 
         if (json && json.ok && json.dataUrl) {
           const blob = await dataUrlToBlob(json.dataUrl);
-          const safeBlob = expectVideo && blob ? await ensurePlayableAudioBlob(blob, json.fileName || '', true) : blob;
+          const safeBlob = blob ? await ensurePlayableAudioBlob(blob, json.fileName || '', expectVideo) : blob;
           if (safeBlob && safeBlob.size > 0) {
             await writeBrowserCachedMedia(driveFileId, safeBlob);
+            resolvedBlobCache[cacheSlot] = safeBlob;
             if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
               const objUrl = URL.createObjectURL(safeBlob);
               resolvedMediaCache[cacheSlot] = objUrl;
@@ -351,11 +408,16 @@ window.StudySnapAudio = (function () {
         driveMediaErrors[driveFileId] = 'Lỗi kết nối khi tải tệp từ Google Drive.';
         return '';
       } finally {
-        delete inflightMediaFetches[cacheSlot];
+        if (inflightMediaFetches[cacheSlot] === runResolve) {
+          delete inflightMediaFetches[cacheSlot];
+        }
       }
     })();
 
-    return await inflightMediaFetches[cacheSlot];
+    if (!bypassCache) {
+      inflightMediaFetches[cacheSlot] = runResolve;
+    }
+    return await runResolve;
   }
 
   const PLAYER_ICONS = {
@@ -489,6 +551,7 @@ window.StudySnapAudio = (function () {
             'min="0" max="100" step="0.5" value="' + percent + '" ' +
             'aria-label="Thanh tua thời gian nghe ' + escapeAttr(label) + '">' +
           '<div class="voice-error-note" data-vp-error role="status"' + (errText ? '' : ' hidden') + '>' + escapeAttr(errText) + '</div>' +
+          '<div class="voice-drive-fallback" data-vp-fallback hidden></div>' +
         '</div>' +
       '</div>'
     );
@@ -816,6 +879,32 @@ window.StudySnapAudio = (function () {
         errEl.textContent = errMsg;
         errEl.hidden = !errMsg;
       }
+      const fallbackEl = el.querySelector('[data-vp-fallback]');
+      if (fallbackEl) {
+        const fbDriveId = session.driveFallbackId || '';
+        const showFb = Boolean(fbDriveId && (errMsg || session.showDriveEmbed));
+        fallbackEl.hidden = !showFb;
+        if (!showFb) {
+          if (fallbackEl.innerHTML) fallbackEl.innerHTML = '';
+        } else {
+          const driveViewUrl = 'https://drive.google.com/file/d/' + encodeURIComponent(fbDriveId) + '/view';
+          const drivePreviewUrl = getDriveVideoPreviewUrl(fbDriveId);
+          const wantedState = fbDriveId + ':' + (session.showDriveEmbed ? 'embed' : 'bar');
+          if (fallbackEl.getAttribute('data-fb-rendered') !== wantedState) {
+            fallbackEl.setAttribute('data-fb-rendered', wantedState);
+            fallbackEl.innerHTML =
+              '<div class="voice-fallback-actions">' +
+                (session.showDriveEmbed
+                  ? '<button type="button" class="voice-ctrl-btn voice-rewind-btn" data-vp-action="close-drive-embed">' + PLAYER_ICONS.close + '<span>Đóng trình phát Drive</span></button>'
+                  : '<button type="button" class="voice-ctrl-btn voice-speed-btn" data-vp-action="drive-embed">' + PLAYER_ICONS.play + '<span>Nghe qua Google Drive</span></button>') +
+                '<a class="voice-ctrl-btn voice-rewind-btn video-drive-link" href="' + escapeAttr(driveViewUrl) + '" target="_blank" rel="noopener noreferrer">' + PLAYER_ICONS.external + '<span>Mở file gốc</span></a>' +
+              '</div>' +
+              (session.showDriveEmbed
+                ? '<div class="voice-drive-embed-wrap"><iframe class="voice-drive-iframe" src="' + escapeAttr(drivePreviewUrl) + '" allow="autoplay; encrypted-media" title="Trình phát Google Drive"></iframe></div>'
+                : '');
+          }
+        }
+      }
       if (toggleBtn) {
         toggleBtn.disabled = isLoading;
         toggleBtn.setAttribute('aria-busy', isLoading ? 'true' : 'false');
@@ -885,7 +974,9 @@ window.StudySnapAudio = (function () {
         simTimer: null,
         isRealAudio: isAudioUrlLikelyReal(effectiveUrl),
         fetchingDriveMedia: false,
-        errorMessage: ''
+        errorMessage: '',
+        driveFallbackId: '',
+        showDriveEmbed: false
       };
     } else {
       playerSessions[id].variant = variant;
@@ -1070,9 +1161,117 @@ window.StudySnapAudio = (function () {
     }
   }
 
+  async function decodeBlobToPlayableWavUrl(blob) {
+    if (!blob || !blob.size || blob.size > 25 * 1024 * 1024 || typeof window === 'undefined') {
+      return null;
+    }
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx || typeof blob.arrayBuffer !== 'function' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+      return null;
+    }
+    let ctx = null;
+    try {
+      ctx = new AudioCtx();
+      const arrBuf = await blob.arrayBuffer();
+      const decoded = await ctx.decodeAudioData(arrBuf);
+      if (!decoded || !decoded.length || !decoded.sampleRate) return null;
+      const chCount = Math.max(1, decoded.numberOfChannels || 1);
+      const mono = new Float32Array(decoded.length);
+      for (let c = 0; c < chCount; c++) {
+        const chData = decoded.getChannelData(c);
+        for (let i = 0; i < decoded.length; i++) {
+          mono[i] += chData[i] / chCount;
+        }
+      }
+      const wavBytes = encodeMonoWavBytes(mono, decoded.sampleRate);
+      const wavBlob = new Blob([wavBytes], { type: 'audio/wav' });
+      const wavUrl = URL.createObjectURL(wavBlob);
+      return { url: wavUrl, blob: wavBlob, durationSec: Math.round(decoded.duration || 0) };
+    } catch (e) {
+      return null;
+    } finally {
+      if (ctx && typeof ctx.close === 'function') {
+        try { await ctx.close(); } catch (closeErr) {}
+      }
+    }
+  }
+
+  async function tryDecodeAndPlayBlob(session, blob, driveFileId) {
+    if (!blob || !blob.size) return false;
+    const repaired = await ensurePlayableAudioBlob(blob, '', false);
+    if (repaired && repaired.type !== blob.type && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+      const repairedUrl = URL.createObjectURL(repaired);
+      configureAudioElementSource(session, repairedUrl);
+      try {
+        await session.audioEl.play();
+        session.url = repairedUrl;
+        if (driveFileId) {
+          resolvedMediaCache[driveFileId] = repairedUrl;
+          resolvedBlobCache[driveFileId] = repaired;
+        }
+        return true;
+      } catch (e) {}
+    }
+
+    const wavRes = await decodeBlobToPlayableWavUrl(repaired || blob);
+    if (wavRes && wavRes.url) {
+      configureAudioElementSource(session, wavRes.url);
+      try {
+        await session.audioEl.play();
+        session.url = wavRes.url;
+        if (wavRes.durationSec > 0) session.totalSeconds = Math.max(1, wavRes.durationSec);
+        if (driveFileId) {
+          resolvedMediaCache[driveFileId] = wavRes.url;
+          resolvedBlobCache[driveFileId] = wavRes.blob;
+          writeBrowserCachedMedia(driveFileId, wavRes.blob);
+        }
+        syncPlayerDom(session.id);
+        return true;
+      } catch (e) {}
+    }
+    return false;
+  }
+
+  async function tryRecoverAudioPlayback(session, driveFileId) {
+    let curBlob = driveFileId ? resolvedBlobCache[driveFileId] : null;
+    if (!curBlob && session.url && (session.url.indexOf('blob:') === 0 || session.url.indexOf('data:') === 0) && typeof fetch === 'function') {
+      try {
+        curBlob = await fetch(session.url).then(function (r) { return r.blob(); });
+      } catch (e) {
+        curBlob = null;
+      }
+    }
+    if (curBlob && await tryDecodeAndPlayBlob(session, curBlob, driveFileId)) {
+      return true;
+    }
+    if (driveFileId) {
+      delete resolvedMediaCache[driveFileId];
+      delete resolvedBlobCache[driveFileId];
+      const freshSrc = await resolveDriveMediaSource(driveFileId, { bypassCache: true });
+      if (freshSrc) {
+        session.url = freshSrc;
+        configureAudioElementSource(session, freshSrc);
+        try {
+          await session.audioEl.play();
+          return true;
+        } catch (freshErr) {
+          const freshBlob = resolvedBlobCache[driveFileId];
+          if (freshBlob && await tryDecodeAndPlayBlob(session, freshBlob, driveFileId)) {
+            return true;
+          }
+        }
+      }
+      delete resolvedMediaCache[driveFileId];
+      delete resolvedBlobCache[driveFileId];
+    }
+    return false;
+  }
+
   async function playSession(session) {
     pauseAllExcept(session.id);
     session.errorMessage = '';
+    session.driveFallbackId = '';
+    session.showDriveEmbed = false;
 
     const rawUrl = String(session.rawUrl || '').trim();
     const isExplicitDemo = rawUrl.indexOf('demo:') === 0;
@@ -1099,7 +1298,8 @@ window.StudySnapAudio = (function () {
       const resolvedSrc = await resolveDriveMediaSource(driveFileId);
       session.fetchingDriveMedia = false;
       if (!resolvedSrc) {
-        const driveErr = driveMediaErrors[driveFileId] || 'Không tải được tệp âm thanh từ Google Drive. Kiểm tra quyền chia sẻ hoặc thử tải lại file.';
+        session.driveFallbackId = driveFileId;
+        const driveErr = driveMediaErrors[driveFileId] || 'Không tải được tệp âm thanh từ Google Drive. Kiểm tra quyền chia sẻ hoặc dùng trình phát Google Drive bên dưới.';
         notifyPlayerError(session, driveErr);
         return;
       }
@@ -1138,10 +1338,30 @@ window.StudySnapAudio = (function () {
         }
       }
       const mediaErrCode = session.audioEl && session.audioEl.error ? session.audioEl.error.code : 0;
+      const isDecodeFailure = mediaErrCode === 4 || mediaErrCode === 3 || (err && err.name === 'NotSupportedError');
+      if (isDecodeFailure || driveFileId) {
+        session.fetchingDriveMedia = true;
+        session.isPlaying = false;
+        syncPlayerDom(session.id);
+        const recovered = await tryRecoverAudioPlayback(session, driveFileId);
+        session.fetchingDriveMedia = false;
+        if (recovered) {
+          session.isPlaying = true;
+          activePlayerId = session.id;
+          syncPlayerDom(session.id);
+          return;
+        }
+      }
+      const finalErrCode = session.audioEl && session.audioEl.error ? session.audioEl.error.code : mediaErrCode;
+      if (driveFileId) {
+        session.driveFallbackId = driveFileId;
+      }
       let errMsg = 'Không phát được tệp âm thanh. Hãy kiểm tra lại file đã tải lên hoặc đường dẫn audio.';
-      if (mediaErrCode === 2) {
+      if (finalErrCode === 2) {
         errMsg = 'Lỗi mạng khi tải tệp âm thanh. Vui lòng kiểm tra kết nối rồi bấm Phát lại.';
-      } else if (mediaErrCode === 4 || (err && err.name === 'NotSupportedError')) {
+      } else if (driveFileId) {
+        errMsg = 'Trình duyệt không giải mã trực tiếp được định dạng tệp này — hãy bấm "Nghe qua Google Drive" bên dưới.';
+      } else if (finalErrCode === 4 || (err && err.name === 'NotSupportedError')) {
         errMsg = 'Trình duyệt không giải mã được tệp âm thanh này hoặc link file bị chặn. Khuyên dùng .mp3 / .m4a / .wav.';
       }
       notifyPlayerError(session, errMsg);
@@ -1199,6 +1419,16 @@ window.StudySnapAudio = (function () {
           } else {
             syncPlayerDom(session.id);
           }
+        } else if (action === 'drive-embed') {
+          pauseSession(session.id);
+          session.showDriveEmbed = true;
+          if (!session.driveFallbackId) {
+            session.driveFallbackId = extractDriveFileId(session.rawUrl);
+          }
+          syncPlayerDom(session.id);
+        } else if (action === 'close-drive-embed') {
+          session.showDriveEmbed = false;
+          syncPlayerDom(session.id);
         }
         return;
       }
@@ -1811,7 +2041,8 @@ window.StudySnapAudio = (function () {
       activeRecorder.onstop = async function () {
         clearInterval(timerInterval);
         const elapsedSeconds = Math.max(1, Math.round((Date.now() - startTime) / 1000));
-        const rawBlob = new Blob(recordedChunks, { type: mimeType });
+        const actualMime = (activeRecorder && activeRecorder.mimeType) || mimeType || 'audio/webm';
+        const rawBlob = new Blob(recordedChunks, { type: actualMime });
 
         stream.getTracks().forEach(function (track) {
           track.stop();

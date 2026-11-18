@@ -1111,6 +1111,45 @@ select.form-control {
   line-height: 1.4;
 }
 
+.voice-drive-fallback {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.voice-drive-fallback[hidden] {
+  display: none;
+}
+
+.voice-fallback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.voice-fallback-actions .voice-ctrl-btn {
+  gap: 5px;
+  font-family: var(--font-body);
+}
+
+.voice-drive-embed-wrap {
+  width: 100%;
+  min-width: 200px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1.5px solid var(--color-border-soft);
+  background-color: var(--color-surface-soft);
+}
+
+.voice-drive-iframe {
+  display: block;
+  width: 100%;
+  height: 92px;
+  border: 0;
+}
+
 .voice-player-bar.has-error .voice-play-toggle {
   border-color: var(--color-destructive);
 }

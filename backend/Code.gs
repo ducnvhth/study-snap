@@ -1763,6 +1763,8 @@ function inferMediaMimeType_(fileName, rawMime) {
     mp3: 'audio/mpeg',
     wav: 'audio/wav',
     aac: 'audio/aac',
+    caf: 'audio/x-caf',
+    amr: 'audio/amr',
     ogg: 'audio/ogg',
     oga: 'audio/ogg',
     opus: 'audio/opus',
@@ -1784,8 +1786,10 @@ function inferMediaMimeType_(fileName, rawMime) {
       return extMap[ext];
     }
   }
-  if (mime === 'audio/x-m4a' || mime === 'audio/m4a') return 'audio/mp4';
+  if (mime === 'audio/x-m4a' || mime === 'audio/m4a' || mime === 'audio/mp4a-latm') return 'audio/mp4';
   if (mime === 'audio/mp3') return 'audio/mpeg';
+  if (mime === 'audio/x-wav' || mime === 'audio/wave') return 'audio/wav';
+  if (mime === 'audio/x-aac' || mime === 'audio/x-hx-aac-adts' || mime === 'audio/aacp') return 'audio/aac';
   if (!mime || mime === 'application/octet-stream' || mime === 'binary/octet-stream') {
     return (ext && extMap[ext]) || 'audio/webm';
   }

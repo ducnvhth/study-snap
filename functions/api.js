@@ -708,6 +708,9 @@ function inferMimeFromFilenameOrHint(fileNameOrDisposition, fallbackMime) {
     mp3: 'audio/mpeg',
     wav: 'audio/wav',
     aac: 'audio/aac',
+    caf: 'audio/x-caf',
+    amr: 'audio/amr',
+    '3gp': 'audio/3gpp',
     ogg: 'audio/ogg',
     oga: 'audio/ogg',
     opus: 'audio/opus',
@@ -721,15 +724,17 @@ function inferMimeFromFilenameOrHint(fileNameOrDisposition, fallbackMime) {
 function normalizeProxyMediaMime(rawContentType, contentDisposition, hintMime) {
   const ct = String(rawContentType || '').split(';')[0].trim().toLowerCase();
   const cleanHint = String(hintMime || '').split(';')[0].trim().toLowerCase();
-  if (ct === 'audio/x-m4a' || ct === 'audio/m4a') return 'audio/mp4';
+  if (ct === 'audio/x-m4a' || ct === 'audio/m4a' || ct === 'audio/mp4a-latm') return 'audio/mp4';
   if (ct === 'audio/mp3') return 'audio/mpeg';
+  if (ct === 'audio/x-wav' || ct === 'audio/wave') return 'audio/wav';
+  if (ct === 'audio/x-aac' || ct === 'audio/x-hx-aac-adts' || ct === 'audio/aacp') return 'audio/aac';
   if (!ct || ct === 'application/octet-stream' || ct === 'binary/octet-stream') {
     const byName = inferMimeFromFilenameOrHint(contentDisposition, cleanHint);
     if (byName) return byName;
     if (cleanHint && (cleanHint.indexOf('video/') === 0 || cleanHint.indexOf('audio/') === 0)) {
       return cleanHint;
     }
-    return 'audio/webm';
+    return 'application/octet-stream';
   }
   return ct;
 }
@@ -767,13 +772,14 @@ async function handleDriveMediaProxy(request, url, ctx) {
     return jsonResponse({ ok: false, error: 'Thiếu hoặc sai định dạng fileId.' }, 400);
   }
   const hintMime = url.searchParams.get('mime') || '';
+  const bypassCache = url.searchParams.get('nocache') === '1';
   const rangeHeader = request && request.headers ? request.headers.get('range') : null;
 
   const edgeCache = typeof caches !== 'undefined' && caches.default ? caches.default : null;
-  const cacheKey = new Request('https://studysnap-drive-edge.internal/media/v2/' + encodeURIComponent(fileId), {
+  const cacheKey = new Request('https://studysnap-drive-edge.internal/media/v3/' + encodeURIComponent(fileId), {
     method: 'GET'
   });
-  if (edgeCache) {
+  if (edgeCache && !bypassCache) {
     const cached = await edgeCache.match(cacheKey);
     if (cached) {
       if (rangeHeader) {
@@ -820,7 +826,8 @@ async function handleDriveMediaProxy(request, url, ctx) {
       if (
         (upstream.status === 200 || upstream.status === 206) &&
         upstream.body &&
-        contentType.indexOf('text/html') === -1 &&
+        contentType.indexOf('text/') === -1 &&
+        contentType.indexOf('xml') === -1 &&
         contentType.indexOf('application/json') === -1
       ) {
         const headers = new Headers();
