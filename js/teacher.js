@@ -366,27 +366,39 @@
     return created;
   }
 
+  function isValidRealClassName(name) {
+    const clean = String(name || '').trim();
+    if (!clean) return false;
+    const lower = clean.toLowerCase();
+    return (
+      lower !== 'all' &&
+      lower !== 'unassigned' &&
+      lower !== 'chưa xếp lớp' &&
+      lower !== 'chua xep lop'
+    );
+  }
+
   function getAvailableClasses() {
     const classes = [];
+    const seen = new Set();
+    function pushClass(rawName) {
+      const c = String(rawName || '').trim();
+      if (!isValidRealClassName(c)) return;
+      const key = c.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      classes.push(c);
+    }
     if (Array.isArray(state.classes)) {
       state.classes.forEach(function (cls) {
-        const c = (cls.class_name || '').trim();
-        if (c && classes.indexOf(c) === -1) {
-          classes.push(c);
-        }
+        pushClass(cls && cls.class_name);
       });
     }
     (state.students || []).forEach(function (st) {
-      const c = (st.class_name || '').trim();
-      if (c && classes.indexOf(c) === -1) {
-        classes.push(c);
-      }
+      pushClass(st && st.class_name);
     });
     (state.assignments || []).forEach(function (asg) {
-      const c = (asg.class_name || '').trim();
-      if (c && c !== 'all' && classes.indexOf(c) === -1) {
-        classes.push(c);
-      }
+      pushClass(asg && asg.class_name);
     });
     return classes;
   }
@@ -674,6 +686,9 @@
     const classFilter = document.getElementById('teacher-class-filter');
     const classBadge = document.getElementById('teacher-class-count-badge');
     const availableClasses = getAvailableClasses();
+    if (ui.selectedClass !== 'all' && !availableClasses.some(function (c) { return c === ui.selectedClass; })) {
+      ui.selectedClass = 'all';
+    }
     const filteredStudents = getFilteredStudents();
     const filteredAssignments = getFilteredAssignments();
 
@@ -1215,14 +1230,17 @@
     if (!Array.isArray(state.classes)) {
       state.classes = [];
     }
+    const validClasses = state.classes.filter(function (cls) {
+      return isValidRealClassName(cls && cls.class_name);
+    });
 
     if (badge) {
-      badge.textContent = state.classes.length + ' lớp học';
+      badge.textContent = validClasses.length + ' lớp học';
     }
 
     if (!grid) return;
 
-    if (state.classes.length === 0) {
+    if (validClasses.length === 0) {
       grid.innerHTML =
         '<div style="grid-column: 1 / -1; padding: 18px; text-align: center; color: var(--color-muted-foreground); background: var(--color-surface); border: 1px dashed var(--color-border-soft); border-radius: var(--radius-lg);">' +
           'Chưa có lớp học nào. Hãy nhập tên lớp học ở trên để tạo lớp đầu tiên!' +
@@ -1230,7 +1248,7 @@
       return;
     }
 
-    grid.innerHTML = state.classes.map(function (cls) {
+    grid.innerHTML = validClasses.map(function (cls) {
       const studentCount = (state.students || []).filter(function (s) {
         return (s.class_name || '').trim().toLowerCase() === cls.class_name.trim().toLowerCase();
       }).length;
@@ -7375,6 +7393,10 @@
         const nameInput = document.getElementById('new-class-name');
         const className = (nameInput ? nameInput.value : '').trim();
         if (!className) return;
+        if (!isValidRealClassName(className)) {
+          showToast('Tên lớp không hợp lệ hoặc trùng từ khóa hệ thống (all, unassigned, Chưa xếp lớp).');
+          return;
+        }
 
         if (!Array.isArray(state.classes)) state.classes = [];
 

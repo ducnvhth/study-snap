@@ -252,7 +252,9 @@ async function getBootstrapData(db, metaOverride) {
   return {
     isProduction: meta.is_production === 'true',
     teachers: rows(0),
-    classes: rows(1),
+    classes: rows(1).filter(function (c) {
+      return isValidRealClassName(c && c.class_name);
+    }),
     students: rows(2),
     assignments: rows(3),
     submissions: rows(4),
@@ -289,9 +291,21 @@ async function buildMutationResponse(db, payload, preVer, extraFields) {
   return jsonResponse(out);
 }
 
+function isValidRealClassName(name) {
+  const clean = String(name || '').trim();
+  if (!clean) return false;
+  const lower = clean.toLowerCase();
+  return (
+    lower !== 'chưa xếp lớp' &&
+    lower !== 'chua xep lop' &&
+    lower !== 'all' &&
+    lower !== 'unassigned'
+  );
+}
+
 async function ensureClassRecord(db, className) {
   const clean = String(className || '').trim();
-  if (!clean || clean === 'Chưa xếp lớp' || clean === 'all' || clean === 'unassigned') return;
+  if (!isValidRealClassName(clean)) return;
   const existing = await db
     .prepare('SELECT class_id FROM classes WHERE LOWER(TRIM(class_name)) = LOWER(TRIM(?)) LIMIT 1')
     .bind(clean)
@@ -382,7 +396,7 @@ async function handleImportFromBootstrapData(db, payload) {
   const seenClasses = new Set();
   const queueClass = function (clsObj) {
     const cname = String((clsObj && clsObj.class_name) || clsObj || '').trim();
-    if (!cname || cname === 'Chưa xếp lớp' || cname === 'all' || cname === 'unassigned') return;
+    if (!isValidRealClassName(cname)) return;
     const key = cname.toLowerCase();
     if (seenClasses.has(key)) return;
     seenClasses.add(key);
@@ -1112,6 +1126,9 @@ export async function handleApiRequest(request, env, ctx) {
       const className = String(payload.class_name || '').trim();
       if (!className) {
         return jsonResponse({ ok: false, error: 'Thiếu tên lớp học.' }, 400);
+      }
+      if (!isValidRealClassName(className)) {
+        return jsonResponse({ ok: false, error: 'Tên lớp không hợp lệ hoặc trùng từ khóa hệ thống.' }, 400);
       }
       const existing = await db
         .prepare('SELECT class_id, class_name, created_at FROM classes WHERE LOWER(TRIM(class_name)) = LOWER(TRIM(?)) LIMIT 1')

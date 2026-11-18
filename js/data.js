@@ -1622,6 +1622,18 @@ window.StudySnapStore = (function () {
     return str;
   }
 
+  function isValidRealClassName(name) {
+    const clean = String(name || '').trim();
+    if (!clean) return false;
+    const lower = clean.toLowerCase();
+    return (
+      lower !== 'all' &&
+      lower !== 'unassigned' &&
+      lower !== 'chưa xếp lớp' &&
+      lower !== 'chua xep lop'
+    );
+  }
+
   function loadState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -1632,13 +1644,13 @@ window.StudySnapStore = (function () {
           if (!Array.isArray(parsed.classes) || (!isProd && parsed.classes.length === 0)) {
             parsed.classes = isProd ? [] : JSON.parse(JSON.stringify(window.STUDYSNAP_INITIAL_DATA.classes || []));
           }
+          parsed.classes = parsed.classes.filter(function (cls) {
+            return isValidRealClassName(cls && cls.class_name);
+          });
           (parsed.students || []).forEach(function (st) {
             const c = (st.class_name || '').trim();
             if (
-              c &&
-              c !== 'Chưa xếp lớp' &&
-              c !== 'all' &&
-              c !== 'unassigned' &&
+              isValidRealClassName(c) &&
               !parsed.classes.some(function (cls) { return cls.class_name.toLowerCase() === c.toLowerCase(); })
             ) {
               parsed.classes.push({
@@ -1878,7 +1890,7 @@ window.StudySnapStore = (function () {
           class_name: String(c.class_name || '').trim(),
           created_at: formatCleanDate(c.created_at) || '01/11/2026'
         };
-      }).filter(function (c) { return Boolean(c.class_name); });
+      }).filter(function (c) { return isValidRealClassName(c.class_name); });
     } else if (
       (remoteIsCleared || stateObj.isClearedForProduction === true) &&
       Array.isArray(remoteData.students) &&
@@ -1904,10 +1916,7 @@ window.StudySnapStore = (function () {
       stateObj.students.forEach(function (st) {
         const c = String(st.class_name || '').trim();
         if (
-          c &&
-          c !== 'Chưa xếp lớp' &&
-          c !== 'all' &&
-          c !== 'unassigned' &&
+          isValidRealClassName(c) &&
           Array.isArray(stateObj.classes) &&
           !stateObj.classes.some(function (cls) { return String(cls.class_name || '').toLowerCase() === c.toLowerCase(); })
         ) {
