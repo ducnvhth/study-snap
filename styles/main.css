@@ -450,6 +450,38 @@ p {
   box-shadow: var(--shadow-sm);
 }
 
+.student-welcome-class {
+  margin: 6px 0 10px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-primary-text-contrast);
+}
+
+.student-welcome-quote {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 6px;
+  padding: 2px 0;
+  max-width: 58ch;
+}
+
+.student-quote-mark {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--pink);
+  opacity: 0.88;
+}
+
+.student-welcome-quote p {
+  margin: 0;
+  font-style: italic;
+  font-weight: 600;
+  font-size: 0.96875rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
 .banner-actions {
   display: flex;
   flex-wrap: wrap;

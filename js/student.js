@@ -36,12 +36,38 @@
 
   const activeStudent = getActiveStudent();
   const MASTERY_KEY = 'studysnap_mastered_vocab_' + activeStudent.student_id;
+  const WELCOME_QUOTE_KEY = 'studysnap_last_welcome_quote_' + activeStudent.student_id;
+
+  const STUDENT_WELCOME_QUOTES = {
+    completed: [
+      'Em đã hoàn thành trọn vẹn mọi bài tập được giao hôm nay rồi — thật đáng tự hào! Dành ít phút ôn lại từ vựng để nhớ sâu hơn nhé.',
+      'Tất cả bài luyện và BVN đều đã gọn gàng xong xuôi. Hôm nay em đã nỗ lực rất tuyệt vời!',
+      'Chặng bài hôm nay đã cán đích trọn vẹn rồi đấy. Nghỉ ngơi một chút hoặc ghé lật nhanh vài thẻ từ vựng cho vui nhé!',
+      'Phong độ rất ổn định! Em đã xong hết nhiệm vụ của buổi học hôm nay — giữ vững đà tiến bộ này nhé.'
+    ],
+    encouraging: [
+      'Mỗi ngày kiên trì thêm một chút là phát âm và chữ Hán sẽ tự nhiên vững vàng hơn. Cố lên em nhé!',
+      'Không cần vội đi thật nhanh, chỉ cần mỗi ngày em tiến thêm một bước nhỏ so với hôm qua là đã rất tuyệt rồi.',
+      'Nghe thêm một lượt, đọc to thêm một lần — âm bật hơi và 4 thanh điệu sẽ dần trở nên thật tự nhiên.',
+      'Mỗi chữ Hán em viết hôm nay, mỗi câu em thu âm hôm nay đều là một viên gạch xây nên sự tự tin của ngày mai.',
+      'Học ngoại ngữ giống như tích lũy từng giọt mưa nhỏ: đều đặn mỗi ngày một ít, rồi đến lúc em sẽ bất ngờ vì mình hiểu được thật nhiều.',
+      'Sai một lần cũng chẳng sao cả — mỗi lần sửa phát âm là một lần nhớ chắc hơn gấp bội!',
+      'Bắt đầu từ 5 phút luyện tập nhẹ nhàng ngay bây giờ, em sẽ thấy tiếng Trung gần gũi và thú vị hơn mỗi ngày.',
+      'Hành trình chinh phục tiếng Trung bắt đầu từ những bước nhỏ bền bỉ. Hôm nay cùng chinh phục thêm một mục tiêu nhỏ nhé!',
+      'Giọng đọc tự tin không tự nhiên mà có — nó được tạo nên từ những lần em dám mở mic lên và thử nói thật to.',
+      'Một chút tập trung hôm nay sẽ đổi lấy thật nhiều thoải mái ở buổi học tiếp theo. Bắt đầu thôi nào!',
+      'Đừng lo nếu hôm nay mới nhớ được vài từ mới: chỉ cần gặp lại chúng thêm vài lượt nữa, bộ não sẽ tự động ghi nhớ giúp em.',
+      'Sự đều đặn luôn chiến thắng tốc độ. Chỉ cần em giữ nhịp học mỗi ngày, kết quả tốt sẽ tự tìm đến.'
+    ]
+  };
 
   const ui = {
     activeTab: 'practice',
     selectedHomeworkSession: 'all',
     selectedAssignmentId: state.assignments[0] ? state.assignments[0].assignment_id : 'BVN01_1',
     pendingMedia: null,
+    welcomeQuoteCategory: null,
+    welcomeQuoteText: null,
 
     // Practice state
     selectedExerciseId: (state.practiceExercises && state.practiceExercises[0]) ? state.practiceExercises[0].exercise_id : 'EX_HSK1_BAI_1',
@@ -255,43 +281,51 @@
   // =========================================================================
   // 1. HEADER & PERSONAL PROGRESS SUMMARY BANNER
   // =========================================================================
-  /**
-   * Tạo câu nhắn động viên ngắn gọn, ấm áp dựa theo lớp và tiến độ hiện tại của học sinh.
-   */
-  function buildStudentEncouragementMessage(student, progress) {
+  function formatStudentClassLabel(student) {
     const rawClass = String((student && student.class_name) || 'Lớp Tiếng Trung HSK 2').trim();
-    const classLabel = /^lớp\b/i.test(rawClass) ? rawClass : 'Lớp ' + rawClass;
+    return /^lớp\b/i.test(rawClass) ? rawClass : 'Lớp ' + rawClass;
+  }
+
+  /**
+   * Chọn một quote động viên mới cho mỗi lần tải trang và tránh lặp lại quote vừa xem trước đó.
+   */
+  function pickStudentWelcomeQuote(progress) {
     const totalAssignments = Number(progress && progress.totalAssignments) || 0;
     const submittedCount = Number(progress && progress.submittedCount) || 0;
     const totalPracticeCount = Number(progress && progress.totalPracticeCount) || 0;
     const submittedPracticeCount = Number(progress && progress.submittedPracticeCount) || 0;
-    const validMasteredCount = Number(progress && progress.validMasteredCount) || 0;
 
     const allTasksTotal = totalAssignments + totalPracticeCount;
-    const allTasksDone = submittedCount + submittedPracticeCount;
-
-    let encouragement;
-    if (
+    const category =
       allTasksTotal > 0 &&
       submittedCount >= totalAssignments &&
       submittedPracticeCount >= totalPracticeCount
-    ) {
-      encouragement =
-        'Em đã hoàn thành trọn vẹn các bài luyện tập và BVN được giao rồi, rất đáng khen! Dành vài phút ôn lại từ vựng để nhớ lâu hơn nhé.';
-    } else if (allTasksDone > 0) {
-      encouragement =
-        'Mỗi ngày kiên trì thêm một chút là phát âm và chữ Hán sẽ tự nhiên vững vàng hơn. Cố gắng hoàn thành nốt các bài hôm nay em nhé!';
-    } else if (validMasteredCount >= 10) {
-      encouragement =
-        'Em đang giữ nhịp học rất tốt với ' +
-        validMasteredCount +
-        ' từ vựng đã ghi nhớ. Tiếp tục phát huy phong độ này nhé!';
-    } else {
-      encouragement =
-        'Hành trình chinh phục tiếng Trung bắt đầu từ những bước nhỏ mỗi ngày. Hôm nay cùng luyện tập một chút cho thật hào hứng nhé!';
+        ? 'completed'
+        : 'encouraging';
+
+    if (ui.welcomeQuoteCategory === category && ui.welcomeQuoteText) {
+      return ui.welcomeQuoteText;
     }
 
-    return classLabel + ' • ' + encouragement;
+    const pool = STUDENT_WELCOME_QUOTES[category] || STUDENT_WELCOME_QUOTES.encouraging;
+    let lastQuote = '';
+    try {
+      lastQuote = localStorage.getItem(WELCOME_QUOTE_KEY) || '';
+    } catch (e) {}
+
+    const candidates = pool.filter(function (quote) {
+      return quote !== lastQuote;
+    });
+    const source = candidates.length > 0 ? candidates : pool;
+    const chosen = source[Math.floor(Math.random() * source.length)] || pool[0];
+
+    ui.welcomeQuoteCategory = category;
+    ui.welcomeQuoteText = chosen;
+    try {
+      localStorage.setItem(WELCOME_QUOTE_KEY, chosen);
+    } catch (e) {}
+
+    return chosen;
   }
 
   function renderStudentHeaderAndStats() {
@@ -300,6 +334,7 @@
     const profilePill = document.getElementById('student-profile-pill');
     const headerSub = document.getElementById('student-header-subtitle');
     const welcomeHeading = document.getElementById('student-welcome-heading');
+    const welcomeClass = document.getElementById('student-welcome-class');
     const welcomeDesc = document.getElementById('student-welcome-desc');
     const accountBadge = document.getElementById('student-account-badge');
 
@@ -312,6 +347,9 @@
     if (welcomeHeading) {
       const fullName = String(student.full_name || '').trim();
       welcomeHeading.textContent = fullName ? 'Chào mừng trở lại, ' + fullName : 'Chào mừng trở lại';
+    }
+    if (welcomeClass) {
+      welcomeClass.textContent = formatStudentClassLabel(student);
     }
     if (accountBadge) {
       accountBadge.textContent = student.student_id + ' • ' + student.full_name;
@@ -378,12 +416,11 @@
     const validMasteredCount = Math.min(totalVocab, customMasteredCount + hskMasteredCount);
 
     if (welcomeDesc) {
-      welcomeDesc.textContent = buildStudentEncouragementMessage(student, {
+      welcomeDesc.textContent = pickStudentWelcomeQuote({
         totalAssignments: totalAssignments,
         submittedCount: submittedCount,
         totalPracticeCount: totalPracticeCount,
-        submittedPracticeCount: submittedPracticeCount,
-        validMasteredCount: validMasteredCount
+        submittedPracticeCount: submittedPracticeCount
       });
     }
 
