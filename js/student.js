@@ -255,6 +255,45 @@
   // =========================================================================
   // 1. HEADER & PERSONAL PROGRESS SUMMARY BANNER
   // =========================================================================
+  /**
+   * Tạo câu nhắn động viên ngắn gọn, ấm áp dựa theo lớp và tiến độ hiện tại của học sinh.
+   */
+  function buildStudentEncouragementMessage(student, progress) {
+    const rawClass = String((student && student.class_name) || 'Lớp Tiếng Trung HSK 2').trim();
+    const classLabel = /^lớp\b/i.test(rawClass) ? rawClass : 'Lớp ' + rawClass;
+    const totalAssignments = Number(progress && progress.totalAssignments) || 0;
+    const submittedCount = Number(progress && progress.submittedCount) || 0;
+    const totalPracticeCount = Number(progress && progress.totalPracticeCount) || 0;
+    const submittedPracticeCount = Number(progress && progress.submittedPracticeCount) || 0;
+    const validMasteredCount = Number(progress && progress.validMasteredCount) || 0;
+
+    const allTasksTotal = totalAssignments + totalPracticeCount;
+    const allTasksDone = submittedCount + submittedPracticeCount;
+
+    let encouragement;
+    if (
+      allTasksTotal > 0 &&
+      submittedCount >= totalAssignments &&
+      submittedPracticeCount >= totalPracticeCount
+    ) {
+      encouragement =
+        'Em đã hoàn thành trọn vẹn các bài luyện tập và BVN được giao rồi, rất đáng khen! Dành vài phút ôn lại từ vựng để nhớ lâu hơn nhé.';
+    } else if (allTasksDone > 0) {
+      encouragement =
+        'Mỗi ngày kiên trì thêm một chút là phát âm và chữ Hán sẽ tự nhiên vững vàng hơn. Cố gắng hoàn thành nốt các bài hôm nay em nhé!';
+    } else if (validMasteredCount >= 10) {
+      encouragement =
+        'Em đang giữ nhịp học rất tốt với ' +
+        validMasteredCount +
+        ' từ vựng đã ghi nhớ. Tiếp tục phát huy phong độ này nhé!';
+    } else {
+      encouragement =
+        'Hành trình chinh phục tiếng Trung bắt đầu từ những bước nhỏ mỗi ngày. Hôm nay cùng luyện tập một chút cho thật hào hứng nhé!';
+    }
+
+    return classLabel + ' • ' + encouragement;
+  }
+
   function renderStudentHeaderAndStats() {
     const student = getActiveStudent();
 
@@ -273,12 +312,6 @@
     if (welcomeHeading) {
       const fullName = String(student.full_name || '').trim();
       welcomeHeading.textContent = fullName ? 'Chào mừng trở lại, ' + fullName : 'Chào mừng trở lại';
-    }
-    if (welcomeDesc) {
-      welcomeDesc.textContent =
-        'Lớp: ' +
-        (student.class_name || 'Lớp Tiếng Trung HSK 2') +
-        '. Làm bài luyện tập cuối buổi có hệ thống tự chấm, nộp BVN (thu âm trực tiếp hoặc tải video) để nghe phản hồi giáo viên bằng giọng nói (Voice Feedback) và ôn từ vựng theo từng bài hoặc tổng hợp.';
     }
     if (accountBadge) {
       accountBadge.textContent = student.student_id + ' • ' + student.full_name;
@@ -343,6 +376,16 @@
         }).length
       : 0;
     const validMasteredCount = Math.min(totalVocab, customMasteredCount + hskMasteredCount);
+
+    if (welcomeDesc) {
+      welcomeDesc.textContent = buildStudentEncouragementMessage(student, {
+        totalAssignments: totalAssignments,
+        submittedCount: submittedCount,
+        totalPracticeCount: totalPracticeCount,
+        submittedPracticeCount: submittedPracticeCount,
+        validMasteredCount: validMasteredCount
+      });
+    }
 
     const elSubmitted = document.getElementById('student-stat-hw-submitted');
     const elGraded = document.getElementById('student-stat-hw-graded');
