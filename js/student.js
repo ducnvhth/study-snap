@@ -271,7 +271,8 @@
       headerSub.textContent = (student.class_name || 'Lớp Tiếng Trung HSK 2') + ' • Tài khoản: @' + (student.username || student.student_id.toLowerCase());
     }
     if (welcomeHeading) {
-      welcomeHeading.textContent = 'Xin chào ' + student.full_name + '!';
+      const fullName = String(student.full_name || '').trim();
+      welcomeHeading.textContent = fullName ? 'Chào mừng trở lại, ' + fullName : 'Chào mừng trở lại';
     }
     if (welcomeDesc) {
       welcomeDesc.textContent =
