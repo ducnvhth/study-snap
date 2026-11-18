@@ -4,6 +4,25 @@
 
 window.StudySnapAuth = (function () {
   const SESSION_KEY = 'studysnap_active_session_v2';
+  const STATE_STORAGE_KEY = 'studysnap_app_state_zh_v1';
+
+  function getPortalUrl(role) {
+    if (role === 'teacher') return 'teacher.html';
+    if (role === 'student') return 'student.html';
+    return '';
+  }
+
+  function readStoredStateForAuth() {
+    if (window.StudySnapStore && typeof window.StudySnapStore.loadState === 'function') {
+      return window.StudySnapStore.loadState();
+    }
+    try {
+      const raw = localStorage.getItem(STATE_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
 
   function getCurrentUser() {
     try {
@@ -78,7 +97,7 @@ window.StudySnapAuth = (function () {
 
   function logout() {
     localStorage.removeItem(SESSION_KEY);
-    window.location.href = 'index.html';
+    window.location.replace('index.html');
   }
 
   function revalidateActiveSession(stateObj) {
@@ -114,6 +133,85 @@ window.StudySnapAuth = (function () {
       return null;
     }
     return user;
+  }
+
+  function attachPortalSessionGuard(requiredRole) {
+    if (window.__ssPortalGuardBound) return;
+    window.__ssPortalGuardBound = true;
+
+    function checkPortalSession() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('preview') === '1') return;
+      const current = getCurrentUser();
+      if (!current) {
+        window.location.replace('index.html');
+        return;
+      }
+      if (requiredRole && current.role !== requiredRole) {
+        const target = getPortalUrl(current.role) || 'index.html';
+        window.location.replace(target);
+      }
+    }
+
+    window.addEventListener('pageshow', function (ev) {
+      if (ev && ev.persisted) checkPortalSession();
+    });
+    window.addEventListener('storage', function (ev) {
+      if (!ev || ev.key === SESSION_KEY || ev.key === null) {
+        checkPortalSession();
+      }
+    });
+  }
+
+  /**
+   * Chuyển thẳng vào cổng làm việc nếu người dùng vẫn đang đăng nhập hợp lệ.
+   * Chỉ giữ lại trang đăng nhập khi chưa đăng nhập, đã đăng xuất, hoặc phiên hết hiệu lực.
+   */
+  function redirectIfAuthenticated() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('session') === 'expired') {
+        setCurrentUser(null);
+        if (document && document.documentElement) {
+          document.documentElement.classList.remove('is-auth-redirecting');
+        }
+        return false;
+      }
+
+      const user = getCurrentUser();
+      if (!user) {
+        if (document && document.documentElement) {
+          document.documentElement.classList.remove('is-auth-redirecting');
+        }
+        return false;
+      }
+
+      const target = getPortalUrl(user.role);
+      if (!target) {
+        if (document && document.documentElement) {
+          document.documentElement.classList.remove('is-auth-redirecting');
+        }
+        return false;
+      }
+
+      const state = readStoredStateForAuth();
+      if (state && state.isClearedForProduction === true) {
+        if (!revalidateActiveSession(state)) {
+          if (document && document.documentElement) {
+            document.documentElement.classList.remove('is-auth-redirecting');
+          }
+          return false;
+        }
+      }
+
+      if (document && document.documentElement) {
+        document.documentElement.classList.add('is-auth-redirecting');
+      }
+      window.location.replace(target);
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   /**
@@ -165,18 +263,21 @@ window.StudySnapAuth = (function () {
     }
 
     if (user.role !== requiredRole) {
-      window.location.replace(user.role === 'teacher' ? 'teacher.html' : 'student.html');
+      window.location.replace(getPortalUrl(user.role) || 'index.html');
       return null;
     }
 
+    attachPortalSessionGuard(requiredRole);
     return user;
   }
 
   return {
     getCurrentUser: getCurrentUser,
     setCurrentUser: setCurrentUser,
+    getPortalUrl: getPortalUrl,
     authenticate: authenticate,
     revalidateActiveSession: revalidateActiveSession,
+    redirectIfAuthenticated: redirectIfAuthenticated,
     logout: logout,
     enforceRole: enforceRole
   };

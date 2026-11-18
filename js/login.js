@@ -97,13 +97,39 @@
   document.addEventListener('DOMContentLoaded', function () {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('session') === 'expired') {
+      window.StudySnapAuth.setCurrentUser(null);
+      if (document && document.documentElement) {
+        document.documentElement.classList.remove('is-auth-redirecting');
+      }
       showToast('Phiên đăng nhập trước đã hết hiệu lực. Vui lòng đăng nhập lại.');
+      if (window.history && typeof window.history.replaceState === 'function') {
+        try {
+          window.history.replaceState(null, '', window.location.pathname || 'index.html');
+        } catch (e) {}
+      }
+    } else if (window.StudySnapAuth && typeof window.StudySnapAuth.redirectIfAuthenticated === 'function') {
+      if (window.StudySnapAuth.redirectIfAuthenticated()) return;
     }
 
     if (state && state.isClearedForProduction === true) {
       window.StudySnapAuth.revalidateActiveSession(state);
     }
     renderSessionBanner();
+
+    window.addEventListener('pageshow', function (ev) {
+      if (ev && ev.persisted && window.StudySnapAuth && typeof window.StudySnapAuth.redirectIfAuthenticated === 'function') {
+        window.StudySnapAuth.redirectIfAuthenticated();
+      }
+    });
+
+    window.addEventListener('storage', function (ev) {
+      if (!ev || ev.key === 'studysnap_active_session_v2' || ev.key === null) {
+        if (window.StudySnapAuth && typeof window.StudySnapAuth.redirectIfAuthenticated === 'function' && window.StudySnapAuth.redirectIfAuthenticated()) {
+          return;
+        }
+        renderSessionBanner();
+      }
+    });
 
     // Đồng bộ ngầm dữ liệu mới nhất từ hệ thống và xác thực lại phiên đang lưu
     if (window.StudySnapStore.getGasUrl()) {
@@ -113,6 +139,9 @@
           state = window.StudySnapStore.loadState();
           if (remoteRes && remoteRes.ok && remoteRes.data) {
             window.StudySnapAuth.revalidateActiveSession(state);
+            if (window.StudySnapAuth && typeof window.StudySnapAuth.redirectIfAuthenticated === 'function' && window.StudySnapAuth.redirectIfAuthenticated()) {
+              return;
+            }
             renderSessionBanner();
           }
         })
@@ -248,7 +277,10 @@
 
           if (result && result.ok) {
             didRedirect = true;
-            window.location.href = result.user.role === 'teacher' ? 'teacher.html' : 'student.html';
+            const targetUrl = window.StudySnapAuth && typeof window.StudySnapAuth.getPortalUrl === 'function'
+              ? window.StudySnapAuth.getPortalUrl(result.user.role)
+              : (result.user.role === 'teacher' ? 'teacher.html' : 'student.html');
+            window.location.replace(targetUrl || 'student.html');
             return;
           }
         } finally {

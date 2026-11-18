@@ -2066,6 +2066,10 @@ body:has(.ss-scroll-top-btn.is-visible) .toast-banner {
 }
 
 /* Login Page & Role Account Management */
+html.is-auth-redirecting .login-shell {
+  display: none;
+}
+
 .login-shell {
   max-width: 820px;
   margin: 0 auto;

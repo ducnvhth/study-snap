@@ -15,7 +15,14 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css?v=20261116t">
+  <link rel="stylesheet" href="styles/main.css?v=20261116u">
+  <style>html.is-auth-redirecting .login-shell{display:none!important;}</style>
+  <script src="js/auth.js?v=20261116u"></script>
+  <script>
+    if (window.StudySnapAuth && typeof window.StudySnapAuth.redirectIfAuthenticated === 'function') {
+      window.StudySnapAuth.redirectIfAuthenticated();
+    }
+  </script>
 </head>
 <body>
   <div class="login-shell">
@@ -139,7 +146,6 @@
   </div>
 
   <script src="js/data.js?v=20261116p"></script>
-  <script src="js/auth.js?v=20261114c"></script>
-  <script src="js/login.js?v=20261114c"></script>
+  <script src="js/login.js?v=20261116u"></script>
 </body>
 </html>
