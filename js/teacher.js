@@ -565,6 +565,7 @@
         return '<option value="' + escapeHtml(s) + '"' + sel + '>' + escapeHtml(s) + ' (' + count + ' BVN)</option>';
       }).join('');
       picker.value = ui.manageSelectedSession;
+      syncSearchableSelect(picker);
     }
 
     // 2. Render subtasks in selected session
@@ -722,6 +723,335 @@
     return submitted || list[0];
   }
 
+  const searchableCombos = typeof WeakMap === 'function' ? new WeakMap() : null;
+  const enhancedSelectList = [];
+  let comboDocClickBound = false;
+
+  function normalizeComboSearchText(raw) {
+    let s = String(raw || '').trim().toLowerCase();
+    if (typeof s.normalize === 'function') {
+      s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+    return s.replace(/đ/g, 'd');
+  }
+
+  function extractNativeSelectItems(selectEl) {
+    const items = [];
+    if (!selectEl) return items;
+    const childNodes = Array.from(selectEl.children || []);
+    if (childNodes.length > 0) {
+      childNodes.forEach(function (node) {
+        const tag = String(node.tagName || '').toUpperCase();
+        if (tag === 'OPTGROUP') {
+          const grpLabel = node.getAttribute('label') || '';
+          const grpChildren = Array.from(node.children || []).map(function (opt) {
+            return {
+              type: 'option',
+              value: opt.value !== undefined ? opt.value : (opt.getAttribute('value') || ''),
+              label: opt.textContent || '',
+              group: grpLabel,
+              disabled: Boolean(opt.disabled)
+            };
+          });
+          if (grpChildren.length > 0) {
+            items.push({ type: 'group', label: grpLabel, children: grpChildren });
+          }
+        } else if (tag === 'OPTION') {
+          items.push({
+            type: 'option',
+            value: node.value !== undefined ? node.value : (node.getAttribute('value') || ''),
+            label: node.textContent || '',
+            group: '',
+            disabled: Boolean(node.disabled)
+          });
+        }
+      });
+      return items;
+    }
+    Array.from(selectEl.options || []).forEach(function (opt) {
+      items.push({
+        type: 'option',
+        value: opt.value !== undefined ? opt.value : '',
+        label: opt.textContent || '',
+        group: '',
+        disabled: Boolean(opt.disabled)
+      });
+    });
+    return items;
+  }
+
+  function getSelectedOptionLabelFromSelect(selectEl) {
+    if (!selectEl) return '';
+    const opts = Array.from(selectEl.options || []);
+    const matched = opts.find(function (o) { return o.value === selectEl.value; }) || opts[0];
+    return matched ? (matched.textContent || '') : '';
+  }
+
+  function closeAllSearchableCombos(exceptCombo) {
+    enhancedSelectList.forEach(function (entry) {
+      if (exceptCombo && entry.wrap === exceptCombo) return;
+      entry.isOpen = false;
+      entry.wrap.classList.remove('is-open');
+      entry.menu.hidden = true;
+      entry.trigger.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function renderComboOptionRows(entry) {
+    const query = normalizeComboSearchText(entry.searchInput.value);
+    const items = extractNativeSelectItems(entry.selectEl);
+    const currentVal = entry.selectEl.value;
+    entry.listEl.innerHTML = '';
+    const renderedButtons = [];
+
+    function appendOptionBtn(opt) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ss-combo-option' + (opt.value === currentVal ? ' is-selected' : '');
+      btn.setAttribute('role', 'option');
+      btn.setAttribute('aria-selected', opt.value === currentVal ? 'true' : 'false');
+      btn.setAttribute('data-value', opt.value);
+      if (opt.disabled) btn.disabled = true;
+
+      const txt = document.createElement('span');
+      txt.className = 'ss-combo-option-text';
+      txt.textContent = opt.label;
+      btn.appendChild(txt);
+
+      if (opt.value === currentVal) {
+        const chk = document.createElement('span');
+        chk.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        btn.appendChild(chk);
+      }
+
+      btn.addEventListener('click', function () {
+        if (opt.disabled) return;
+        entry.selectEl.value = opt.value;
+        entry.triggerText.textContent = opt.label;
+        closeAllSearchableCombos(null);
+        try {
+          entry.selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+        } catch (e) {}
+      });
+
+      entry.listEl.appendChild(btn);
+      renderedButtons.push(btn);
+    }
+
+    items.forEach(function (item) {
+      if (item.type === 'group') {
+        const groupMatch = query && normalizeComboSearchText(item.label).indexOf(query) !== -1;
+        const matchedChildren = item.children.filter(function (ch) {
+          return !query || groupMatch || normalizeComboSearchText(ch.label).indexOf(query) !== -1;
+        });
+        if (matchedChildren.length > 0) {
+          const hdr = document.createElement('div');
+          hdr.className = 'ss-combo-group-label';
+          hdr.textContent = item.label;
+          entry.listEl.appendChild(hdr);
+          matchedChildren.forEach(appendOptionBtn);
+        }
+      } else {
+        if (!query || normalizeComboSearchText(item.label).indexOf(query) !== -1) {
+          appendOptionBtn(item);
+        }
+      }
+    });
+
+    if (renderedButtons.length === 0) {
+      const emptyEl = document.createElement('div');
+      emptyEl.className = 'ss-combo-empty';
+      emptyEl.textContent = 'Không tìm thấy kết quả phù hợp';
+      entry.listEl.appendChild(emptyEl);
+    }
+
+    entry.highlightIndex = -1;
+    entry.renderedButtons = renderedButtons;
+    entry.clearBtn.hidden = !entry.searchInput.value;
+  }
+
+  function enhanceSearchableSelect(selectEl) {
+    if (!selectEl || !selectEl.parentNode || typeof document.createElement !== 'function') return null;
+    if (searchableCombos && searchableCombos.has(selectEl)) {
+      return searchableCombos.get(selectEl);
+    }
+    const probe = document.createElement('div');
+    if (!probe || !probe.classList || typeof probe.appendChild !== 'function') return null;
+    if (typeof selectEl.parentNode.insertBefore !== 'function') return null;
+
+    const placeholder = selectEl.getAttribute('data-searchable-select') || 'Tìm kiếm...';
+    const isInline = Boolean(
+      (selectEl.style && selectEl.style.width === 'auto') ||
+      (selectEl.closest && selectEl.closest('.class-selector-card'))
+    );
+
+    const wrap = document.createElement('div');
+    wrap.className = 'ss-combo' + (isInline ? ' is-inline' : '');
+
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'form-control ss-combo-trigger';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+
+    const triggerText = document.createElement('span');
+    triggerText.className = 'ss-combo-trigger-text';
+    triggerText.textContent = getSelectedOptionLabelFromSelect(selectEl) || placeholder;
+    trigger.appendChild(triggerText);
+
+    const chev = document.createElement('span');
+    chev.className = 'ss-combo-chevron';
+    chev.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+    trigger.appendChild(chev);
+
+    const menu = document.createElement('div');
+    menu.className = 'ss-combo-menu';
+    menu.hidden = true;
+
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'ss-combo-search-wrap';
+
+    const searchIcon = document.createElement('span');
+    searchIcon.className = 'ss-combo-search-icon';
+    searchIcon.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>';
+    searchWrap.appendChild(searchIcon);
+
+    const searchInput = document.createElement('input');
+    searchInput.type = 'search';
+    searchInput.className = 'ss-combo-search';
+    searchInput.placeholder = placeholder;
+    searchInput.setAttribute('aria-label', placeholder);
+    searchWrap.appendChild(searchInput);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'ss-combo-clear';
+    clearBtn.hidden = true;
+    clearBtn.setAttribute('aria-label', 'Xóa từ khóa tìm kiếm');
+    clearBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    searchWrap.appendChild(clearBtn);
+
+    const listEl = document.createElement('div');
+    listEl.className = 'ss-combo-list';
+    listEl.setAttribute('role', 'listbox');
+
+    menu.appendChild(searchWrap);
+    menu.appendChild(listEl);
+
+    selectEl.parentNode.insertBefore(wrap, selectEl);
+    wrap.appendChild(selectEl);
+    wrap.appendChild(trigger);
+    wrap.appendChild(menu);
+
+    selectEl.classList.add('ss-native-select-hidden');
+    selectEl.setAttribute('aria-hidden', 'true');
+    selectEl.tabIndex = -1;
+
+    const entry = {
+      selectEl: selectEl,
+      wrap: wrap,
+      trigger: trigger,
+      triggerText: triggerText,
+      menu: menu,
+      searchInput: searchInput,
+      clearBtn: clearBtn,
+      listEl: listEl,
+      isOpen: false,
+      highlightIndex: -1,
+      renderedButtons: []
+    };
+
+    trigger.addEventListener('click', function () {
+      const willOpen = !entry.isOpen;
+      closeAllSearchableCombos(null);
+      if (!willOpen) return;
+      entry.isOpen = true;
+      wrap.classList.add('is-open');
+      menu.hidden = false;
+      trigger.setAttribute('aria-expanded', 'true');
+      searchInput.value = '';
+      renderComboOptionRows(entry);
+      const selectedBtn = listEl.querySelector('.ss-combo-option.is-selected');
+      if (selectedBtn && typeof selectedBtn.scrollIntoView === 'function') {
+        selectedBtn.scrollIntoView({ block: 'nearest' });
+      }
+      setTimeout(function () {
+        if (typeof searchInput.focus === 'function') searchInput.focus();
+      }, 0);
+    });
+
+    searchInput.addEventListener('input', function () {
+      renderComboOptionRows(entry);
+    });
+
+    clearBtn.addEventListener('click', function () {
+      searchInput.value = '';
+      renderComboOptionRows(entry);
+      if (typeof searchInput.focus === 'function') searchInput.focus();
+    });
+
+    searchInput.addEventListener('keydown', function (ev) {
+      const btns = entry.renderedButtons || [];
+      if (ev.key === 'Escape') {
+        closeAllSearchableCombos(null);
+        if (typeof trigger.focus === 'function') trigger.focus();
+        return;
+      }
+      if (ev.key === 'ArrowDown' && btns.length > 0) {
+        ev.preventDefault();
+        entry.highlightIndex = (entry.highlightIndex + 1) % btns.length;
+        btns.forEach(function (b, idx) { b.classList.toggle('is-highlighted', idx === entry.highlightIndex); });
+        if (typeof btns[entry.highlightIndex].scrollIntoView === 'function') {
+          btns[entry.highlightIndex].scrollIntoView({ block: 'nearest' });
+        }
+      } else if (ev.key === 'ArrowUp' && btns.length > 0) {
+        ev.preventDefault();
+        entry.highlightIndex = entry.highlightIndex <= 0 ? btns.length - 1 : entry.highlightIndex - 1;
+        btns.forEach(function (b, idx) { b.classList.toggle('is-highlighted', idx === entry.highlightIndex); });
+        if (typeof btns[entry.highlightIndex].scrollIntoView === 'function') {
+          btns[entry.highlightIndex].scrollIntoView({ block: 'nearest' });
+        }
+      } else if (ev.key === 'Enter' && btns.length > 0) {
+        ev.preventDefault();
+        const target = btns[entry.highlightIndex >= 0 ? entry.highlightIndex : 0];
+        if (target && typeof target.click === 'function') target.click();
+      }
+    });
+
+    if (!comboDocClickBound && typeof document !== 'undefined') {
+      comboDocClickBound = true;
+      document.addEventListener('click', function (ev) {
+        const inCombo = ev.target && ev.target.closest ? ev.target.closest('.ss-combo') : null;
+        if (!inCombo) {
+          closeAllSearchableCombos(null);
+        }
+      });
+    }
+
+    if (searchableCombos) searchableCombos.set(selectEl, entry);
+    enhancedSelectList.push(entry);
+    return entry;
+  }
+
+  function syncSearchableSelect(selectEl) {
+    if (!selectEl) return;
+    if (selectEl.getAttribute && !selectEl.getAttribute('data-searchable-select')) return;
+    const entry = (searchableCombos && searchableCombos.get(selectEl)) || enhanceSearchableSelect(selectEl);
+    if (!entry) return;
+    entry.triggerText.textContent = getSelectedOptionLabelFromSelect(selectEl) || '-- Chọn --';
+    if (entry.isOpen) {
+      renderComboOptionRows(entry);
+    }
+  }
+
+  function syncAllSearchableSelects() {
+    if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
+    const selects = document.querySelectorAll('select[data-searchable-select]');
+    Array.from(selects || []).forEach(function (sel) {
+      syncSearchableSelect(sel);
+    });
+  }
+
   function renderGradingPanel() {
     const classFilter = document.getElementById('teacher-class-filter');
     const classBadge = document.getElementById('teacher-class-count-badge');
@@ -873,6 +1203,12 @@
         }).join('');
       }
     }
+
+    syncSearchableSelect(classFilter);
+    syncSearchableSelect(sessionFilter);
+    syncSearchableSelect(studentSelect);
+    syncSearchableSelect(gradeSessionSelect);
+    syncSearchableSelect(assignmentSelect);
 
     const asg = findAssignment(ui.gradingAssignmentId) || cascadeAssignments[0] || filteredAssignments[0];
     const st = findStudent(ui.gradingStudentId) || filteredStudents[0];
@@ -9914,6 +10250,7 @@
     renderStudentAccountsTab();
     renderTeacherPracticeTab();
     renderContentAndExitLogsTab();
+    syncAllSearchableSelects();
   }
 
   if (typeof window.addEventListener === 'function') {

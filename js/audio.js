@@ -2027,6 +2027,7 @@ window.StudySnapAudio = (function () {
       }
 
       recordedChunks = [];
+      let recordedChunkBytes = 0;
       let mimeType = 'audio/webm';
       if (typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function') {
         if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
@@ -2052,6 +2053,7 @@ window.StudySnapAudio = (function () {
       activeRecorder.ondataavailable = function (e) {
         if (e.data && e.data.size > 0) {
           recordedChunks.push(e.data);
+          recordedChunkBytes += e.data.size;
         }
       };
 
@@ -2117,7 +2119,12 @@ window.StudySnapAudio = (function () {
       timerInterval = setInterval(function () {
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
         if (typeof onTick === 'function') {
-          onTick(formatDuration(elapsed));
+          const tracks = typeof stream.getAudioTracks === 'function' ? stream.getAudioTracks() : [];
+          const allMutedOrEnded = tracks.length > 0 && tracks.every(function (t) {
+            return Boolean(t.muted) || t.readyState === 'ended';
+          });
+          const micWarning = (elapsed >= 3 && recordedChunkBytes === 0) || (elapsed >= 2 && allMutedOrEnded);
+          onTick(micWarning ? formatDuration(elapsed) + ' (Chú ý: chưa thấy tín hiệu Micro)' : formatDuration(elapsed));
         }
       }, 500);
     } catch (err) {

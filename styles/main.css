@@ -638,23 +638,206 @@ select.form-control {
   min-width: 0;
 }
 
-.grade-asg-cascade {
-  display: grid;
-  grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
-  gap: 8px;
-  align-items: stretch;
+.grade-assignment-full-row {
+  margin-bottom: 14px;
 }
 
-.grade-session-select {
-  width: auto;
-  min-width: 112px;
-  font-weight: 800;
-  color: var(--color-primary-deep);
-}
-
-.grade-asg-select {
-  min-width: 0;
+/* Searchable Combobox Dropdown */
+.ss-combo {
+  position: relative;
   width: 100%;
+  min-width: 0;
+}
+
+.ss-combo.is-inline {
+  display: inline-block;
+  width: auto;
+  min-width: 175px;
+  max-width: 100%;
+}
+
+.ss-native-select-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+.ss-combo-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ss-combo-trigger-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ss-combo-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.ss-combo.is-open .ss-combo-chevron {
+  transform: rotate(180deg);
+  color: var(--pink);
+}
+
+.ss-combo.is-open .ss-combo-trigger {
+  background-color: var(--white);
+  border-color: var(--pink);
+  box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.16);
+}
+
+.ss-combo-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 45;
+  min-width: 250px;
+  max-width: min(480px, calc(100vw - 28px));
+  background-color: var(--white);
+  border: 1.5px solid var(--pink-md);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 8px;
+}
+
+.ss-combo-menu[hidden] {
+  display: none;
+}
+
+.ss-combo-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.ss-combo-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.ss-combo-search {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 30px 6px 32px;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink);
+  background-color: var(--color-surface-subtle);
+  border: 1.5px solid var(--color-border-soft);
+  border-radius: var(--radius-sm);
+}
+
+.ss-combo-search:focus {
+  outline: none;
+  background-color: var(--white);
+  border-color: var(--pink);
+}
+
+.ss-combo-clear {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.ss-combo-clear:hover {
+  background-color: var(--pink-lt);
+  color: var(--color-primary-text-contrast);
+}
+
+.ss-combo-clear[hidden] {
+  display: none;
+}
+
+.ss-combo-list {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ss-combo-group-label {
+  padding: 6px 8px 3px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--color-muted-foreground);
+}
+
+.ss-combo-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  line-height: 1.35;
+}
+
+.ss-combo-option-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ss-combo-option:hover,
+.ss-combo-option.is-highlighted {
+  background-color: var(--pink-lt);
+  color: var(--color-primary-text-contrast);
+}
+
+.ss-combo-option.is-selected {
+  background-color: var(--mint-lt);
+  color: var(--color-success-text);
+  font-weight: 800;
+}
+
+.ss-combo-empty {
+  padding: 12px 10px;
+  text-align: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
 }
 
 .grade-asg-meta-row {
@@ -5660,8 +5843,12 @@ body.ss-sync-locked .ss-api-status-chip {
 }
 
 @media (max-width: 640px) {
-  .grade-asg-cascade {
-    grid-template-columns: 1fr;
+  .ss-combo.is-inline {
+    width: 100%;
+  }
+
+  .ss-combo-menu {
+    max-width: calc(100vw - 24px);
   }
 
   .video-player-card {
