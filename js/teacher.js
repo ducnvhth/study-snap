@@ -2644,6 +2644,34 @@
           ]
         }
       };
+    } else if (type === 'short_answer') {
+      return {
+        section_id: 'sec_sa_' + timeId,
+        section_num: sectionNum,
+        type: 'short_answer',
+        title: 'Phần ' + sectionNum + ': Trả lời ngắn',
+        description: 'Nghe audio/video hoặc xem hình và nhập đáp án ngắn vào từng câu.',
+        max_score: 1,
+        data: {
+          image_url: '',
+          youtube_id: '',
+          youtube_url: '',
+          audio_label: '',
+          audio_url: '',
+          audio_duration: '00:45',
+          items: [
+            {
+              id: 'SA_' + timeId + '_1',
+              prompt: '1. ',
+              hint: '',
+              mode: 'manual',
+              accepted: [],
+              grading_note: '',
+              explanation: ''
+            }
+          ]
+        }
+      };
     }
   }
 
@@ -2834,6 +2862,7 @@
 
         sec.data = { left: left, right: right, answer: answer };
       } else if (sec.type === 'multiple_choice') {
+        const prevData = sec.data || {};
         const items = [];
         const qCards = card.querySelectorAll('[data-mc-qcard]');
         qCards.forEach(function (qCard, qIdx) {
@@ -2858,12 +2887,27 @@
             id: itemId,
             prompt: prompt.trim(),
             speakWord: speak.trim(),
+            image_url: prevData.items && prevData.items[qIdx] && prevData.items[qIdx].image_url ? prevData.items[qIdx].image_url : undefined,
             options: options.length > 0 ? options : ['', '', '', ''],
             correctIndex: correctIdx,
             explanation: exp.trim()
           });
         });
-        sec.data = { items: items };
+        const mcImgEl = card.querySelector('[data-sec-img-url]');
+        const mcYtEl = card.querySelector('[data-sec-yt-url]');
+        const prevMcImg = (sec.data && sec.data.image_url) || '';
+        const prevMcYt = (sec.data && (sec.data.youtube_id || sec.data.youtube_url)) || '';
+        const rawMcYt = mcYtEl ? mcYtEl.value.trim() : prevMcYt;
+        const mcYtId = window.StudySnapGoogleForm ? window.StudySnapGoogleForm.extractYouTubeId(rawMcYt) : '';
+        sec.data = {
+          items: items
+        };
+        const resolvedMcImg = mcImgEl ? mcImgEl.value.trim() : prevMcImg;
+        if (resolvedMcImg) sec.data.image_url = resolvedMcImg;
+        if (mcYtId) {
+          sec.data.youtube_id = mcYtId;
+          sec.data.youtube_url = 'https://www.youtube.com/watch?v=' + mcYtId;
+        }
       } else if (sec.type === 'fill_blank_wordbank') {
         const wbInput = card.querySelector('[data-fb-wordbank]');
         const rawWb = wbInput ? wbInput.value : '';
@@ -3013,6 +3057,12 @@
           });
         });
 
+        const lsImgEl = card.querySelector('[data-sec-img-url]');
+        const lsYtEl = card.querySelector('[data-sec-yt-url]');
+        const resolvedLsImg = lsImgEl ? lsImgEl.value.trim() : String(prevData.image_url || '');
+        const rawLsYt = lsYtEl ? lsYtEl.value.trim() : String(prevData.youtube_id || prevData.youtube_url || '');
+        const resolvedLsYtId = window.StudySnapGoogleForm ? window.StudySnapGoogleForm.extractYouTubeId(rawLsYt) : '';
+
         sec.data = {
           listening_mode: listeningMode,
           context_label: ctxLabel.trim(),
@@ -3021,6 +3071,61 @@
           audio_label: secAudio.audio_label,
           audio_url: secAudio.audio_url,
           audio_duration: secAudio.audio_duration,
+          items: items
+        };
+        if (resolvedLsImg) sec.data.image_url = resolvedLsImg;
+        if (resolvedLsYtId) {
+          sec.data.youtube_id = resolvedLsYtId;
+          sec.data.youtube_url = 'https://www.youtube.com/watch?v=' + resolvedLsYtId;
+        }
+      } else if (sec.type === 'short_answer') {
+        const prevData = sec.data || {};
+        const customTitleEl = card.querySelector('[data-sa-sec-title]');
+        const customDescEl = card.querySelector('[data-sa-sec-desc]');
+        if (customTitleEl && customTitleEl.value.trim()) {
+          sec.title = customTitleEl.value.trim();
+          if (titleEl) titleEl.value = sec.title;
+        }
+        if (customDescEl) {
+          sec.description = customDescEl.value.trim();
+          if (descEl) descEl.value = sec.description;
+        }
+
+        const imgUrlEl = card.querySelector('[data-sec-img-url]');
+        const ytUrlEl = card.querySelector('[data-sec-yt-url]');
+        const imgVal = imgUrlEl ? imgUrlEl.value.trim() : String(prevData.image_url || '');
+        const rawYt = ytUrlEl ? ytUrlEl.value.trim() : String(prevData.youtube_id || prevData.youtube_url || '');
+        const ytId = window.StudySnapGoogleForm ? window.StudySnapGoogleForm.extractYouTubeId(rawYt) : '';
+
+        const items = [];
+        card.querySelectorAll('[data-sa-qcard]').forEach(function (qCard, qIdx) {
+          const itemId = qCard.getAttribute('data-sa-qcard') || ('SA_' + (qIdx + 1));
+          const prompt = (qCard.querySelector('[data-sa-prompt]') || {}).value || '';
+          const hint = (qCard.querySelector('[data-sa-hint]') || {}).value || '';
+          const accRaw = (qCard.querySelector('[data-sa-acc]') || {}).value || '';
+          const exp = (qCard.querySelector('[data-sa-exp]') || {}).value || '';
+          const accepted = accRaw
+            .split(/[\/;]/)
+            .map(function (s) { return s.trim(); })
+            .filter(Boolean);
+          items.push({
+            id: itemId,
+            prompt: prompt.trim(),
+            hint: hint.trim(),
+            mode: accepted.length > 0 ? 'exact' : 'manual',
+            accepted: accepted,
+            grading_note: '',
+            explanation: exp.trim()
+          });
+        });
+
+        sec.data = {
+          image_url: imgVal,
+          youtube_id: ytId,
+          youtube_url: ytId ? ('https://www.youtube.com/watch?v=' + ytId) : '',
+          audio_label: String(prevData.audio_label || ''),
+          audio_url: String(prevData.audio_url || ''),
+          audio_duration: String(prevData.audio_duration || '00:45'),
           items: items
         };
       }
@@ -3208,6 +3313,7 @@
           '<p style="margin:0 auto 18px;font-size:0.875rem;color:var(--color-muted-foreground);">Bạn có thể tạo bài tập mới từ đầu, nhập nhanh từ file Excel, hoặc nạp bộ câu hỏi mẫu chuẩn HSK.</p>' +
           '<div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">' +
           '<button type="button" class="btn btn-primary" id="btn-empty-new-practice">+ Tạo bài tập mới</button>' +
+          '<button type="button" class="btn btn-outline-primary" id="btn-empty-import-gform">Nhập Google Form</button>' +
           '<button type="button" class="btn btn-outline-primary" id="btn-empty-import-practice">Nhập từ Excel</button>' +
           '<button type="button" class="btn btn-ghost" id="btn-empty-fill-template">Nạp bộ câu hỏi mẫu HSK</button>' +
           '</div></div>';
@@ -3223,6 +3329,13 @@
             switchPracticeSubView('builder');
             renderTeacherPracticeTab();
             showToast('Đã tạo bài luyện tập cuối buổi mới!');
+          });
+        }
+        const btnEmptyImportGform = document.getElementById('btn-empty-import-gform');
+        if (btnEmptyImportGform) {
+          btnEmptyImportGform.addEventListener('click', function () {
+            const openGfBtn = document.getElementById('btn-open-import-gform-modal');
+            if (openGfBtn) openGfBtn.click();
           });
         }
         const btnEmptyImport = document.getElementById('btn-empty-import-practice');
@@ -3363,7 +3476,8 @@
       fill_blank_wordbank: 'Điền từ',
       error_correction: 'Sửa câu sai',
       translation: 'Dịch câu',
-      listening_mc: 'Nghe hiểu'
+      listening_mc: 'Nghe hiểu',
+      short_answer: 'Trả lời ngắn'
     };
 
     listEl.innerHTML = ex.sections
@@ -3416,6 +3530,50 @@
       .join('');
 
     bindBuilderInteractiveEvents(ex);
+  }
+
+  function renderBuilderSectionMediaHtml(sec, alwaysShowControls) {
+    const d = (sec && sec.data) || {};
+    const rawImg = String(d.image_url || '').trim();
+    const rawYt = String(d.youtube_url || d.youtube_id || '').trim();
+    const ytId = window.StudySnapGoogleForm ? window.StudySnapGoogleForm.extractYouTubeId(rawYt) : '';
+    const hasMedia = Boolean(rawImg || ytId);
+    if (!alwaysShowControls && !hasMedia) return '';
+
+    const displayImg = rawImg && window.StudySnapStore && typeof window.StudySnapStore.resolveMediaDisplayUrl === 'function'
+      ? window.StudySnapStore.resolveMediaDisplayUrl(rawImg, 'image/jpeg')
+      : rawImg;
+
+    return (
+      '<div class="listening-builder-media-box" style="margin-bottom:14px;">' +
+        '<div class="form-row-2">' +
+          '<div>' +
+            '<label class="form-label" style="font-size:0.8125rem;">Ảnh minh họa đầu phần (tùy chọn — hỗ trợ tải ảnh hoặc link):</label>' +
+            '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">' +
+              '<input type="text" class="form-control" style="flex:1 1 180px;" data-sec-img-url value="' + escapeHtml(rawImg) + '" placeholder="Tự điền khi tải ảnh hoặc nhập URL ảnh...">' +
+              '<label class="btn btn-outline btn-sm" style="cursor:pointer;">' +
+                '<input type="file" accept="image/*" class="file-input-hidden" data-sec-img-upload="' + escapeHtml(sec.section_id) + '">' +
+                '<span>Tải ảnh</span>' +
+              '</label>' +
+              (rawImg ? '<button type="button" class="btn-danger-outline" data-sec-img-clear="' + escapeHtml(sec.section_id) + '">Xóa ảnh</button>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div>' +
+            '<label class="form-label" style="font-size:0.8125rem;">Link Video YouTube bài nghe (tùy chọn):</label>' +
+            '<input type="text" class="form-control" data-sec-yt-url value="' + escapeHtml(rawYt) + '" placeholder="Ví dụ: https://www.youtube.com/watch?v=...">' +
+          '</div>' +
+        '</div>' +
+        (displayImg
+          ? '<div class="practice-prompt-image-box" style="margin-top:10px;"><img src="' + escapeHtml(displayImg) + '" alt="Xem trước ảnh phần ' + escapeHtml(sec.section_num || '') + '" style="max-height:220px;"></div>'
+          : '') +
+        (ytId
+          ? '<div style="margin-top:8px;font-size:0.8125rem;color:var(--color-primary-deep);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">' +
+              '<span>Đã gắn video YouTube ID: <code>' + escapeHtml(ytId) + '</code></span>' +
+              '<a href="https://www.youtube.com/watch?v=' + escapeHtml(ytId) + '" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">Mở thử YouTube</a>' +
+            '</div>'
+          : '') +
+      '</div>'
+    );
   }
 
   function renderTypeSpecificEditorHtml(sec) {
@@ -3490,6 +3648,7 @@
       );
     } else if (sec.type === 'multiple_choice') {
       const items = (sec.data && sec.data.items) || [];
+      const mcMediaHtml = renderBuilderSectionMediaHtml(sec, false);
       const questionsHtml = items
         .map(function (item, idx) {
           const opts = item.options || ['', '', '', ''];
@@ -3603,6 +3762,7 @@
 
       return (
         '<div>' +
+        mcMediaHtml +
         '<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:12px;">' +
         questionsHtml +
         '</div>' +
@@ -4096,6 +4256,7 @@
         '" placeholder="' + (listeningMode === 'per_question' ? 'Ví dụ: Bấm nghe từng câu và chọn đáp án đúng.' : 'Ví dụ: Nghe đoạn hội thoại 2 lần và chọn đáp án đúng.') + '">' +
         '</div>' +
         '</div>' +
+        (renderBuilderSectionMediaHtml(sec, false)) +
         (listeningMode === 'shared'
           ? renderListeningAudioEditorHtml({
               targetKey: sec.section_id,
@@ -4115,6 +4276,92 @@
         escapeHtml(sec.section_id) +
         '">' +
         '<span>+ Thêm câu hỏi nghe mới</span>' +
+        '</button>' +
+        '</div>'
+      );
+    } else if (sec.type === 'short_answer') {
+      const items = (sec.data && sec.data.items) || [];
+      const questionsHtml = items
+        .map(function (item, idx) {
+          const acceptedStr = Array.isArray(item.accepted) ? item.accepted.join(' / ') : item.accepted || '';
+          const isAuto = Array.isArray(item.accepted) && item.accepted.length > 0 && item.mode !== 'manual';
+          return (
+            '<div class="gform-question-card" data-sa-qcard="' +
+            escapeHtml(item.id) +
+            '">' +
+            '<div class="gform-question-header">' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+            '<strong style="color:var(--color-primary-deep);">Câu ' + (idx + 1) + '</strong>' +
+            '<span class="status-badge ' + (isAuto ? 'status-graded' : 'status-submitted') + '" style="font-size:0.75rem;">' +
+            (isAuto ? 'Tự động chấm' : 'Chờ cô chấm') +
+            '</span>' +
+            '</div>' +
+            '<button type="button" class="btn-danger-outline" data-delete-sa-q="' +
+            escapeHtml(sec.section_id + ':' + item.id) +
+            '">✕ Xóa câu này</button>' +
+            '</div>' +
+            '<div class="form-row-2">' +
+            '<div>' +
+            '<label class="form-label" style="font-size:0.8125rem;">Đề bài / Chỗ trống (ví dụ: 1. ____ āi):</label>' +
+            '<input type="text" class="form-control" data-sa-prompt value="' +
+            escapeHtml(item.prompt || '') +
+            '" placeholder="Ví dụ: 1. ____ āi">' +
+            '</div>' +
+            '<div>' +
+            '<label class="form-label" style="font-size:0.8125rem;">Gợi ý ngắn (tùy chọn):</label>' +
+            '<input type="text" class="form-control" data-sa-hint value="' +
+            escapeHtml(item.hint || '') +
+            '" placeholder="Ví dụ: Ví dụ: B-A-C-E-D">' +
+            '</div>' +
+            '</div>' +
+            '<div class="form-row-2">' +
+            '<div>' +
+            '<label class="form-label" style="font-size:0.8125rem;">Đáp án chấp nhận (ngăn cách bởi /, bỏ trống = chấm tay):</label>' +
+            '<input type="text" class="form-control" data-sa-acc value="' +
+            escapeHtml(acceptedStr) +
+            '" placeholder="Ví dụ: b hoặc D-C-A-E-B">' +
+            '</div>' +
+            '<div>' +
+            '<label class="form-label" style="font-size:0.8125rem;">Giải thích đáp án (tùy chọn):</label>' +
+            '<input type="text" class="form-control" data-sa-exp value="' +
+            escapeHtml(item.explanation || '') +
+            '" placeholder="Hiện cho học sinh xem sau khi nộp...">' +
+            '</div>' +
+            '</div>' +
+            '</div>'
+          );
+        })
+        .join('');
+
+      return (
+        '<div>' +
+        '<div class="form-row-2" style="margin-bottom:12px;">' +
+          '<div>' +
+            '<label class="form-label" style="font-size:0.8125rem;">Tên phần câu hỏi:</label>' +
+            '<input type="text" class="form-control" data-sa-sec-title value="' + escapeHtml(sec.title || '') + '" placeholder="Ví dụ: II. 听录音，写出听到的声母">' +
+          '</div>' +
+          '<div>' +
+            '<label class="form-label" style="font-size:0.8125rem;">Hướng dẫn làm bài cho phần này:</label>' +
+            '<input type="text" class="form-control" data-sa-sec-desc value="' + escapeHtml(sec.description || '') + '" placeholder="Ví dụ: Chỉ cần viết thanh mẫu, không viết hoa...">' +
+          '</div>' +
+        '</div>' +
+        renderBuilderSectionMediaHtml(sec, true) +
+        (items.length > 1
+          ? '<div class="bulk-answer-bar">' +
+              '<label class="form-label" style="font-size:0.8125rem;margin:0;">Điền nhanh đáp án cho cả ' + items.length + ' câu trong phần (để bật tự chấm ngay):</label>' +
+              '<div class="bulk-answer-row">' +
+                '<input type="text" class="form-control" data-sa-bulk-input="' + escapeHtml(sec.section_id) + '" placeholder="Dán ' + items.length + ' đáp án cách nhau bởi dấu phẩy hoặc dấu cách (ví dụ: b, p, m, f...)">' +
+                '<button type="button" class="btn btn-secondary btn-sm" data-sa-bulk-apply="' + escapeHtml(sec.section_id) + '">Áp dụng hàng loạt</button>' +
+              '</div>' +
+            '</div>'
+          : '') +
+        '<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:12px;">' +
+        questionsHtml +
+        '</div>' +
+        '<button type="button" class="btn btn-outline btn-sm" data-add-sa-q="' +
+        escapeHtml(sec.section_id) +
+        '">' +
+        '<span>+ Thêm câu trả lời ngắn</span>' +
         '</button>' +
         '</div>'
       );
@@ -4786,6 +5033,128 @@
         showToast('Đã gỡ file âm thanh (hãy bấm "Lưu đề nhanh" để cập nhật lên máy chủ).');
       });
     });
+
+    // 8. Short Answer & Section Media Events (Add / Delete / Bulk Answer / Image Upload)
+    document.querySelectorAll('[data-add-sa-q]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        collectExerciseFromDom();
+        const secId = btn.getAttribute('data-add-sa-q');
+        const sec = (ex.sections || []).find(function (s) {
+          return s.section_id === secId;
+        });
+        if (!sec || !sec.data) return;
+        if (!Array.isArray(sec.data.items)) sec.data.items = [];
+        const nextIdx = sec.data.items.length + 1;
+        sec.data.items.push({
+          id: 'SA_' + Date.now() + '_' + nextIdx,
+          prompt: nextIdx + '. ',
+          hint: '',
+          mode: 'manual',
+          accepted: [],
+          grading_note: '',
+          explanation: ''
+        });
+        sec.max_score = sec.data.items.length;
+        savePracticeDraftLocally(ex);
+        renderTeacherPracticeTab();
+      });
+    });
+
+    document.querySelectorAll('[data-delete-sa-q]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        collectExerciseFromDom();
+        const parts = String(btn.getAttribute('data-delete-sa-q') || '').split(':');
+        const secId = parts[0];
+        const itemId = parts[1];
+        const sec = (ex.sections || []).find(function (s) {
+          return s.section_id === secId;
+        });
+        if (!sec || !sec.data || !Array.isArray(sec.data.items)) return;
+        sec.data.items = sec.data.items.filter(function (it) {
+          return it.id !== itemId;
+        });
+        sec.max_score = Math.max(1, sec.data.items.length);
+        savePracticeDraftLocally(ex);
+        renderTeacherPracticeTab();
+      });
+    });
+
+    document.querySelectorAll('[data-sa-bulk-apply]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const secId = btn.getAttribute('data-sa-bulk-apply');
+        const inp = document.querySelector('[data-sa-bulk-input="' + secId + '"]');
+        const raw = inp ? String(inp.value || '').trim() : '';
+        if (!raw) {
+          showToast('Vui lòng nhập danh sách đáp án (cách nhau bằng dấu phẩy hoặc xuống dòng)!');
+          if (inp) inp.focus();
+          return;
+        }
+
+        collectExerciseFromDom();
+        const sec = (ex.sections || []).find(function (s) {
+          return s.section_id === secId;
+        });
+        if (!sec || !sec.data || !Array.isArray(sec.data.items)) return;
+
+        let parts = raw.split(/[,;\r\n]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+        if (parts.length === 1) {
+          const spaceTokens = raw.split(/\s+/).map(function (s) { return s.trim(); }).filter(Boolean);
+          if (spaceTokens.length > 1) parts = spaceTokens;
+        }
+        parts = parts.map(function (token) {
+          return token.replace(/^\d{1,2}\.\s*/, '').trim();
+        }).filter(Boolean);
+
+        let updatedCount = 0;
+        sec.data.items.forEach(function (item, idx) {
+          if (parts[idx] !== undefined && parts[idx] !== '') {
+            item.accepted = parts[idx].split(/[\/]/).map(function (x) { return x.trim(); }).filter(Boolean);
+            item.mode = item.accepted.length > 0 ? 'exact' : 'manual';
+            updatedCount++;
+          }
+        });
+
+        savePracticeDraftLocally(ex);
+        renderTeacherPracticeTab();
+        showToast('Đã điền đáp án tự chấm cho ' + updatedCount + '/' + sec.data.items.length + ' câu!');
+      });
+    });
+
+    document.querySelectorAll('[data-sec-img-upload]').forEach(function (fileInp) {
+      fileInp.addEventListener('change', function (ev) {
+        const file = ev.target.files && ev.target.files[0];
+        const secId = fileInp.getAttribute('data-sec-img-upload');
+        if (!file || !secId) return;
+        if (file.size > 4 * 1024 * 1024) {
+          showToast('Ảnh vượt quá 4 MB. Vui lòng chọn ảnh nhẹ hơn.');
+          return;
+        }
+        collectExerciseFromDom();
+        const sec = (ex.sections || []).find(function (s) { return s.section_id === secId; });
+        if (!sec || !sec.data) return;
+        const reader = new FileReader();
+        reader.onload = function () {
+          sec.data.image_url = String(reader.result || '');
+          savePracticeDraftLocally(ex);
+          renderTeacherPracticeTab();
+          showToast('Đã gắn ảnh vào phần câu hỏi (bấm "Lưu đề nhanh" để đồng bộ).');
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    document.querySelectorAll('[data-sec-img-clear]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const secId = btn.getAttribute('data-sec-img-clear');
+        collectExerciseFromDom();
+        const sec = (ex.sections || []).find(function (s) { return s.section_id === secId; });
+        if (!sec || !sec.data) return;
+        sec.data.image_url = '';
+        savePracticeDraftLocally(ex);
+        renderTeacherPracticeTab();
+        showToast('Đã xóa ảnh khỏi phần câu hỏi.');
+      });
+    });
   }
 
   function findPracticeSubmission(exerciseId, studentId) {
@@ -4803,9 +5172,11 @@
     if (!ex || !sub) return false;
     let pending = false;
     (ex.sections || []).forEach(function (sec) {
-      if (sec.type === 'translation') {
+      if (sec.type === 'translation' || sec.type === 'short_answer') {
         ((sec.data && sec.data.items) || []).forEach(function (item) {
-          if (item.mode === 'manual') {
+          const hasKey = Array.isArray(item && item.accepted) && item.accepted.length > 0;
+          const isManualItem = Boolean(item && (item.mode === 'manual' || (sec.type === 'short_answer' && !hasKey)));
+          if (isManualItem) {
             const mg = sub.manual_grades && sub.manual_grades[item.id];
             if (!mg) pending = true;
           }
@@ -5476,9 +5847,10 @@
   }
 
   function hasManualItemsInSection(sec) {
-    if (!sec || sec.type !== 'translation') return false;
+    if (!sec || (sec.type !== 'translation' && sec.type !== 'short_answer')) return false;
     return ((sec.data && sec.data.items) || []).some(function (it) {
-      return it && it.mode === 'manual';
+      const hasKey = Array.isArray(it && it.accepted) && it.accepted.length > 0;
+      return Boolean(it && (it.mode === 'manual' || (sec.type === 'short_answer' && !hasKey)));
     });
   }
 
@@ -5649,6 +6021,61 @@
             '<div style="font-size:0.875rem;margin-top:4px;color:var(--color-foreground);">' +
               'HS dịch: <strong>' + escapeHtml(userVal || 'Chưa nhập') + '</strong>' +
               (!isCorrect && expectedHint ? (' • Đáp án gợi ý: <strong style="color:var(--color-success-text);">' + escapeHtml(expectedHint) + '</strong>') : '') +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+    } else if (sec.type === 'short_answer') {
+      const items = (sec.data && sec.data.items) || [];
+      itemsHtml = items.map(function (item, idx) {
+        const userVal = studentAns[item.id] || '';
+        const hasKey = Array.isArray(item.accepted) && item.accepted.length > 0;
+        const isManual = item.mode === 'manual' || !hasKey;
+        if (isManual) {
+          const mg = manualGrades[item.id] || {};
+          const currentScore = mg.score !== undefined ? mg.score : 1;
+          const currentComment = mg.comment || '';
+          return (
+            '<div class="trans-item-card is-pending" style="padding:12px;border-radius:var(--radius-md);margin-bottom:8px;">' +
+              '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;">' +
+                '<div style="font-weight:700;color:var(--color-foreground);font-size:0.9375rem;">' +
+                  'Câu ' + (idx + 1) + ': <span style="color:var(--color-primary-deep);">' + escapeHtml(item.prompt || '') + '</span>' +
+                '</div>' +
+                '<span class="status-badge status-submitted" style="font-size:0.75rem;">Chấm thủ công</span>' +
+              '</div>' +
+              '<div style="background:var(--white);padding:8px 10px;border-radius:var(--radius-sm);margin-bottom:10px;border:1px solid var(--color-border-soft);">' +
+                '<div style="font-size:0.75rem;color:var(--color-muted-foreground);font-weight:700;">Câu trả lời của học sinh:</div>' +
+                '<div style="font-size:0.9375rem;font-weight:700;color:var(--color-foreground);margin-top:2px;">' +
+                  (userVal ? escapeHtml(userVal) : '<em style="color:var(--color-destructive);">Chưa nhập câu trả lời</em>') +
+                '</div>' +
+              '</div>' +
+              '<div class="form-row-2">' +
+                '<div class="form-group" style="margin-bottom:0;">' +
+                  '<label class="form-label" style="font-size:0.8125rem;" for="manual-score-' + escapeHtml(item.id) + '">Điểm câu này (0 đến 1):</label>' +
+                  '<input type="number" id="manual-score-' + escapeHtml(item.id) + '" class="form-control tabular-nums" min="0" max="1" step="0.5" value="' + currentScore + '" data-manual-item-score="' + escapeHtml(item.id) + '" required>' +
+                '</div>' +
+                '<div class="form-group" style="margin-bottom:0;">' +
+                  '<label class="form-label" style="font-size:0.8125rem;" for="manual-comment-' + escapeHtml(item.id) + '">Nhận xét cho học sinh:</label>' +
+                  '<input type="text" id="manual-comment-' + escapeHtml(item.id) + '" class="form-control" placeholder="Ví dụ: Đọc chuẩn, viết đúng thanh mẫu..." value="' + escapeHtml(currentComment) + '" data-manual-item-comment="' + escapeHtml(item.id) + '">' +
+                '</div>' +
+              '</div>' +
+            '</div>'
+          );
+        }
+
+        const isCorrect = window.StudySnapStore.isAnswerMatch(userVal, item.accepted || []);
+        const expectedHint = (item.accepted || []).slice(0, 3).join(' / ');
+        return (
+          '<div class="trans-item-card ' + (isCorrect ? 'is-correct' : 'is-wrong') + '" style="padding:10px 12px;border-radius:var(--radius-md);margin-bottom:8px;">' +
+            '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">' +
+              '<div style="font-weight:700;color:var(--ink);">Câu ' + (idx + 1) + ': ' + escapeHtml(item.prompt || '') + '</div>' +
+              '<span class="status-badge ' + (isCorrect ? 'status-graded' : 'status-missing') + '">' +
+                (isCorrect ? ICONS.check + '<span>Đúng (+1đ)</span>' : ICONS.alert + '<span>Sai</span>') +
+              '</span>' +
+            '</div>' +
+            '<div style="font-size:0.875rem;margin-top:4px;color:var(--color-foreground);">' +
+              'HS trả lời: <strong>' + escapeHtml(userVal || 'Chưa nhập') + '</strong>' +
+              (!isCorrect && expectedHint ? (' • Đáp án chuẩn: <strong style="color:var(--color-success-text);">' + escapeHtml(expectedHint) + '</strong>') : '') +
             '</div>' +
           '</div>'
         );
@@ -6674,30 +7101,28 @@
           nextSectionScores[secId] = safeVal;
         });
 
-        // Recalculate translation section score if it contains manual items:
-        let autoTransScore = 0;
-        let transSecId = null;
-        let hasManualTrans = false;
+        // Recalculate each section containing manual items (supports multiple translation / short_answer sections):
         ((ex && ex.sections) || []).forEach(function (sec) {
-          if (sec.type === 'translation' && hasManualItemsInSection(sec)) {
-            transSecId = sec.section_id;
-            hasManualTrans = true;
+          if ((sec.type === 'translation' || sec.type === 'short_answer') && hasManualItemsInSection(sec)) {
+            let secSum = 0;
             ((sec.data && sec.data.items) || []).forEach(function (item) {
-              if (item.mode !== 'manual') {
+              const hasKey = Array.isArray(item && item.accepted) && item.accepted.length > 0;
+              const isManualItem = Boolean(item && (item.mode === 'manual' || (sec.type === 'short_answer' && !hasKey)));
+              if (isManualItem) {
+                const mg = manualGrades[item.id];
+                secSum += mg ? Number(mg.score || 0) : 0;
+              } else {
                 const userVal =
                   sub.answers && sub.answers[sec.section_id] && sub.answers[sec.section_id][item.id];
                 const ok = item.mode === 'keywords'
                   ? window.StudySnapStore.isKeywordsMatch(userVal, item.required_keywords || [])
                   : window.StudySnapStore.isAnswerMatch(userVal, item.accepted || []);
-                if (ok) autoTransScore += 1;
+                if (ok) secSum += 1;
               }
             });
+            nextSectionScores[sec.section_id] = Math.round(secSum * 10) / 10;
           }
         });
-
-        if (transSecId && hasManualTrans) {
-          nextSectionScores[transSecId] = Math.round((autoTransScore + manualSum) * 10) / 10;
-        }
         sub.section_scores = nextSectionScores;
 
         // Recalculate total score
@@ -9091,7 +9516,8 @@
       fill_blank_wordbank: { label: 'Điền từ', cls: 'status-purple' },
       error_correction: { label: 'Sửa câu sai', cls: 'status-peach' },
       translation: { label: 'Dịch câu', cls: 'status-sky' },
-      listening_mc: { label: 'Nghe hiểu', cls: 'status-yellow' }
+      listening_mc: { label: 'Nghe hiểu', cls: 'status-yellow' },
+      short_answer: { label: 'Trả lời ngắn', cls: 'status-teal' }
     };
 
     let parsedPracticeResult = { sections: [], warnings: [], totalItems: 0, totalScore: 0 };
@@ -9535,6 +9961,15 @@
         const modeTag = d.listening_mode === 'per_question' ? '(Mỗi câu 1 file nghe) ' : '(1 file nghe) ';
         return modeTag + ctx + (first ? first.prompt : '');
       }
+      if (sec.type === 'short_answer') {
+        const first = (d.items || [])[0];
+        const mediaTags = [];
+        if (d.image_url) mediaTags.push('Có ảnh');
+        if (d.youtube_id || d.youtube_url) mediaTags.push('YouTube');
+        if (d.audio_url) mediaTags.push('Audio');
+        const prefix = mediaTags.length > 0 ? '[' + mediaTags.join(' + ') + '] ' : '';
+        return prefix + (first ? first.prompt : ((d.items || []).length + ' câu điền ngắn'));
+      }
       return '';
     }
 
@@ -9768,67 +10203,97 @@
       });
     }
 
+    async function applyImportedSectionsToPractice(importedSections, opts) {
+      const mode = (opts && opts.mode) || 'append';
+      const firstNewId = importedSections[0] ? importedSections[0].section_id : null;
+      let targetEx = null;
+
+      if (mode === 'new' || !getActivePracticeExercise()) {
+        const nextNum = (state.practiceExercises || []).length + 1;
+        const title = (opts && opts.title && opts.title.trim()) || ((opts && opts.defaultTitlePrefix ? opts.defaultTitlePrefix : 'Bài luyện tập mới #') + nextNum);
+        const tag = (opts && opts.tag && opts.tag.trim()) || ('Bài ' + nextNum);
+        const totalScore = importedSections.reduce(function (sum, s) { return sum + Number(s.max_score || 0); }, 0);
+        targetEx = {
+          exercise_id: 'EX_' + Date.now(),
+          title: title,
+          lesson_tag: tag,
+          total_score: totalScore,
+          thresholds: {
+            good: Math.max(1, Math.round(totalScore * 0.7)),
+            very_good: Math.max(1, Math.round(totalScore * 0.85))
+          },
+          sections: importedSections
+        };
+        if (!Array.isArray(state.practiceExercises)) state.practiceExercises = [];
+        ui.selectedPracticeExId = targetEx.exercise_id;
+      } else {
+        collectExerciseFromDom();
+        targetEx = getActivePracticeExercise();
+        if (mode === 'replace') {
+          targetEx.sections = importedSections;
+        } else {
+          if (!Array.isArray(targetEx.sections)) targetEx.sections = [];
+          targetEx.sections = targetEx.sections.concat(importedSections);
+        }
+        targetEx.sections.forEach(function (sec, idx) {
+          sec.section_num = idx + 1;
+        });
+        targetEx.total_score = targetEx.sections.reduce(function (sum, s) {
+          return sum + Number(s.max_score || 0);
+        }, 0);
+        if (!targetEx.thresholds) targetEx.thresholds = { good: 1, very_good: 1 };
+        targetEx.thresholds.good = Math.max(1, Math.round(targetEx.total_score * 0.7));
+        targetEx.thresholds.very_good = Math.max(1, Math.round(targetEx.total_score * 0.85));
+      }
+
+      const saveRes = await runWithLoading(
+        (opts && opts.triggerBtn) || null,
+        'Đang nhập vào đề...',
+        async function () {
+          return await window.StudySnapStore.savePracticeExercise(state, targetEx);
+        },
+        {
+          title: (opts && opts.loadingTitle) || 'Đang lưu bài luyện tập mới...',
+          desc: (opts && opts.loadingDesc) || ('Hệ thống đang lưu ' + importedSections.length + ' phần lên máy chủ.')
+        }
+      );
+      if (saveRes && saveRes.ok === false) {
+        alert(saveRes.error || 'Không thể lưu đề vừa nhập lên máy chủ. Vui lòng thử lại.');
+        return null;
+      }
+      clearPracticeExerciseDirty(targetEx.exercise_id);
+      switchPracticeSubView('builder');
+      renderAll();
+
+      if (firstNewId) {
+        setTimeout(function () {
+          const newCard = document.querySelector('[data-sec-card="' + firstNewId + '"]');
+          if (newCard) {
+            newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
+      }
+      return targetEx;
+    }
+
     if (btnConfirmPracticeImport) {
       btnConfirmPracticeImport.addEventListener('click', async function () {
         if (!parsedPracticeResult || !parsedPracticeResult.sections || parsedPracticeResult.sections.length === 0) return;
 
         const mode = (practiceImportModeSel && practiceImportModeSel.value) || 'append';
         const importedSections = JSON.parse(JSON.stringify(parsedPracticeResult.sections));
-        let targetEx = null;
-        const firstNewId = importedSections[0] ? importedSections[0].section_id : null;
-
-        if (mode === 'new' || !getActivePracticeExercise()) {
-          const nextNum = (state.practiceExercises || []).length + 1;
-          const title = (practiceNewTitleInput && practiceNewTitleInput.value.trim()) || ('Bài luyện tập nhập Excel #' + nextNum);
-          const tag = (practiceNewTagInput && practiceNewTagInput.value.trim()) || ('Bài ' + nextNum);
-          const totalScore = importedSections.reduce(function (sum, s) { return sum + Number(s.max_score || 0); }, 0);
-          targetEx = {
-            exercise_id: 'EX_' + Date.now(),
-            title: title,
-            lesson_tag: tag,
-            total_score: totalScore,
-            thresholds: {
-              good: Math.max(1, Math.round(totalScore * 0.7)),
-              very_good: Math.max(1, Math.round(totalScore * 0.85))
-            },
-            sections: importedSections
-          };
-          if (!Array.isArray(state.practiceExercises)) state.practiceExercises = [];
-          ui.selectedPracticeExId = targetEx.exercise_id;
-        } else {
-          collectExerciseFromDom();
-          targetEx = getActivePracticeExercise();
-          if (mode === 'replace') {
-            targetEx.sections = importedSections;
-          } else {
-            if (!Array.isArray(targetEx.sections)) targetEx.sections = [];
-            targetEx.sections = targetEx.sections.concat(importedSections);
-          }
-          targetEx.sections.forEach(function (sec, idx) {
-            sec.section_num = idx + 1;
-          });
-          targetEx.total_score = targetEx.sections.reduce(function (sum, s) {
-            return sum + Number(s.max_score || 0);
-          }, 0);
-          if (!targetEx.thresholds) targetEx.thresholds = { good: 1, very_good: 1 };
-          targetEx.thresholds.good = Math.max(1, Math.round(targetEx.total_score * 0.7));
-          targetEx.thresholds.very_good = Math.max(1, Math.round(targetEx.total_score * 0.85));
-        }
-
-        await runWithLoading(
-          btnConfirmPracticeImport,
-          'Đang nhập vào đề...',
-          async function () {
-            await window.StudySnapStore.savePracticeExercise(state, targetEx);
-          },
-          {
-            title: 'Đang nhập đề luyện tập từ Excel...',
-            desc: 'Hệ thống đang lưu ' + importedSections.length + ' phần (' + parsedPracticeResult.totalItems + ' câu hỏi) lên máy chủ.'
-          }
-        );
-        clearPracticeExerciseDirty(targetEx.exercise_id);
-        switchPracticeSubView('builder');
-        renderAll();
+        const totalItems = parsedPracticeResult.totalItems;
+        const totalScore = parsedPracticeResult.totalScore;
+        const savedEx = await applyImportedSectionsToPractice(importedSections, {
+          mode: mode,
+          title: practiceNewTitleInput ? practiceNewTitleInput.value : '',
+          tag: practiceNewTagInput ? practiceNewTagInput.value : '',
+          defaultTitlePrefix: 'Bài luyện tập nhập Excel #',
+          triggerBtn: btnConfirmPracticeImport,
+          loadingTitle: 'Đang nhập đề luyện tập từ Excel...',
+          loadingDesc: 'Hệ thống đang lưu ' + importedSections.length + ' phần (' + totalItems + ' câu hỏi) lên máy chủ.'
+        });
+        if (!savedEx) return;
 
         closePracticeExcelModal();
         if (practicePasteTextarea) practicePasteTextarea.value = '';
@@ -9840,20 +10305,214 @@
           'Đã nhập thành công ' +
             importedSections.length +
             ' phần (' +
-            parsedPracticeResult.totalItems +
+            totalItems +
             ' câu • ' +
-            parsedPracticeResult.totalScore +
+            totalScore +
             ' điểm) từ Excel!'
         );
+      });
+    }
 
-        if (firstNewId) {
-          setTimeout(function () {
-            const newCard = document.querySelector('[data-sec-card="' + firstNewId + '"]');
-            if (newCard) {
-              newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-          }, 100);
+    // =========================================================================
+    // XỬ LÝ NHẬP ĐỀ TỪ GOOGLE FORM CÔNG KHAI (TAB 1)
+    // =========================================================================
+    const modalGformImport = document.getElementById('modal-import-google-form');
+    const btnOpenGformModal = document.getElementById('btn-open-import-gform-modal');
+    const btnOpenGformSticky = document.getElementById('btn-open-import-gform-sticky');
+    const btnCloseGformModal = document.getElementById('btn-close-gform-import');
+    const btnCancelGformModal = document.getElementById('btn-cancel-gform-import');
+    const gformUrlInput = document.getElementById('gform-import-url-input');
+    const btnFetchGform = document.getElementById('btn-fetch-google-form');
+    const gformErrorBox = document.getElementById('gform-import-error');
+    const gformModeSel = document.getElementById('import-gform-mode');
+    const gformTitleWrap = document.getElementById('import-gform-title-wrap');
+    const gformTagWrap = document.getElementById('import-gform-tag-wrap');
+    const gformTitleInput = document.getElementById('import-gform-new-title');
+    const gformTagInput = document.getElementById('import-gform-new-tag');
+    const gformPreviewBox = document.getElementById('gform-import-preview');
+    const gformPreviewTbody = document.getElementById('gform-import-preview-tbody');
+    const gformSecCountEl = document.getElementById('gform-import-sec-count');
+    const gformQCountEl = document.getElementById('gform-import-q-count');
+    const gformScoreCountEl = document.getElementById('gform-import-score-count');
+    const gformIdentityNoteEl = document.getElementById('gform-import-identity-note');
+    const btnConfirmGformImport = document.getElementById('btn-confirm-gform-import');
+    let parsedGoogleFormResult = null;
+
+    function openGformImportModal() {
+      if (!modalGformImport) return;
+      if (gformErrorBox) gformErrorBox.classList.remove('is-visible');
+      modalGformImport.classList.add('is-open', 'is-visible');
+      setTimeout(function () {
+        if (gformUrlInput) gformUrlInput.focus();
+      }, 60);
+    }
+
+    function closeGformImportModal() {
+      if (modalGformImport) modalGformImport.classList.remove('is-open', 'is-visible');
+    }
+
+    function updateGformModeVisibility() {
+      const isNew = !gformModeSel || gformModeSel.value === 'new';
+      if (gformTitleWrap) gformTitleWrap.style.display = isNew ? 'block' : 'none';
+      if (gformTagWrap) gformTagWrap.style.display = isNew ? 'block' : 'none';
+    }
+
+    function renderGoogleFormPreview(built) {
+      parsedGoogleFormResult = built;
+      if (!gformPreviewBox || !gformPreviewTbody || !btnConfirmGformImport) return;
+
+      if (!built || !Array.isArray(built.sections) || built.sections.length === 0) {
+        gformPreviewBox.style.display = 'none';
+        gformPreviewTbody.innerHTML = '';
+        btnConfirmGformImport.disabled = true;
+        return;
+      }
+
+      gformPreviewBox.style.display = 'block';
+      btnConfirmGformImport.disabled = false;
+      if (gformSecCountEl) gformSecCountEl.textContent = built.sections.length + ' phần';
+      if (gformQCountEl) gformQCountEl.textContent = built.totalItems + ' câu hỏi';
+      if (gformScoreCountEl) gformScoreCountEl.textContent = built.totalScore + ' điểm';
+      if (gformIdentityNoteEl) {
+        gformIdentityNoteEl.textContent = built.skippedIdentityQuestions > 0
+          ? 'Đã lược bỏ ô nhập họ tên dư thừa'
+          : 'Sẵn sàng nhập';
+      }
+
+      if (gformTitleInput && !gformTitleInput.value.trim()) {
+        gformTitleInput.value = built.title || 'Bài kiểm tra Google Form';
+      }
+      if (gformTagInput && !gformTagInput.value.trim()) {
+        gformTagInput.value = built.suggestedLessonTag || 'Test 1';
+      }
+
+      gformPreviewTbody.innerHTML = built.sections.map(function (sec, idx) {
+        const badge = SECTION_BADGE_MAP[sec.type] || { label: sec.type, cls: 'status-teal' };
+        const d = sec.data || {};
+        const itemCount = d.items ? d.items.length : 0;
+        const extras = [];
+        if (d.image_url) extras.push('<span class="status-badge status-pink" style="font-size:0.75rem;">Ảnh minh họa</span>');
+        if (d.youtube_id) extras.push('<span class="status-badge status-yellow" style="font-size:0.75rem;">Video YouTube</span>');
+        const extraHtml = extras.length > 0 ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">' + extras.join('') + '</div>' : '';
+
+        return (
+          '<tr>' +
+            '<td class="tabular-nums"><strong>' + (idx + 1) + '</strong></td>' +
+            '<td><span class="status-badge ' + badge.cls + '" style="font-size:0.75rem;">' + escapeHtml(badge.label) + '</span></td>' +
+            '<td><strong>' + escapeHtml(sec.title) + '</strong>' + extraHtml + '</td>' +
+            '<td class="tabular-nums">' + itemCount + ' câu</td>' +
+            '<td style="font-size:0.75rem;color:var(--color-muted-foreground);">' + escapeHtml(summarizeImportedSection(sec)) + '</td>' +
+          '</tr>'
+        );
+      }).join('');
+    }
+
+    async function handleFetchGoogleForm() {
+      if (!gformUrlInput) return;
+      const rawUrl = String(gformUrlInput.value || '').trim();
+      if (gformErrorBox) gformErrorBox.classList.remove('is-visible');
+
+      if (!window.StudySnapGoogleForm || !window.StudySnapGoogleForm.isSupportedGoogleFormUrl(rawUrl)) {
+        if (gformErrorBox) {
+          gformErrorBox.textContent = 'Vui lòng dán đường dẫn Google Form hợp lệ (https://docs.google.com/forms/d/e/.../viewform hoặc https://forms.gle/...).';
+          gformErrorBox.classList.add('is-visible');
         }
+        return;
+      }
+
+      const fetchRes = await runWithLoading(
+        btnFetchGform,
+        'Đang tải đề...',
+        async function () {
+          return await window.StudySnapStore.fetchGoogleFormFromServer(rawUrl);
+        },
+        {
+          title: 'Đang tải & phân tích Google Form...',
+          desc: 'Hệ thống đang trích xuất câu hỏi, hình ảnh và video bài nghe từ Google Form.'
+        }
+      );
+
+      if (!fetchRes || !fetchRes.ok || !fetchRes.form) {
+        renderGoogleFormPreview(null);
+        if (gformErrorBox) {
+          gformErrorBox.textContent = (fetchRes && fetchRes.error) || 'Không thể tải Google Form. Hãy kiểm tra lại đường dẫn.';
+          gformErrorBox.classList.add('is-visible');
+        }
+        return;
+      }
+
+      if (gformTitleInput) gformTitleInput.value = '';
+      if (gformTagInput) gformTagInput.value = '';
+      const built = window.StudySnapGoogleForm.buildSectionsFromGoogleForm(fetchRes.form);
+      if (!built || built.sections.length === 0) {
+        renderGoogleFormPreview(null);
+        if (gformErrorBox) {
+          gformErrorBox.textContent = 'Google Form này không chứa câu hỏi nào phù hợp để nhập.';
+          gformErrorBox.classList.add('is-visible');
+        }
+        return;
+      }
+
+      renderGoogleFormPreview(built);
+      showToast('Đã phân tích ' + built.sections.length + ' phần (' + built.totalItems + ' câu hỏi) từ Google Form!');
+    }
+
+    if (btnOpenGformModal) btnOpenGformModal.addEventListener('click', openGformImportModal);
+    if (btnOpenGformSticky) btnOpenGformSticky.addEventListener('click', openGformImportModal);
+    if (btnCloseGformModal) btnCloseGformModal.addEventListener('click', closeGformImportModal);
+    if (btnCancelGformModal) btnCancelGformModal.addEventListener('click', closeGformImportModal);
+    if (modalGformImport) {
+      modalGformImport.addEventListener('click', function (ev) {
+        if (ev.target === modalGformImport) closeGformImportModal();
+      });
+    }
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && modalGformImport && modalGformImport.classList.contains('is-open')) {
+        closeGformImportModal();
+      }
+    });
+    if (gformModeSel) {
+      updateGformModeVisibility();
+      gformModeSel.addEventListener('change', updateGformModeVisibility);
+    }
+    if (btnFetchGform) btnFetchGform.addEventListener('click', handleFetchGoogleForm);
+
+    if (btnConfirmGformImport) {
+      btnConfirmGformImport.addEventListener('click', async function () {
+        if (!parsedGoogleFormResult || !parsedGoogleFormResult.sections || parsedGoogleFormResult.sections.length === 0) return;
+
+        const mode = (gformModeSel && gformModeSel.value) || 'new';
+        const importedSections = JSON.parse(JSON.stringify(parsedGoogleFormResult.sections));
+        const totalItems = parsedGoogleFormResult.totalItems;
+        const totalScore = parsedGoogleFormResult.totalScore;
+        const savedEx = await applyImportedSectionsToPractice(importedSections, {
+          mode: mode,
+          title: gformTitleInput ? gformTitleInput.value : parsedGoogleFormResult.title,
+          tag: gformTagInput ? gformTagInput.value : parsedGoogleFormResult.suggestedLessonTag,
+          defaultTitlePrefix: 'Bài kiểm tra Google Form #',
+          triggerBtn: btnConfirmGformImport,
+          loadingTitle: 'Đang nhập bài kiểm tra từ Google Form...',
+          loadingDesc: 'Hệ thống đang lưu ' + importedSections.length + ' phần (' + totalItems + ' câu hỏi) cùng ảnh/video vào StudySnap.'
+        });
+        if (!savedEx) return;
+
+        closeGformImportModal();
+        if (gformUrlInput) gformUrlInput.value = '';
+        if (gformTitleInput) gformTitleInput.value = '';
+        if (gformTagInput) gformTagInput.value = '';
+        renderGoogleFormPreview(null);
+
+        showToast(
+          'Đã đưa bài "' +
+            savedEx.title +
+            '" (' +
+            importedSections.length +
+            ' phần • ' +
+            totalItems +
+            ' câu • ' +
+            totalScore +
+            ' điểm) vào StudySnap!'
+        );
       });
     }
 

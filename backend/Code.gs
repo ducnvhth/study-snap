@@ -275,6 +275,92 @@ function doGet(e) {
       });
     }
 
+    if (action === 'fetchGoogleForm') {
+      const rawUrl = (e && e.parameter && e.parameter.url) ? String(e.parameter.url).trim() : '';
+      if (!/^https?:\/\/(?:docs\.google\.com\/forms\/|forms\.gle\/)/i.test(rawUrl)) {
+        return jsonResponse({ ok: false, error: 'Đường dẫn Google Form không hợp lệ.' });
+      }
+      try {
+        const res = UrlFetchApp.fetch(rawUrl, { followRedirects: true, muteHttpExceptions: true });
+        const code = res.getResponseCode();
+        const html = res.getContentText();
+        const match = html.match(/FB_PUBLIC_LOAD_DATA_\s*=\s*([\s\S]*?);\s*<\/script>/);
+        if (code >= 400 || !match) {
+          return jsonResponse({ ok: false, error: 'Không thể đọc Google Form công khai (HTTP ' + code + ').' });
+        }
+        const rawData = JSON.parse(match[1]);
+        const formMeta = rawData[1] || [];
+        const rawItems = Array.isArray(formMeta[1]) ? formMeta[1] : [];
+        const imgUrls = [];
+        const imgMatches = html.match(/<img[^>]+src=["']https:\/\/docs\.google\.com\/forms-images-rt\/[^"']+["']/gi) || [];
+        imgMatches.forEach(function (tag) {
+          const m = tag.match(/src=["']([^"']+)["']/i);
+          if (m && m[1]) imgUrls.push(m[1].replace(/&amp;/g, '&'));
+        });
+        const hdrs = res.getAllHeaders ? res.getAllHeaders() : {};
+        const rawSetCookie = hdrs['Set-Cookie'] || hdrs['set-cookie'] || '';
+        const cookieHeader = Array.isArray(rawSetCookie)
+          ? rawSetCookie.map(function (c) { return String(c).split(';')[0]; }).join('; ')
+          : String(rawSetCookie).split(',').map(function (c) { return c.split(';')[0]; }).join('; ');
+
+        let imgCursor = 0;
+        const parsedItems = rawItems.map(function (it) {
+          const qBlocks = Array.isArray(it && it[4]) ? it[4] : [];
+          const primaryBlock = qBlocks[0] || [];
+          const rawOptions = Array.isArray(primaryBlock[1]) ? primaryBlock[1] : [];
+          const options = rawOptions
+            .map(function (opt) { return opt && opt[0] !== undefined && opt[0] !== null ? String(opt[0]).trim() : ''; })
+            .filter(function (v) { return v !== ''; });
+          const videoBlock = Array.isArray(it && it[6]) ? it[6] : null;
+          const youtubeId = videoBlock && typeof videoBlock[3] === 'string' ? videoBlock[3] : '';
+          const imgBlock = Array.isArray(it && it[9]) ? it[9] : null;
+          const imageId = imgBlock && imgBlock[0] && typeof imgBlock[0][0] === 'string' ? imgBlock[0][0] : '';
+          let imageUrl = '';
+          let imageDataUrl = '';
+          if (imageId && imgUrls[imgCursor]) {
+            imageUrl = imgUrls[imgCursor];
+            imgCursor++;
+            try {
+              const imgRes = UrlFetchApp.fetch(imageUrl, {
+                muteHttpExceptions: true,
+                headers: { Referer: 'https://docs.google.com/', Cookie: cookieHeader }
+              });
+              if (imgRes.getResponseCode() === 200) {
+                const blob = imgRes.getBlob();
+                const ct = blob.getContentType() || 'image/jpeg';
+                if (ct.indexOf('image/') === 0) {
+                  imageDataUrl = 'data:' + ct + ';base64,' + Utilities.base64Encode(blob.getBytes());
+                }
+              }
+            } catch (imgErr) {}
+          }
+          return {
+            id: it && it[0] !== undefined ? String(it[0]) : '',
+            title: String((it && it[1]) || ''),
+            desc: String((it && it[2]) || ''),
+            rawType: Number(it && it[3]),
+            options: options,
+            youtubeId: youtubeId,
+            youtubeUrl: youtubeId ? ('https://www.youtube.com/watch?v=' + youtubeId) : '',
+            imageId: imageId,
+            imageUrl: imageUrl,
+            imageDataUrl: imageDataUrl
+          };
+        });
+        return jsonResponse({
+          ok: true,
+          form: {
+            sourceUrl: rawUrl,
+            title: String(formMeta[8] || rawData[3] || '').trim() || 'Bài kiểm tra Google Form',
+            description: String(formMeta[0] || '').trim(),
+            items: parsedItems
+          }
+        });
+      } catch (gfErr) {
+        return jsonResponse({ ok: false, error: 'Lỗi đọc Google Form: ' + gfErr.message });
+      }
+    }
+
     if (action === 'getMedia') {
       const fileId = (e && e.parameter && e.parameter.fileId) ? String(e.parameter.fileId).trim() : '';
       if (!fileId) {
@@ -1776,7 +1862,12 @@ function inferMediaMimeType_(fileName, rawMime) {
     m4v: 'video/mp4',
     mov: 'video/quicktime',
     avi: 'video/x-msvideo',
-    mkv: 'video/x-matroska'
+    mkv: 'video/x-matroska',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    gif: 'image/gif'
   };
   if (mime.indexOf('video/') === 0 && ext !== 'm4a' && ext !== 'm4b') {
     return mime;

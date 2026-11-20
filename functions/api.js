@@ -163,9 +163,11 @@ function collectPracticeMediaUrls(sectionsInput) {
   sections.forEach(function (sec) {
     if (!sec || !sec.data) return;
     if (sec.data.audio_url) candidates.push(sec.data.audio_url);
+    if (sec.data.image_url) candidates.push(sec.data.image_url);
     if (Array.isArray(sec.data.items)) {
       sec.data.items.forEach(function (item) {
         if (item && item.audio_url) candidates.push(item.audio_url);
+        if (item && item.image_url) candidates.push(item.image_url);
       });
     }
   });
@@ -715,7 +717,12 @@ function inferMimeFromFilenameOrHint(fileNameOrDisposition, fallbackMime) {
     oga: 'audio/ogg',
     opus: 'audio/opus',
     flac: 'audio/flac',
-    webm: (fallbackMime && String(fallbackMime).toLowerCase().indexOf('video/') === 0) ? 'video/webm' : 'audio/webm'
+    webm: (fallbackMime && String(fallbackMime).toLowerCase().indexOf('video/') === 0) ? 'video/webm' : 'audio/webm',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    gif: 'image/gif'
   };
   if (ext && extMap[ext]) return extMap[ext];
   return '';
@@ -731,7 +738,7 @@ function normalizeProxyMediaMime(rawContentType, contentDisposition, hintMime) {
   if (!ct || ct === 'application/octet-stream' || ct === 'binary/octet-stream') {
     const byName = inferMimeFromFilenameOrHint(contentDisposition, cleanHint);
     if (byName) return byName;
-    if (cleanHint && (cleanHint.indexOf('video/') === 0 || cleanHint.indexOf('audio/') === 0)) {
+    if (cleanHint && (cleanHint.indexOf('video/') === 0 || cleanHint.indexOf('audio/') === 0 || cleanHint.indexOf('image/') === 0)) {
       return cleanHint;
     }
     return 'application/octet-stream';
@@ -994,6 +1001,200 @@ export async function handleTtsProxy(request, url, ctx) {
   return jsonResponse({ ok: false, error: 'TTS upstream unavailable' }, 502);
 }
 
+function isAllowedGoogleFormUrl(rawUrl) {
+  const clean = String(rawUrl || '').trim();
+  if (!clean) return false;
+  try {
+    const parsed = new URL(clean);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'forms.gle') return parsed.pathname.length > 1;
+    if (host === 'docs.google.com') return /^\/forms\//i.test(parsed.pathname);
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+function uint8ArrayToBase64(bytes) {
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk);
+  }
+  return btoa(binary);
+}
+
+function decodeFormEntities(str) {
+  return String(str || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+async function handleGoogleFormFetchProxy(request, url) {
+  let targetUrl = String(url.searchParams.get('url') || '').trim();
+  if (!targetUrl && request.method === 'POST') {
+    try {
+      const body = await request.json();
+      targetUrl = String((body && body.url) || '').trim();
+    } catch (e) {
+      // ignore invalid JSON
+    }
+  }
+
+  if (!isAllowedGoogleFormUrl(targetUrl)) {
+    return jsonResponse({
+      ok: false,
+      error: 'Link không hợp lệ. Vui lòng dán đường dẫn Google Form (https://docs.google.com/forms/... hoặc https://forms.gle/...).'
+    }, 400);
+  }
+
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+  try {
+    const res = await fetch(targetUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: {
+        'User-Agent': ua,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      }
+    });
+
+    if (res.url && res.url.indexOf('accounts.google.com') >= 0) {
+      return jsonResponse({
+        ok: false,
+        error: 'Google Form này đang yêu cầu đăng nhập Google. Vui lòng tắt giới hạn tổ chức trong Cài đặt Google Form trước khi nhập.'
+      }, 403);
+    }
+
+    const cookies =
+      res.headers && typeof res.headers.getSetCookie === 'function'
+        ? res.headers.getSetCookie().map(function (c) { return String(c).split(';')[0]; }).join('; ')
+        : String((res.headers && res.headers.get('set-cookie')) || '');
+
+    const html = await res.text();
+    const dataMatch = html.match(/FB_PUBLIC_LOAD_DATA_\s*=\s*([\s\S]*?);\s*<\/script>/);
+    if (!dataMatch) {
+      return jsonResponse({
+        ok: false,
+        error: 'Không đọc được nội dung câu hỏi từ Google Form này. Hãy đảm bảo đây là link làm bài (/viewform) đang mở công khai.'
+      }, 422);
+    }
+
+    const rawData = JSON.parse(dataMatch[1]);
+    if (!Array.isArray(rawData) || !Array.isArray(rawData[1])) {
+      return jsonResponse({ ok: false, error: 'Cấu trúc Google Form không được hỗ trợ.' }, 422);
+    }
+
+    const htmlImgUrls = [];
+    const seenImgs = {};
+    const imgRegex = /<img[^>]+src=["'](https:\/\/docs\.google\.com\/forms-images-rt\/[^"']+)["']/gi;
+    let imgMatch;
+    while ((imgMatch = imgRegex.exec(html)) !== null) {
+      const cleanImg = decodeFormEntities(imgMatch[1]);
+      if (!seenImgs[cleanImg]) {
+        seenImgs[cleanImg] = true;
+        htmlImgUrls.push(cleanImg);
+      }
+    }
+
+    const formMeta = rawData[1];
+    const title = String(formMeta[8] || rawData[3] || '').trim() || 'Bài kiểm tra Google Form';
+    const description = String(formMeta[0] || '').trim();
+    const rawItems = Array.isArray(formMeta[1]) ? formMeta[1] : [];
+
+    let imgCursor = 0;
+    const parsedItems = [];
+    const imgFetchJobs = [];
+
+    rawItems.forEach(function (it) {
+      if (!it) return;
+      const qBlocks = Array.isArray(it[4]) ? it[4] : [];
+      const primaryBlock = qBlocks[0] || [];
+      const rawOptions = Array.isArray(primaryBlock[1]) ? primaryBlock[1] : [];
+      const options = rawOptions
+        .map(function (opt) { return opt && opt[0] !== undefined && opt[0] !== null ? String(opt[0]).trim() : ''; })
+        .filter(function (v) { return v !== ''; });
+
+      const videoBlock = Array.isArray(it[6]) ? it[6] : null;
+      const youtubeId =
+        videoBlock && typeof videoBlock[3] === 'string' && /^[a-zA-Z0-9_-]{11}$/.test(videoBlock[3])
+          ? videoBlock[3]
+          : '';
+
+      const imgBlock = Array.isArray(it[9]) ? it[9] : null;
+      const imageId = imgBlock && imgBlock[0] && typeof imgBlock[0][0] === 'string' ? imgBlock[0][0] : '';
+      let imageUrl = '';
+      if (imageId && htmlImgUrls[imgCursor]) {
+        imageUrl = htmlImgUrls[imgCursor];
+        imgCursor++;
+      }
+
+      const itemObj = {
+        id: it[0] !== undefined ? String(it[0]) : '',
+        title: String(it[1] || ''),
+        desc: String(it[2] || ''),
+        rawType: Number(it[3]),
+        options: options,
+        youtubeId: youtubeId,
+        youtubeUrl: youtubeId ? ('https://www.youtube.com/watch?v=' + youtubeId) : '',
+        imageId: imageId,
+        imageUrl: imageUrl,
+        imageDataUrl: ''
+      };
+      parsedItems.push(itemObj);
+      if (imageUrl && imgFetchJobs.length < 15) {
+        imgFetchJobs.push({ item: itemObj, url: imageUrl });
+      }
+    });
+
+    if (imgFetchJobs.length > 0) {
+      await Promise.all(
+        imgFetchJobs.map(async function (job) {
+          try {
+            const imgRes = await fetch(job.url, {
+              headers: {
+                'User-Agent': ua,
+                'Referer': 'https://docs.google.com/',
+                'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+                'Cookie': cookies
+              }
+            });
+            if (!imgRes.ok) return;
+            const ct = String(imgRes.headers.get('content-type') || 'image/jpeg').split(';')[0].trim().toLowerCase();
+            if (ct.indexOf('image/') !== 0) return;
+            const buf = await imgRes.arrayBuffer();
+            if (buf.byteLength > 0 && buf.byteLength <= 1500000) {
+              job.item.imageDataUrl = 'data:' + ct + ';base64,' + uint8ArrayToBase64(new Uint8Array(buf));
+            }
+          } catch (e) {
+            // Leave imageDataUrl empty if image fetch fails
+          }
+        })
+      );
+    }
+
+    return jsonResponse({
+      ok: true,
+      form: {
+        sourceUrl: res.url || targetUrl,
+        title: title,
+        description: description,
+        items: parsedItems
+      }
+    });
+  } catch (err) {
+    return jsonResponse({
+      ok: false,
+      error: 'Không thể kết nối tới Google Form lúc này. Vui lòng kiểm tra lại đường dẫn và thử lại.'
+    }, 502);
+  }
+}
+
 export async function handleApiRequest(request, env, ctx) {
   if (request.method === 'OPTIONS') {
     return new Response(null, {
@@ -1014,6 +1215,10 @@ export async function handleApiRequest(request, env, ctx) {
 
   if ((request.method === 'GET' || request.method === 'HEAD') && url.searchParams.get('action') === 'tts') {
     return await handleTtsProxy(request, url, ctx);
+  }
+
+  if (url.searchParams.get('action') === 'fetchGoogleForm' && (request.method === 'GET' || request.method === 'POST')) {
+    return await handleGoogleFormFetchProxy(request, url);
   }
 
   const db = env && env.DB ? env.DB : null;

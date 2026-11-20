@@ -1727,7 +1727,7 @@
             answeredCount++;
           }
         });
-      } else if (sec.type === 'error_correction' || sec.type === 'translation') {
+      } else if (sec.type === 'error_correction' || sec.type === 'translation' || sec.type === 'short_answer') {
         const items = (sec.data && sec.data.items) || [];
         totalCount += items.length;
         items.forEach(function (item) {
@@ -1787,9 +1787,11 @@
     const comments = [];
     if (exercise && Array.isArray(exercise.sections)) {
       exercise.sections.forEach(function (sec) {
-        if (sec && sec.type === 'translation') {
+        if (sec && (sec.type === 'translation' || sec.type === 'short_answer')) {
           ((sec.data && sec.data.items) || []).forEach(function (item) {
-            if (item && item.mode === 'manual') {
+            const hasKey = Array.isArray(item && item.accepted) && item.accepted.length > 0;
+            const isManualItem = Boolean(item && (item.mode === 'manual' || (sec.type === 'short_answer' && !hasKey)));
+            if (isManualItem) {
               totalManual++;
               const mg = sub && sub.manual_grades ? sub.manual_grades[item.id] : null;
               if (mg) {
@@ -2179,6 +2181,8 @@
       return renderErrorCorrectionBodyHtml(sec);
     } else if (sec.type === 'translation') {
       return renderTranslationBodyHtml(sec);
+    } else if (sec.type === 'short_answer') {
+      return renderShortAnswerBodyHtml(sec);
     }
     return '<p style="color:var(--color-muted-foreground);">Dạng câu hỏi chưa được hỗ trợ.</p>';
   }
@@ -2339,13 +2343,89 @@
     );
   }
 
+  // --- SHARED SECTION MEDIA HELPER (IMAGE + YOUTUBE + AUDIO) ---
+  function extractStudentYouTubeId(rawUrlOrId) {
+    const clean = String(rawUrlOrId || '').trim();
+    if (!clean) return '';
+    if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) return clean;
+    const match = clean.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
+    return match ? match[1] : '';
+  }
+
+  function resolveStudentDisplayImageUrl(rawUrl) {
+    const clean = String(rawUrl || '').trim();
+    if (!clean) return '';
+    if (
+      typeof window !== 'undefined' &&
+      window.StudySnapStore &&
+      typeof window.StudySnapStore.resolveMediaDisplayUrl === 'function'
+    ) {
+      return window.StudySnapStore.resolveMediaDisplayUrl(clean, 'image/jpeg');
+    }
+    return clean;
+  }
+
+  function renderSectionMediaContextHtml(sec, idPrefix) {
+    const data = (sec && sec.data) || {};
+    const blocks = [];
+
+    const imgUrl = resolveStudentDisplayImageUrl(data.image_url);
+    if (imgUrl) {
+      blocks.push(
+        '<div class="practice-prompt-image-box">' +
+        '<img src="' + escapeHtml(imgUrl) + '" alt="Hình ảnh minh họa câu hỏi" loading="lazy">' +
+        '</div>'
+      );
+    }
+
+    const ytId = extractStudentYouTubeId(data.youtube_id || data.youtube_url);
+    if (ytId) {
+      const watchUrl = 'https://www.youtube.com/watch?v=' + encodeURIComponent(ytId);
+      const embedUrl = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(ytId) + '?rel=0';
+      blocks.push(
+        '<div class="practice-youtube-box">' +
+        '<div class="practice-youtube-frame-wrap">' +
+        '<iframe src="' + escapeHtml(embedUrl) + '" title="' + escapeHtml(sec.title || 'Video bài nghe') + '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>' +
+        '</div>' +
+        '<div class="practice-youtube-footer">' +
+        '<span>Bấm Play trên video để nghe bài làm (có thể tua lại bất kỳ lúc nào).</span>' +
+        '<a href="' + escapeHtml(watchUrl) + '" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">Mở trực tiếp trên YouTube</a>' +
+        '</div>' +
+        '</div>'
+      );
+    }
+
+    const audioUrl = String(data.audio_url || '').trim();
+    if (audioUrl && audioUrl.indexOf('demo:') !== 0 && window.StudySnapAudio) {
+      blocks.push(
+        '<div class="listening-audio-strip">' +
+        window.StudySnapAudio.renderVoicePlayer({
+          id: (idPrefix || 'student-sec-aud-') + sec.section_id,
+          url: audioUrl,
+          duration: data.audio_duration || '00:45',
+          label: data.audio_label || 'Nghe file âm thanh bài tập',
+          fallbackText: '',
+          requireRealAudio: true,
+          lang: 'zh-CN',
+          variant: 'student',
+          showSpeedToggle: true
+        }) +
+        '</div>'
+      );
+    }
+
+    return blocks.length > 0 ? '<div class="practice-media-block">' + blocks.join('') + '</div>' : '';
+  }
+
   function renderMcQuestionCardsHtml(sec, skipEmptyOptions) {
     const secAns = ui.practiceAnswers[sec.section_id] || {};
     const items = (sec.data && sec.data.items) || [];
     const isPerQuestionListening =
       sec.type === 'listening_mc' && sec.data && sec.data.listening_mode === 'per_question';
+    const mediaHeaderHtml = sec.type === 'multiple_choice' ? renderSectionMediaContextHtml(sec, 'student-mc-media-') : '';
 
     return (
+      mediaHeaderHtml +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
       items
         .map(function (item, idx) {
@@ -2357,6 +2437,10 @@
               visibleOptions.push({ optText: optText || '', optIdx: optIdx });
             }
           });
+          const itemImgUrl = resolveStudentDisplayImageUrl(item.image_url);
+          const itemImgHtml = itemImgUrl
+            ? '<div class="practice-prompt-image-box" style="margin-top:10px;"><img src="' + escapeHtml(itemImgUrl) + '" alt="Hình ảnh câu ' + (idx + 1) + '" loading="lazy"></div>'
+            : '';
           const itemPlayerHtml = isPerQuestionListening
             ? renderListeningQuestionPlayerHtml(sec, item, idx, 'student-ls-')
             : '';
@@ -2382,6 +2466,7 @@
                 '<span>Nghe</span></button>'
               : '') +
             '</div>' +
+            itemImgHtml +
             itemPlayerHtml +
             '<div class="mc-options-grid">' +
             visibleOptions
@@ -2434,8 +2519,13 @@
     const listeningMode = data.listening_mode === 'per_question' ? 'per_question' : 'shared';
     const audioUrl = (data.audio_url || '').trim();
     const hasAudioFile = Boolean(audioUrl && audioUrl.indexOf('demo:') !== 0);
+    const ytId = extractStudentYouTubeId(data.youtube_id || data.youtube_url);
+    const secImgUrl = resolveStudentDisplayImageUrl(data.image_url);
     const showSharedPlayer = listeningMode === 'shared' && hasAudioFile && window.StudySnapAudio;
 
+    const imgBannerHtml = secImgUrl
+      ? '<div class="practice-prompt-image-box" style="margin-bottom:12px;"><img src="' + escapeHtml(secImgUrl) + '" alt="Hình ảnh bài nghe" loading="lazy"></div>'
+      : '';
     const playerHtml = listeningMode === 'shared'
       ? (showSharedPlayer
           ? '<div class="listening-audio-strip">' +
@@ -2451,10 +2541,20 @@
                 showSpeedToggle: true
               }) +
             '</div>'
+          : ytId
+          ? ''
           : '<div class="listening-missing-audio-note">Phần nghe hiểu này chưa được giáo viên gắn tệp âm thanh.</div>')
       : '';
+    const ytStripHtml = ytId
+      ? '<div class="practice-youtube-box" style="margin-top:10px;">' +
+        '<div class="practice-youtube-frame-wrap">' +
+        '<iframe src="' + escapeHtml('https://www.youtube-nocookie.com/embed/' + encodeURIComponent(ytId) + '?rel=0') + '" title="' + escapeHtml(sec.title || 'Video bài nghe') + '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>' +
+        '</div>' +
+        '<div class="practice-youtube-footer"><span>Nghe video để chọn đáp án phù hợp.</span><a href="' + escapeHtml('https://www.youtube.com/watch?v=' + encodeURIComponent(ytId)) + '" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">Mở trên YouTube</a></div>' +
+        '</div>'
+      : '';
 
-    const hasBannerContent = Boolean(data.context_label || data.context_title || data.context_subtitle || playerHtml);
+    const hasBannerContent = Boolean(data.context_label || data.context_title || data.context_subtitle || playerHtml || ytStripHtml || imgBannerHtml);
     const bannerHtml = hasBannerContent
       ? '<div class="listening-context-banner">' +
         '<div class="listening-context-top">' +
@@ -2477,7 +2577,9 @@
           : '') +
         '</div>' +
         '</div>' +
+        imgBannerHtml +
         playerHtml +
+        ytStripHtml +
         '</div>'
       : '';
 
@@ -2720,6 +2822,57 @@
     );
   }
 
+  // --- SECTION 7: SHORT ANSWER / IMAGE MATCH / AUDIO FILL (TRẢ LỜI NGẮN / NGHE & ĐIỀN) ---
+  function renderShortAnswerBodyHtml(sec) {
+    const secAns = ui.practiceAnswers[sec.section_id] || {};
+    const items = (sec.data && sec.data.items) || [];
+    const mediaHtml = renderSectionMediaContextHtml(sec, 'student-sa-');
+    const isCompactGrid = items.length >= 4;
+
+    const cardsHtml = items
+      .map(function (item, idx) {
+        const currentVal = secAns[item.id] || '';
+        const itemImgUrl = resolveStudentDisplayImageUrl(item.image_url);
+        const itemImgHtml = itemImgUrl
+          ? '<div class="practice-prompt-image-box"><img src="' + escapeHtml(itemImgUrl) + '" alt="Hình minh họa câu ' + (idx + 1) + '" loading="lazy"></div>'
+          : '';
+        const placeholderText = item.hint ? String(item.hint) : 'Nhập câu trả lời của em...';
+        return (
+          '<div class="short-answer-card">' +
+          '<div class="short-answer-card-head">' +
+          '<div class="short-answer-prompt">' +
+          escapeHtml(item.prompt || ('Câu ' + (idx + 1))) +
+          '</div>' +
+          '<span class="practice-section-num-badge" style="font-size:0.75rem;flex-shrink:0;">Câu ' +
+          (idx + 1) +
+          '</span>' +
+          '</div>' +
+          itemImgHtml +
+          (item.hint
+            ? '<div class="short-answer-hint">' + escapeHtml(item.hint) + '</div>'
+            : '') +
+          '<input type="text" class="form-control chinese-text-input" placeholder="' +
+          escapeHtml(placeholderText) +
+          '" value="' +
+          escapeHtml(currentVal) +
+          '" data-sa-sec="' +
+          escapeHtml(sec.section_id) +
+          '" data-sa-item="' +
+          escapeHtml(item.id) +
+          '">' +
+          '</div>'
+        );
+      })
+      .join('');
+
+    return (
+      mediaHtml +
+      '<div class="short-answer-grid' + (isCompactGrid ? ' is-compact' : '') + '">' +
+      cardsHtml +
+      '</div>'
+    );
+  }
+
   // --- INTERACTIVE EVENT BINDINGS FOR SECTIONS ---
   function bindSectionInteractiveEvents(exercise) {
     // 1. Matching Left Click
@@ -2941,6 +3094,17 @@
       input.addEventListener('input', function () {
         const secId = input.getAttribute('data-trans-sec');
         const itemId = input.getAttribute('data-trans-item');
+        if (!ui.practiceAnswers[secId]) ui.practiceAnswers[secId] = {};
+        ui.practiceAnswers[secId][itemId] = input.value;
+        savePracticeDraft();
+      });
+    });
+
+    // 7. Short Answer Inputs (Realtime auto-save)
+    document.querySelectorAll('[data-sa-sec]').forEach(function (input) {
+      input.addEventListener('input', function () {
+        const secId = input.getAttribute('data-sa-sec');
+        const itemId = input.getAttribute('data-sa-item');
         if (!ui.practiceAnswers[secId]) ui.practiceAnswers[secId] = {};
         ui.practiceAnswers[secId][itemId] = input.value;
         savePracticeDraft();
@@ -3350,6 +3514,82 @@
           );
         })
         .join('');
+    } else if (sec.type === 'short_answer') {
+      const items = (sec.data && sec.data.items) || [];
+      const manualGrades = sub.manual_grades || {};
+      const mediaHtml = renderSectionMediaContextHtml(sec, 'student-sa-review-');
+
+      const itemsHtml = items
+        .map(function (item, idx) {
+          const userVal = studentAns[item.id] || '';
+          const hasAccepted = Array.isArray(item.accepted) && item.accepted.length > 0;
+          const isManual = item.mode === 'manual' || !hasAccepted;
+          const mg = manualGrades[item.id];
+
+          let isCorrect = false;
+          let badgeHtml = '';
+
+          if (isManual) {
+            if (mg) {
+              const sc = Number(mg.score || 0);
+              isCorrect = sc >= 0.5;
+              badgeHtml =
+                '<span class="status-badge status-graded">Giáo viên chấm: ' + sc + '/1 đ</span>';
+            } else {
+              badgeHtml =
+                '<span class="status-badge status-submitted">Đang chờ giáo viên chấm</span>';
+            }
+          } else {
+            isCorrect = window.StudySnapStore.isAnswerMatch(userVal, item.accepted || []);
+            badgeHtml =
+              '<span class="status-badge ' +
+              (isCorrect ? 'status-graded' : 'status-submitted') +
+              '">' +
+              (isCorrect ? '✓ Đúng (+1đ)' : '✕ Sai') +
+              '</span>';
+          }
+
+          return (
+            '<div class="trans-item-card ' +
+            (isManual && !mg
+              ? 'is-pending'
+              : isCorrect
+              ? 'is-correct'
+              : 'is-wrong') +
+            '">' +
+            '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">' +
+            '<div style="font-weight:700;">Câu ' +
+            (idx + 1) +
+            ': ' +
+            escapeHtml(item.prompt || '') +
+            '</div>' +
+            badgeHtml +
+            '</div>' +
+            '<div style="font-size:0.875rem;margin-top:6px;">' +
+            '<div>Câu trả lời của em: <strong>' +
+            escapeHtml(userVal || 'Chưa nhập') +
+            '</strong></div>' +
+            (!isManual && !isCorrect
+              ? '<div style="color:var(--color-primary-deep);margin-top:2px;">Đáp án chuẩn: <strong>' +
+                escapeHtml((item.accepted || []).slice(0, 3).join(' / ')) +
+                '</strong></div>'
+              : '') +
+            (isManual && mg && mg.comment
+              ? '<div style="color:var(--color-primary-deep);margin-top:4px;">Nhận xét của cô: <em>' +
+                escapeHtml(mg.comment) +
+                '</em></div>'
+              : '') +
+            '</div>' +
+            (item.explanation
+              ? '<div class="explanation-reveal-box"><strong>Giải thích:</strong> ' +
+                escapeHtml(item.explanation) +
+                '</div>'
+              : '') +
+            '</div>'
+          );
+        })
+        .join('');
+      return mediaHtml + itemsHtml;
     }
 
     return '';
@@ -3552,6 +3792,28 @@
               } else if (item.mode === 'manual') {
                 hasManualQuestions = true;
                 // Preserved score if already graded previously
+                const existingSub = findStudentPracticeSubmission(exercise.exercise_id);
+                if (
+                  existingSub &&
+                  existingSub.manual_grades &&
+                  existingSub.manual_grades[item.id]
+                ) {
+                  secScore += Number(existingSub.manual_grades[item.id].score || 0);
+                }
+              }
+            });
+          } else if (sec.type === 'short_answer') {
+            const items = (sec.data && sec.data.items) || [];
+            items.forEach(function (item) {
+              const userVal = secAns[item.id] || '';
+              const hasKey = Array.isArray(item.accepted) && item.accepted.length > 0;
+              const isManual = item.mode === 'manual' || !hasKey;
+              if (!isManual) {
+                if (window.StudySnapStore.isAnswerMatch(userVal, item.accepted || [])) {
+                  secScore += 1;
+                }
+              } else {
+                hasManualQuestions = true;
                 const existingSub = findStudentPracticeSubmission(exercise.exercise_id);
                 if (
                   existingSub &&

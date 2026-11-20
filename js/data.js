@@ -2113,12 +2113,21 @@ window.StudySnapStore = (function () {
     if (!studentInput || !Array.isArray(acceptedList) || acceptedList.length === 0) return false;
     const inputNorm = normalizeChineseSentence(studentInput).toLowerCase();
     const inputNoPunct = inputNorm.replace(/[!.,?:;'"()]/g, '').trim();
+    const inputCompactHyphen = inputNoPunct.replace(/\s*-\s*/g, '-').replace(/\s+/g, '');
 
     return acceptedList.some(function (acc) {
       const accNorm = normalizeChineseSentence(acc).toLowerCase();
       if (inputNorm === accNorm) return true;
       const accNoPunct = accNorm.replace(/[!.,?:;'"()]/g, '').trim();
-      return inputNoPunct === accNoPunct;
+      if (inputNoPunct === accNoPunct) return true;
+      // Hỗ trợ so khớp mã ghép dạng "D-C-A-E-B" khi học sinh gõ "D - C - A - E - B" hoặc "DCAEB"
+      if (/^[a-z0-9]+(?:\s*-\s*[a-z0-9]+)+$/i.test(accNoPunct)) {
+        const accHyphenTight = accNoPunct.replace(/\s*-\s*/g, '-');
+        const accBare = accHyphenTight.replace(/-/g, '');
+        if (inputNoPunct.replace(/\s*-\s*/g, '-') === accHyphenTight) return true;
+        if (inputCompactHyphen === accBare) return true;
+      }
+      return false;
     });
   }
 
@@ -2388,6 +2397,10 @@ window.StudySnapStore = (function () {
     else if (mimeType.indexOf('3gpp') >= 0) ext = '.3gp';
     else if (mimeType.indexOf('wav') >= 0) ext = '.wav';
     else if (mimeType.indexOf('mp3') >= 0 || mimeType.indexOf('mpeg') >= 0) ext = '.mp3';
+    else if (mimeType.indexOf('image/jpeg') >= 0 || mimeType.indexOf('image/jpg') >= 0) ext = '.jpg';
+    else if (mimeType.indexOf('image/png') >= 0) ext = '.png';
+    else if (mimeType.indexOf('image/webp') >= 0) ext = '.webp';
+    else if (mimeType.indexOf('image/gif') >= 0) ext = '.gif';
     else if (mimeType.indexOf('video') >= 0) {
       ext = (rawExt === '.mov' || rawExt === '.webm' || rawExt === '.m4v' || rawExt === '.mp4' || rawExt === '.3gp' || rawExt === '.mkv' || rawExt === '.avi')
         ? rawExt
@@ -2461,6 +2474,7 @@ window.StudySnapStore = (function () {
       const exSource = payloadCopy.exercise || payloadCopy;
       const exClone = JSON.parse(JSON.stringify(exSource));
       const exId = String(exClone.exercise_id || ('EX_' + Date.now()));
+      const hasGasBridge = Boolean(getGasUrl());
       const uploadTasks = [];
 
       if (Array.isArray(exClone.sections)) {
@@ -2470,8 +2484,23 @@ window.StudySnapStore = (function () {
           if (typeof sec.data.audio_url === 'string' && sec.data.audio_url.indexOf('data:') === 0) {
             uploadTasks.push({
               target: sec.data,
+              field: 'audio_url',
               dataUrl: sec.data.audio_url,
-              prefix: secPrefix
+              prefix: secPrefix,
+              fallbackMime: 'audio/webm'
+            });
+          }
+          if (
+            typeof sec.data.image_url === 'string' &&
+            sec.data.image_url.indexOf('data:') === 0 &&
+            (hasGasBridge || sec.data.image_url.length > 150000)
+          ) {
+            uploadTasks.push({
+              target: sec.data,
+              field: 'image_url',
+              dataUrl: sec.data.image_url,
+              prefix: secPrefix + '_img',
+              fallbackMime: 'image/jpeg'
             });
           }
           if (Array.isArray(sec.data.items)) {
@@ -2479,8 +2508,24 @@ window.StudySnapStore = (function () {
               if (item && typeof item.audio_url === 'string' && item.audio_url.indexOf('data:') === 0) {
                 uploadTasks.push({
                   target: item,
+                  field: 'audio_url',
                   dataUrl: item.audio_url,
-                  prefix: secPrefix + '_' + (item.id || ('q' + (qIdx + 1)))
+                  prefix: secPrefix + '_' + (item.id || ('q' + (qIdx + 1))),
+                  fallbackMime: 'audio/webm'
+                });
+              }
+              if (
+                item &&
+                typeof item.image_url === 'string' &&
+                item.image_url.indexOf('data:') === 0 &&
+                (hasGasBridge || item.image_url.length > 150000)
+              ) {
+                uploadTasks.push({
+                  target: item,
+                  field: 'image_url',
+                  dataUrl: item.image_url,
+                  prefix: secPrefix + '_' + (item.id || ('q' + (qIdx + 1))) + '_img',
+                  fallbackMime: 'image/jpeg'
                 });
               }
             });
@@ -2494,7 +2539,7 @@ window.StudySnapStore = (function () {
           const chunk = uploadTasks.slice(i, i + CONCURRENCY);
           const results = await Promise.all(
             chunk.map(function (task) {
-              const meta = inferMimeAndExtFromDataUrl(task.dataUrl, 'audio/webm');
+              const meta = inferMimeAndExtFromDataUrl(task.dataUrl, task.fallbackMime || 'audio/webm');
               return uploadMediaToDriveViaGas({
                 base64_data: task.dataUrl,
                 mime_type: meta.mimeType,
@@ -2504,10 +2549,13 @@ window.StudySnapStore = (function () {
           );
           for (let j = 0; j < results.length; j++) {
             if (!results[j] || !results[j].ok || !results[j].media_url) {
-              return { errorResponse: results[j] || { ok: false, error: 'Lỗi tải file nghe lên Google Drive.' } };
+              return { errorResponse: results[j] || { ok: false, error: 'Lỗi tải tệp media lên Google Drive.' } };
             }
-            cacheUploadedDriveMedia(results[j].media_url, chunk[j].dataUrl, chunk[j].prefix);
-            chunk[j].target.audio_url = results[j].media_url;
+            const targetField = chunk[j].field || 'audio_url';
+            if (targetField === 'audio_url') {
+              cacheUploadedDriveMedia(results[j].media_url, chunk[j].dataUrl, chunk[j].prefix);
+            }
+            chunk[j].target[targetField] = results[j].media_url;
           }
         }
         if (exSource && exSource !== stateObj && Array.isArray(exSource.sections)) {
@@ -3363,6 +3411,83 @@ window.StudySnapStore = (function () {
     });
   }
 
+  function resolveMediaDisplayUrl(rawUrl, fallbackMime) {
+    const clean = String(rawUrl || '').trim();
+    if (!clean || clean.indexOf('data:') === 0 || clean.indexOf('/api?') === 0) return clean;
+    const isDrive =
+      clean.indexOf('drive.google.com') >= 0 || clean.indexOf('drive.usercontent.google.com') >= 0;
+    if (!isDrive) return clean;
+    const idMatch =
+      clean.match(/[?&]id=([a-zA-Z0-9_-]{10,120})/) ||
+      clean.match(/\/file\/d\/([a-zA-Z0-9_-]{10,120})/) ||
+      clean.match(/\/d\/([a-zA-Z0-9_-]{10,120})/);
+    const driveId = idMatch && idMatch[1] ? idMatch[1] : '';
+    const isHttpEnv =
+      typeof window !== 'undefined' &&
+      window.location &&
+      /^https?:$/i.test(String(window.location.protocol || ''));
+    if (driveId && isHttpEnv && backendMode !== 'gas') {
+      return (
+        '/api?action=media&fileId=' +
+        encodeURIComponent(driveId) +
+        (fallbackMime ? '&mime=' + encodeURIComponent(fallbackMime) : '')
+      );
+    }
+    return clean;
+  }
+
+  async function fetchGoogleFormFromServer(formUrl) {
+    const cleanUrl = String(formUrl || '').trim();
+    if (!cleanUrl) {
+      return { ok: false, error: 'Vui lòng nhập đường dẫn Google Form.' };
+    }
+    const isHttpEnv =
+      typeof window !== 'undefined' &&
+      window.location &&
+      /^https?:$/i.test(String(window.location.protocol || ''));
+
+    if (isHttpEnv && typeof fetch === 'function') {
+      try {
+        const res = await fetchWithTimeout(
+          '/api?action=fetchGoogleForm&url=' + encodeURIComponent(cleanUrl),
+          { method: 'GET' },
+          25000
+        );
+        const ct = String(res.headers.get('content-type') || '').toLowerCase();
+        if (ct.indexOf('application/json') >= 0) {
+          const json = await res.json();
+          if (json && json.ok && json.form) return json;
+          if (res.status >= 400 && res.status < 500 && json && json.error) {
+            return json;
+          }
+        }
+      } catch (e) {
+        // Fallback to GAS bridge if configured
+      }
+    }
+
+    const gasUrl = getGasUrl();
+    if (gasUrl && typeof fetch === 'function') {
+      try {
+        const gasRes = await fetchWithTimeout(
+          gasUrl + '?action=fetchGoogleForm&url=' + encodeURIComponent(cleanUrl),
+          { method: 'GET' },
+          25000
+        );
+        const gasJson = await gasRes.json();
+        if (gasJson && gasJson.ok && gasJson.form) return gasJson;
+        if (gasJson && gasJson.error) return gasJson;
+      } catch (gasErr) {
+        // Fall through
+      }
+    }
+
+    return {
+      ok: false,
+      error: 'Không thể tải tự động Google Form lúc này. Nếu bạn đang chạy ngoại tuyến chưa có /api, hãy kiểm tra kết nối mạng hoặc thử lại.'
+    };
+  }
+
   function getInitials(fullName) {
     const parts = String(fullName || '').trim().split(/\s+/);
     if (!parts.length || !parts[0]) return 'HS';
@@ -3379,6 +3504,8 @@ window.StudySnapStore = (function () {
     getBackendMode: function () { return backendMode; },
     syncPostToGas: syncPostToGas,
     fetchBootstrapFromGas: fetchBootstrapFromGas,
+    fetchGoogleFormFromServer: fetchGoogleFormFromServer,
+    resolveMediaDisplayUrl: resolveMediaDisplayUrl,
     normalizeChineseSentence: normalizeChineseSentence,
     isAnswerMatch: isAnswerMatch,
     isKeywordsMatch: isKeywordsMatch,

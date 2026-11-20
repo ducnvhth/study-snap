@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css?v=20261116v">
+  <link rel="stylesheet" href="styles/main.css?v=20261116w">
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -106,6 +106,10 @@
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13h8"></path><path d="M8 17h8"></path><path d="M10 9h4"></path></svg>
               <span>Nhập từ Excel</span>
             </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-open-import-gform-modal" title="Nhập thẳng nội dung bài kiểm tra từ đường dẫn Google Form công khai">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+              <span>Nhập Google Form</span>
+            </button>
           </div>
 
           <!-- Giữa: Chuyển đổi Soạn câu hỏi vs Điểm học sinh -->
@@ -181,6 +185,10 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13h8"></path><path d="M8 17h8"></path></svg>
                     <span>Nhập Excel</span>
                   </button>
+                  <button type="button" class="btn btn-outline btn-sm" id="btn-open-import-gform-sticky" title="Nhập đề trực tiếp từ link Google Form">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                    <span>Google Form</span>
+                  </button>
                   <button type="button" class="btn btn-primary btn-sm" id="btn-save-sticky-bar">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
                     <span>Lưu đề nhanh</span>
@@ -206,6 +214,10 @@
                 <button type="button" class="gform-type-btn" data-quick-add-type="listening_mc">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
                   <span>+ 6. Nghe hiểu</span>
+                </button>
+                <button type="button" class="gform-type-btn" data-quick-add-type="short_answer">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+                  <span>+ 7. Trả lời ngắn</span>
                 </button>
               </div>
             </div>
@@ -1674,6 +1686,95 @@
     </div>
   </div>
 
+  <!-- MODAL 5B: NHẬP ĐỀ TỪ GOOGLE FORM CÔNG KHAI -->
+  <div class="modal-backdrop" id="modal-import-google-form" role="dialog" aria-modal="true" aria-labelledby="modal-gform-import-title">
+    <div class="modal-dialog modal-dialog-xl">
+      <div class="panel-header" style="margin-bottom: 14px;">
+        <div class="panel-title-row">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--color-primary-deep);">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+          </svg>
+          <h2 id="modal-gform-import-title">Nhập Bài Kiểm Tra Từ Google Form</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-gform-import" aria-label="Đóng hộp thoại">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <p style="margin-top:0;color:var(--color-muted-foreground);font-size:0.875rem;">
+        Dán đường dẫn làm bài Google Form (<code>https://docs.google.com/forms/d/e/.../viewform</code>) để tự động trích xuất tiêu đề, ảnh đề bài, video YouTube nghe hiểu và toàn bộ câu hỏi vào StudySnap.
+      </p>
+
+      <div class="form-group">
+        <label class="form-label" for="gform-import-url-input" style="font-weight:700;">Đường dẫn Google Form công khai:</label>
+        <div class="gform-import-url-bar">
+          <input type="url" id="gform-import-url-input" class="form-control" placeholder="https://docs.google.com/forms/d/e/.../viewform">
+          <button type="button" class="btn btn-secondary" id="btn-fetch-google-form">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+            <span>Tải &amp; phân tích đề</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="gform-import-error" class="form-error-box" role="alert"></div>
+
+      <div class="form-row-2" style="margin-bottom: 12px;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label" for="import-gform-mode" style="font-weight: 700;">Cách đưa vào StudySnap:</label>
+          <select id="import-gform-mode" class="form-control">
+            <option value="new" selected>Tạo thành bài tập luyện tập mới</option>
+            <option value="append">Thêm các phần vào bài tập đang mở</option>
+            <option value="replace">Thay thế toàn bộ câu hỏi bài đang mở</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;" id="import-gform-tag-wrap">
+          <label class="form-label" for="import-gform-new-tag" style="font-weight: 700;">Thuộc bài / Kỳ kiểm tra:</label>
+          <input type="text" id="import-gform-new-tag" list="practice-lesson-tag-datalist" class="form-control" placeholder="Ví dụ: Test 1 hoặc Bài 1">
+        </div>
+      </div>
+
+      <div class="form-group" id="import-gform-title-wrap" style="margin-bottom: 14px;">
+        <label class="form-label" for="import-gform-new-title" style="font-weight: 700;">Tiêu đề bài tập trên StudySnap:</label>
+        <input type="text" id="import-gform-new-title" class="form-control" placeholder="Sẽ tự động điền theo tiêu đề Google Form...">
+      </div>
+
+      <div id="gform-import-preview" style="display: none; margin-top: 12px;">
+        <div class="practice-import-summary">
+          <div class="practice-import-badges">
+            <strong style="font-size: 0.875rem; color: var(--color-primary-deep);">Đã phân tích từ Google Form:</strong>
+            <span class="status-badge status-mint tabular-nums" id="gform-import-sec-count">0 phần</span>
+            <span class="status-badge status-sky tabular-nums" id="gform-import-q-count">0 câu hỏi</span>
+            <span class="status-badge status-yellow tabular-nums" id="gform-import-score-count">0 điểm</span>
+          </div>
+          <span class="status-badge status-graded" id="gform-import-identity-note">Đã sẵn sàng</span>
+        </div>
+
+        <div class="excel-preview-wrapper" style="max-height: 260px;">
+          <table class="excel-preview-table">
+            <thead>
+              <tr>
+                <th>Phần</th>
+                <th>Dạng bài</th>
+                <th>Tên phần &amp; Tài nguyên đi kèm</th>
+                <th>Số câu</th>
+                <th>Nội dung mẫu</th>
+              </tr>
+            </thead>
+            <tbody id="gform-import-preview-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="banner-actions" style="margin-top: 18px; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-outline" id="btn-cancel-gform-import">Hủy bỏ</button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-gform-import" disabled style="font-weight: 700;">
+          <span>Xác nhận nhập vào StudySnap</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL 6: XÁC NHẬN XÓA HỌC SINH -->
   <div class="modal-backdrop" id="modal-delete-student-confirm" role="dialog" aria-modal="true" aria-labelledby="delete-student-modal-title">
     <div class="modal-dialog" style="max-width: 480px;">
@@ -1835,9 +1936,10 @@
 
   <script src="js/vocab_data.js?v=20261114h"></script>
   <script src="js/vocab_suite.js?v=20261116e"></script>
-  <script src="js/data.js?v=20261116p"></script>
+  <script src="js/data.js?v=20261116w"></script>
   <script src="js/auth.js?v=20261116u"></script>
   <script src="js/audio.js?v=20261116s"></script>
-  <script src="js/teacher.js?v=20261116t"></script>
+  <script src="js/google_form_import.js?v=20261116w"></script>
+  <script src="js/teacher.js?v=20261116w"></script>
 </body>
 </html>
