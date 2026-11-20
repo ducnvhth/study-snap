@@ -566,6 +566,15 @@ function doPost(e) {
       return jsonResponse(authResult);
     }
 
+    if (action === 'changePassword') {
+      const preVerPwd = getDataVersion_();
+      const pwdRes = handleChangePassword_(ss, payload);
+      if (!pwdRes || !pwdRes.ok) {
+        return jsonResponse(pwdRes || { ok: false, error: 'Không thể đổi mật khẩu.' });
+      }
+      return buildMutationResponse_(ss, payload, preVerPwd, { passwordChanged: true });
+    }
+
     const preVer = getDataVersion_();
 
     if (action === 'createStudentAccount') {
@@ -697,7 +706,7 @@ function setupDatabase() {
   const teachersSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
   if (teachersSheet.getLastRow() <= 1) {
     const defaultTeachers = [
-      ['GV01', 'Hồ Châu Uyển Nhi', 'gv_uyennhi', '123456', 'Tiếng Trung Giao Tiếp & HSK']
+      ['GV01', 'Hồ Châu Uyển Nhi', 'gv_uyennhi', hashPasswordGs_('123456'), 'Tiếng Trung Giao Tiếp & HSK']
     ];
     teachersSheet.getRange(2, 1, defaultTeachers.length, defaultTeachers[0].length).setValues(defaultTeachers);
   }
@@ -964,8 +973,8 @@ function getBootstrapData_(ss) {
 
   return {
     isProduction: isProdProp,
-    teachers: readSheetRows_(teachersSheet),
-    students: readSheetRows_(studentsSheet),
+    teachers: stripPasswordFromRows_(readSheetRows_(teachersSheet)),
+    students: stripPasswordFromRows_(readSheetRows_(studentsSheet)),
     assignments: readSheetRows_(assignmentsSheet),
     submissions: readSheetRows_(submissionsSheet),
     exitTicketLogs: readSheetRows_(exitTicketsSheet),
@@ -973,6 +982,56 @@ function getBootstrapData_(ss) {
     practiceExercises: readSheetRows_(practiceExSheet),
     practiceSubmissions: readSheetRows_(practiceSubSheet)
   };
+}
+
+function stripPasswordFromRows_(rows) {
+  return (rows || []).map(function (r) {
+    const copy = {};
+    for (const k in r) {
+      if (Object.prototype.hasOwnProperty.call(r, k) && k !== 'password') {
+        copy[k] = r[k];
+      }
+    }
+    return copy;
+  });
+}
+
+function sha256HexGs_(text) {
+  const digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(text || ''),
+    Utilities.Charset.UTF_8
+  );
+  let hex = '';
+  for (let i = 0; i < digest.length; i++) {
+    const v = digest[i] < 0 ? digest[i] + 256 : digest[i];
+    hex += ('0' + v.toString(16)).slice(-2);
+  }
+  return hex;
+}
+
+function isPasswordHashedGs_(stored) {
+  const s = String(stored || '');
+  return s.indexOf('sha256_v1$') === 0 || s.indexOf('pbkdf2_v1$') === 0;
+}
+
+function hashPasswordGs_(plainPassword) {
+  const salt = Utilities.getUuid().replace(/-/g, '').slice(0, 24);
+  return 'sha256_v1$' + salt + '$' + sha256HexGs_(salt + ':' + String(plainPassword || '').trim());
+}
+
+function verifyPasswordGs_(plainInput, storedVal) {
+  const plain = String(plainInput || '').trim();
+  const stored = String(storedVal === undefined || storedVal === null ? '' : storedVal).trim();
+  if (!plain || !stored) return { valid: false, needsUpgrade: false };
+  if (stored.indexOf('sha256_v1$') === 0) {
+    const parts = stored.split('$');
+    if (parts.length !== 3 || !parts[1] || !parts[2]) return { valid: false, needsUpgrade: false };
+    const actual = sha256HexGs_(parts[1] + ':' + plain);
+    return { valid: actual === parts[2], needsUpgrade: false };
+  }
+  const match = plain === stored;
+  return { valid: match, needsUpgrade: match };
 }
 
 function readSheetRows_(sheet) {
@@ -1004,12 +1063,16 @@ function handleLogin_(ss, payload) {
     };
   }
 
-  const teachers = readSheetRows_(ss.getSheetByName(SHEET_NAMES.TEACHERS));
+  const teachersSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
+  const teachers = readSheetRows_(teachersSheet);
   for (let i = 0; i < teachers.length; i++) {
     const t = teachers[i];
     const tUser = String(t.username || '').trim().toLowerCase();
-    const tPwd = String(t.password === undefined || t.password === null ? '' : t.password).trim();
-    if (tUser && tUser === username && tPwd === password) {
+    const checkT = verifyPasswordGs_(password, t.password);
+    if (tUser && tUser === username && checkT.valid) {
+      if (checkT.needsUpgrade && teachersSheet) {
+        teachersSheet.getRange(i + 2, 4).setValue(hashPasswordGs_(password));
+      }
       return {
         ok: true,
         user: {
@@ -1023,14 +1086,18 @@ function handleLogin_(ss, payload) {
     }
   }
 
-  const students = readSheetRows_(ss.getSheetByName(SHEET_NAMES.STUDENTS));
+  const studentsSheet = ss.getSheetByName(SHEET_NAMES.STUDENTS);
+  const students = readSheetRows_(studentsSheet);
   for (let j = 0; j < students.length; j++) {
     const s = students[j];
     const sUser = String(s.username || '').trim().toLowerCase();
     const sId = String(s.student_id || '').trim().toLowerCase();
-    const sPwd = String(s.password === undefined || s.password === null ? '' : s.password).trim();
     const matchUser = (sUser && sUser === username) || (sId && sId === username);
-    if (matchUser && sPwd === password) {
+    const checkS = verifyPasswordGs_(password, s.password);
+    if (matchUser && checkS.valid) {
+      if (checkS.needsUpgrade && studentsSheet) {
+        studentsSheet.getRange(j + 2, 6).setValue(hashPasswordGs_(password));
+      }
       return {
         ok: true,
         user: {
@@ -1050,6 +1117,47 @@ function handleLogin_(ss, payload) {
     ok: false,
     error: 'Tên đăng nhập hoặc mật khẩu không chính xác.'
   };
+}
+
+function handleChangePassword_(ss, payload) {
+  const role = String(payload.role || '').trim();
+  const userId = String(payload.user_id || payload.student_id || payload.teacher_id || '').trim();
+  const currentPwd = String(payload.current_password || '').trim();
+  const newPwd = String(payload.new_password || '').trim();
+  if (!userId || !currentPwd || newPwd.length < 6) {
+    return {
+      ok: false,
+      error: 'Vui lòng nhập mật khẩu hiện tại và mật khẩu mới (tối thiểu 6 ký tự).'
+    };
+  }
+  if (role === 'teacher') {
+    const tSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
+    const vals = tSheet ? tSheet.getDataRange().getValues() : [];
+    for (let i = 1; i < vals.length; i++) {
+      if (String(vals[i][0] || '').trim() === userId) {
+        const chk = verifyPasswordGs_(currentPwd, vals[i][3]);
+        if (!chk.valid) {
+          return { ok: false, error: 'Mật khẩu hiện tại không chính xác.' };
+        }
+        tSheet.getRange(i + 1, 4).setValue(hashPasswordGs_(newPwd));
+        return { ok: true };
+      }
+    }
+    return { ok: false, error: 'Không tìm thấy tài khoản giáo viên.' };
+  }
+  const sSheet = ss.getSheetByName(SHEET_NAMES.STUDENTS);
+  const sVals = sSheet ? sSheet.getDataRange().getValues() : [];
+  for (let j = 1; j < sVals.length; j++) {
+    if (String(sVals[j][0] || '').trim() === userId) {
+      const chkS = verifyPasswordGs_(currentPwd, sVals[j][5]);
+      if (!chkS.valid) {
+        return { ok: false, error: 'Mật khẩu hiện tại không chính xác.' };
+      }
+      sSheet.getRange(j + 1, 6).setValue(hashPasswordGs_(newPwd));
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: 'Không tìm thấy tài khoản học sinh.' };
 }
 
 function generateNextStudentId_(sheet) {
@@ -1088,7 +1196,7 @@ function handleCreateStudentAccount_(ss, payload) {
   const password = String(payload.password || '123456').trim();
   const createdAt = new Date().toLocaleDateString('vi-VN');
 
-  sheet.appendRow([studentId, fullName, className, initials, username, password, createdAt]);
+  sheet.appendRow([studentId, fullName, className, initials, username, hashPasswordGs_(password), createdAt]);
   return {
     student_id: studentId,
     full_name: fullName,
@@ -1103,10 +1211,11 @@ function handleCreateStudentAccount_(ss, payload) {
 function handleResetStudentPassword_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.STUDENTS);
   const values = sheet.getDataRange().getValues();
+  const newPwd = String(payload.new_password || '123456').trim();
   for (let i = 1; i < values.length; i++) {
     if (String(values[i][0]) === String(payload.student_id)) {
-      sheet.getRange(i + 1, 6).setValue(String(payload.new_password || '123456'));
-      return { student_id: payload.student_id, password: payload.new_password };
+      sheet.getRange(i + 1, 6).setValue(hashPasswordGs_(newPwd));
+      return { student_id: payload.student_id, password: newPwd };
     }
   }
   return null;

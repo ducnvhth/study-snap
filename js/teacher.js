@@ -23,6 +23,8 @@
   };
 
   let state = window.StudySnapStore.loadState();
+  // Lưu tạm mật khẩu vừa cấp/vừa đặt lại chỉ trong bộ nhớ phiên hiện tại (không lưu vào localStorage)
+  const sessionIssuedPasswords = new Map();
 
   const CUSTOM_SESSIONS_STORAGE_KEY = 'studysnap_custom_bvn_sessions';
 
@@ -1866,7 +1868,10 @@
 
     listEl.innerHTML = filteredStudents.map(function (st) {
       const uname = st.username || st.student_id.toLowerCase();
-      const pwd = st.password || '123456';
+      const issuedPwd = sessionIssuedPasswords.get(st.student_id) || '';
+      const pwdHtml = issuedPwd
+        ? 'Mật khẩu vừa cấp: <strong>' + escapeHtml(issuedPwd) + '</strong>'
+        : 'Mật khẩu: <strong>Đã mã hóa (an toàn)</strong>';
       return '<div class="quick-account-row">' +
         '<div class="student-cell-info">' +
           '<span class="student-avatar">' + escapeHtml(st.avatar_initials) + '</span>' +
@@ -1876,7 +1881,7 @@
               '<span class="status-badge status-submitted" style="font-size:0.75rem;">' + escapeHtml(st.class_name || 'Chưa xếp lớp') + '</span>' +
             '</div>' +
             '<div class="tabular-nums" style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-top:2px;">' +
-              'Tên đăng nhập: <strong>' + escapeHtml(uname) + '</strong> • Mật khẩu: <strong>' + escapeHtml(pwd) + '</strong>' +
+              'Tên đăng nhập: <strong>' + escapeHtml(uname) + '</strong> • ' + pwdHtml +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -1884,7 +1889,7 @@
           '<button type="button" class="btn btn-outline btn-sm" data-change-student-class="' + escapeHtml(st.student_id) + '" title="Chuyển lớp cho học sinh này">' +
             '<span>Đổi lớp</span>' +
           '</button>' +
-          '<button type="button" class="btn btn-outline btn-sm" data-copy-credentials="' + escapeHtml(st.full_name) + '|' + escapeHtml(uname) + '|' + escapeHtml(pwd) + '">' +
+          '<button type="button" class="btn btn-outline btn-sm" data-copy-credentials="' + escapeHtml(st.student_id) + '|' + escapeHtml(st.full_name) + '|' + escapeHtml(uname) + '">' +
             '<span>Sao chép TK</span>' +
           '</button>' +
           '<button type="button" class="btn btn-outline btn-sm" data-reset-password="' + escapeHtml(st.student_id) + '">' +
@@ -7224,7 +7229,84 @@
     const logoutBtn = document.getElementById('btn-teacher-logout');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', function () {
+        sessionIssuedPasswords.clear();
         window.StudySnapAuth.logout();
+      });
+    }
+
+    const changePwdBtn = document.getElementById('btn-teacher-change-password');
+    const modalChangePwd = document.getElementById('modal-change-password');
+    const closeChangePwdBtn = document.getElementById('btn-close-change-pwd-modal');
+    const cancelChangePwdBtn = document.getElementById('btn-cancel-change-pwd-modal');
+    const formTeacherPwd = document.getElementById('teacher-change-password-form');
+
+    function setTeacherPwdModalOpen(open) {
+      if (!modalChangePwd) return;
+      modalChangePwd.classList.toggle('is-open', Boolean(open));
+      modalChangePwd.classList.toggle('is-visible', Boolean(open));
+      if (open) {
+        if (formTeacherPwd) formTeacherPwd.reset();
+        const curInput = document.getElementById('teacher-current-password');
+        if (curInput) setTimeout(function () { curInput.focus(); }, 40);
+      }
+    }
+
+    if (changePwdBtn && modalChangePwd) {
+      changePwdBtn.addEventListener('click', function () {
+        setTeacherPwdModalOpen(true);
+      });
+    }
+    if (closeChangePwdBtn) {
+      closeChangePwdBtn.addEventListener('click', function () {
+        setTeacherPwdModalOpen(false);
+      });
+    }
+    if (cancelChangePwdBtn) {
+      cancelChangePwdBtn.addEventListener('click', function () {
+        setTeacherPwdModalOpen(false);
+      });
+    }
+    if (modalChangePwd) {
+      modalChangePwd.addEventListener('click', function (ev) {
+        if (ev.target === modalChangePwd) setTeacherPwdModalOpen(false);
+      });
+      document.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape' && modalChangePwd.classList.contains('is-open')) {
+          setTeacherPwdModalOpen(false);
+        }
+      });
+    }
+    if (formTeacherPwd) {
+      formTeacherPwd.addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        const curPwd = String((document.getElementById('teacher-current-password') || {}).value || '').trim();
+        const newPwd = String((document.getElementById('teacher-new-password') || {}).value || '').trim();
+        const confirmPwd = String((document.getElementById('teacher-confirm-password') || {}).value || '').trim();
+        if (!curPwd || newPwd.length < 6) {
+          showToast('Mật khẩu mới phải có tối thiểu 6 ký tự.');
+          return;
+        }
+        if (newPwd !== confirmPwd) {
+          showToast('Mật khẩu xác nhận không khớp với mật khẩu mới.');
+          return;
+        }
+        const submitBtn = document.getElementById('btn-submit-teacher-change-pwd');
+        let res = null;
+        await runWithLoading(submitBtn, 'Đang cập nhật...', async function () {
+          res = await window.StudySnapStore.syncPostToGas(state, {
+            action: 'changePassword',
+            role: 'teacher',
+            user_id: currentUser.id,
+            current_password: curPwd,
+            new_password: newPwd
+          });
+        });
+        if (!res || !res.ok) {
+          showToast((res && res.error) || 'Không thể đổi mật khẩu lúc này.');
+          return;
+        }
+        setTeacherPwdModalOpen(false);
+        showToast('Đã đổi mật khẩu Giáo viên thành công! Các phiên đăng nhập cũ ở thiết bị khác đã được đăng xuất.');
       });
     }
 
@@ -8503,24 +8585,33 @@
           class_name: className,
           avatar_initials: initials,
           username: username,
-          password: password,
           created_at: new Date().toLocaleDateString('vi-VN')
         };
 
         state.students.push(newStudent);
+        sessionIssuedPasswords.set(nextId, password);
         window.StudySnapStore.saveState(state);
 
+        let createRes = null;
         await runWithLoading(submitBtn, 'Đang tạo tài khoản...', async function () {
-          await window.StudySnapStore.syncPostToGas(state, {
+          createRes = await window.StudySnapStore.syncPostToGas(state, {
             action: 'createStudentAccount',
             student_id: newStudent.student_id,
             full_name: newStudent.full_name,
             class_name: newStudent.class_name,
             avatar_initials: newStudent.avatar_initials,
             username: newStudent.username,
-            password: newStudent.password
+            password: password
           });
         });
+
+        if (createRes && createRes.student) {
+          const finalId = createRes.student.student_id || newStudent.student_id;
+          newStudent.student_id = finalId;
+          if (createRes.student.password) {
+            sessionIssuedPasswords.set(finalId, String(createRes.student.password));
+          }
+        }
 
         // Reset form: chỉ cần xóa tên học sinh, tự động sinh username kế tiếp và sinh mật khẩu ngẫu nhiên mới
         if (nameInput) {
@@ -11149,7 +11240,21 @@
       const copyBtn = ev.target.closest('[data-copy-credentials]');
       if (copyBtn) {
         const parts = copyBtn.getAttribute('data-copy-credentials').split('|');
-        const copyText = 'Tài khoản StudySnap của ' + parts[0] + ' — Tên đăng nhập: ' + parts[1] + ' | Mật khẩu: ' + parts[2];
+        let stuIdKey = '';
+        let fullNameTxt = '';
+        let unameTxt = '';
+        if (parts.length >= 3) {
+          stuIdKey = parts[0];
+          fullNameTxt = parts[1];
+          unameTxt = parts[2];
+        } else {
+          fullNameTxt = parts[0] || '';
+          unameTxt = parts[1] || '';
+        }
+        const issuedPwd = sessionIssuedPasswords.get(stuIdKey) || '';
+        const copyText = issuedPwd
+          ? ('Tài khoản StudySnap của ' + fullNameTxt + ' — Tên đăng nhập: ' + unameTxt + ' | Mật khẩu: ' + issuedPwd)
+          : ('Tài khoản StudySnap của ' + fullNameTxt + ' — Tên đăng nhập: ' + unameTxt + ' (mật khẩu đang được mã hóa bảo mật; nếu quên vui lòng bấm Đổi mật khẩu để cấp lại)');
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(copyText);
         }
@@ -11162,19 +11267,30 @@
         const stId = resetPwdBtn.getAttribute('data-reset-password');
         const st = findStudent(stId);
         if (!st) return;
-        const newPwd = window.prompt('Nhập mật khẩu mới cho học sinh ' + st.full_name + ':', st.password || '123456');
+        const suggestedPwd = generateRandomPassword();
+        const newPwd = window.prompt('Nhập mật khẩu mới (tối thiểu 6 ký tự) cho học sinh ' + st.full_name + ':', suggestedPwd);
         if (newPwd && newPwd.trim()) {
-          st.password = newPwd.trim();
-          window.StudySnapStore.saveState(state);
+          const cleanPwd = newPwd.trim();
+          if (cleanPwd.length < 6) {
+            showToast('Mật khẩu mới phải có ít nhất 6 ký tự.');
+            return;
+          }
+          let resetRes = null;
           await runWithLoading(resetPwdBtn, 'Đang cập nhật...', async function () {
-            await window.StudySnapStore.syncPostToGas(state, {
+            resetRes = await window.StudySnapStore.syncPostToGas(state, {
               action: 'resetStudentPassword',
               student_id: st.student_id,
-              new_password: st.password
+              new_password: cleanPwd
             });
           });
+          if (resetRes && resetRes.ok === false) {
+            showToast(resetRes.error || 'Không thể cập nhật mật khẩu lúc này.');
+            return;
+          }
+          const finalPwd = (resetRes && resetRes.student && resetRes.student.password) || cleanPwd;
+          sessionIssuedPasswords.set(st.student_id, String(finalPwd));
           renderStudentAccountsTab();
-          showToast('Đã cập nhật mật khẩu mới cho ' + st.full_name + '!');
+          showToast('Đã cập nhật mật khẩu mới cho ' + st.full_name + ': ' + finalPwd);
         }
         return;
       }
@@ -11401,12 +11517,24 @@
   document.addEventListener('DOMContentLoaded', function () {
     bindEvents();
     renderAll();
-    if (window.StudySnapStore.getGasUrl()) {
+    if (
+      window.StudySnapStore.getGasUrl() ||
+      (window.StudySnapAuth && typeof window.StudySnapAuth.isHttpRuntime === 'function' && window.StudySnapAuth.isHttpRuntime())
+    ) {
       window.StudySnapStore.fetchBootstrapFromGas(state).then(function (remoteRes) {
+        if (remoteRes && remoteRes.sessionExpired) {
+          return;
+        }
         if (remoteRes && remoteRes.ok && remoteRes.data) {
-          const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
+          const isPreview = window.StudySnapAuth && typeof window.StudySnapAuth.isPreviewAllowed === 'function'
+            ? window.StudySnapAuth.isPreviewAllowed()
+            : false;
           if (!isPreview && !window.StudySnapAuth.revalidateActiveSession(state)) {
-            window.location.replace('index.html?session=expired');
+            if (window.StudySnapAuth && typeof window.StudySnapAuth.handleSessionExpired === 'function') {
+              window.StudySnapAuth.handleSessionExpired();
+            } else {
+              window.location.replace('index.html?session=expired');
+            }
             return;
           }
         }

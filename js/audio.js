@@ -345,7 +345,7 @@ window.StudySnapAudio = (function () {
               encodeURIComponent(driveFileId) +
               (expectVideo ? '&mime=video%2Fmp4' : '') +
               (bypassCache ? '&nocache=1' : '');
-            const edgeRes = await fetch(edgeUrl);
+            const edgeRes = await fetch(edgeUrl, { credentials: 'same-origin' });
             const ct = String(edgeRes.headers.get('content-type') || '').toLowerCase();
             if (edgeRes.ok && ct.indexOf('application/json') === -1 && ct.indexOf('text/') === -1 && ct.indexOf('xml') === -1) {
               const rawBlob = await edgeRes.blob();

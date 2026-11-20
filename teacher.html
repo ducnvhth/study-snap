@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css?v=20261116x">
+  <link rel="stylesheet" href="styles/main.css?v=20261116y">
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -80,6 +80,7 @@
 
       <div class="utility-group">
         <span class="user-profile-pill" id="teacher-profile-pill">Giáo viên</span>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-teacher-change-password" title="Đổi mật khẩu tài khoản Giáo viên">Đổi mật khẩu</button>
         <button type="button" class="btn btn-outline btn-sm" id="btn-teacher-logout">Đăng xuất</button>
       </div>
     </header>
@@ -2064,17 +2065,53 @@
     </div>
   </div>
 
+  <!-- MODAL 7: ĐỔI MẬT KHẨU GIÁO VIÊN -->
+  <div class="modal-backdrop" id="modal-change-password" role="dialog" aria-modal="true" aria-labelledby="modal-teacher-pwd-title">
+    <div class="modal-dialog">
+      <div class="panel-header" style="margin-bottom: 14px;">
+        <div class="panel-title-row">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--color-primary-deep);">
+            <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <h2 id="modal-teacher-pwd-title">Đổi mật khẩu tài khoản Giáo viên</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-change-pwd-modal" aria-label="Đóng hộp thoại">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <form id="teacher-change-password-form">
+        <div class="form-group">
+          <label class="form-label" for="teacher-current-password">Mật khẩu hiện tại</label>
+          <input type="password" id="teacher-current-password" class="form-control" autocomplete="current-password" required placeholder="Nhập mật khẩu đang dùng">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="teacher-new-password">Mật khẩu mới (tối thiểu 6 ký tự)</label>
+          <input type="password" id="teacher-new-password" class="form-control" autocomplete="new-password" minlength="6" required placeholder="Nhập mật khẩu mới mạnh hơn">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="teacher-confirm-password">Nhập lại mật khẩu mới</label>
+          <input type="password" id="teacher-confirm-password" class="form-control" autocomplete="new-password" minlength="6" required placeholder="Xác nhận lại mật khẩu mới">
+        </div>
+        <div class="banner-actions" style="justify-content: flex-end; gap: 10px; margin-top: 16px;">
+          <button type="button" class="btn btn-outline" id="btn-cancel-change-pwd-modal">Hủy</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-teacher-change-pwd" style="font-weight: 700;">Cập nhật mật khẩu</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="toast-banner" id="toast-banner" role="status" aria-live="polite">
     <span id="toast-message">Đã lưu thay đổi!</span>
   </div>
 
   <script src="js/vocab_data.js?v=20261114h"></script>
   <script src="js/vocab_suite.js?v=20261116e"></script>
-  <script src="js/data.js?v=20261116w"></script>
-  <script src="js/auth.js?v=20261116u"></script>
-  <script src="js/audio.js?v=20261116s"></script>
+  <script src="js/data.js?v=20261116y"></script>
+  <script src="js/auth.js?v=20261116y"></script>
+  <script src="js/audio.js?v=20261116y"></script>
   <script src="js/google_form_import.js?v=20261116w"></script>
   <script src="js/pptx_import.js?v=20261116x"></script>
-  <script src="js/teacher.js?v=20261116x"></script>
+  <script src="js/teacher.js?v=20261116y"></script>
 </body>
 </html>

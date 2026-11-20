@@ -16,7 +16,9 @@ const SCHEMA_TABLE_STATEMENTS = [
   "CREATE TABLE IF NOT EXISTS exit_tickets (record_id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL, student_id TEXT NOT NULL, student_name TEXT NOT NULL DEFAULT '', score REAL NOT NULL DEFAULT 0, total REAL NOT NULL DEFAULT 0, submitted_at TEXT NOT NULL DEFAULT '', answers_json TEXT NOT NULL DEFAULT '[]')",
   "CREATE TABLE IF NOT EXISTS vocabulary (vocab_id TEXT PRIMARY KEY, lesson_id TEXT NOT NULL, lesson_title TEXT NOT NULL DEFAULT '', word TEXT NOT NULL, ipa TEXT NOT NULL DEFAULT '', part_of_speech TEXT NOT NULL DEFAULT '', meaning_vi TEXT NOT NULL DEFAULT '', example_en TEXT NOT NULL DEFAULT '', example_vi TEXT NOT NULL DEFAULT '')",
   "CREATE TABLE IF NOT EXISTS practice_exercises (exercise_id TEXT PRIMARY KEY, title TEXT NOT NULL, lesson_tag TEXT NOT NULL DEFAULT '', total_score REAL NOT NULL DEFAULT 35, thresholds_json TEXT NOT NULL DEFAULT '{\"very_good\":31,\"good\":25}', sections_json TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL DEFAULT '')",
-  "CREATE TABLE IF NOT EXISTS practice_submissions (submission_id TEXT PRIMARY KEY, exercise_id TEXT NOT NULL, student_id TEXT NOT NULL, student_name TEXT NOT NULL DEFAULT '', total_score REAL NOT NULL DEFAULT 0, max_score REAL NOT NULL DEFAULT 35, rating TEXT NOT NULL DEFAULT '', submitted_at TEXT NOT NULL DEFAULT '', section_scores_json TEXT NOT NULL DEFAULT '{}', answers_json TEXT NOT NULL DEFAULT '{}', manual_grades_json TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'submitted')"
+  "CREATE TABLE IF NOT EXISTS practice_submissions (submission_id TEXT PRIMARY KEY, exercise_id TEXT NOT NULL, student_id TEXT NOT NULL, student_name TEXT NOT NULL DEFAULT '', total_score REAL NOT NULL DEFAULT 0, max_score REAL NOT NULL DEFAULT 35, rating TEXT NOT NULL DEFAULT '', submitted_at TEXT NOT NULL DEFAULT '', section_scores_json TEXT NOT NULL DEFAULT '{}', answers_json TEXT NOT NULL DEFAULT '{}', manual_grades_json TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'submitted')",
+  "CREATE TABLE IF NOT EXISTS auth_sessions (session_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, role TEXT NOT NULL, refresh_hash TEXT NOT NULL, prev_refresh_hash TEXT NOT NULL DEFAULT '', prev_refresh_until INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, last_used_at INTEGER NOT NULL, user_agent TEXT NOT NULL DEFAULT '')",
+  'CREATE TABLE IF NOT EXISTS login_attempts (attempt_key TEXT PRIMARY KEY, fail_count INTEGER NOT NULL DEFAULT 0, first_fail_at INTEGER NOT NULL, locked_until INTEGER NOT NULL DEFAULT 0)'
 ];
 
 const SCHEMA_INDEX_STATEMENTS = [
@@ -27,7 +29,8 @@ const SCHEMA_INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_exit_tickets_stu ON exit_tickets(student_id)',
   'CREATE INDEX IF NOT EXISTS idx_vocabulary_lesson ON vocabulary(lesson_id)',
   'CREATE INDEX IF NOT EXISTS idx_practice_subs_ex_stu ON practice_submissions(exercise_id, student_id)',
-  'CREATE INDEX IF NOT EXISTS idx_practice_subs_stu ON practice_submissions(student_id)'
+  'CREATE INDEX IF NOT EXISTS idx_practice_subs_stu ON practice_submissions(student_id)',
+  'CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id, role)'
 ];
 
 const DEFAULT_TEACHER = {
@@ -38,17 +41,471 @@ const DEFAULT_TEACHER = {
   subject: 'Tiếng Trung Giao Tiếp & HSK'
 };
 
+const ACCESS_COOKIE_NAME = 'ss_access';
+const REFRESH_COOKIE_NAME = 'ss_refresh';
+const ACCESS_TTL_SEC = 900; // 15 minutes
+const REFRESH_TTL_SEC = 7 * 24 * 60 * 60; // 7 days
+const LOGIN_MAX_FAILS = 8;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_LOCK_MS = 15 * 60 * 1000;
+const PBKDF2_PREFIX = 'pbkdf2_v1$';
+
 const initializedDatabases = new WeakSet();
 
-function jsonResponse(obj, status = 200, extraHeaders) {
-  const headers = Object.assign(
-    {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store'
-    },
-    extraHeaders || {}
+function jsonResponse(obj, status = 200, extraHeaders, setCookies) {
+  const headers = new Headers(
+    Object.assign(
+      {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store'
+      },
+      extraHeaders || {}
+    )
   );
+  if (Array.isArray(setCookies)) {
+    setCookies.forEach(function (c) {
+      if (c) headers.append('Set-Cookie', c);
+    });
+  }
   return new Response(JSON.stringify(obj), { status, headers });
+}
+
+function withSessionCookies(response, setCookies) {
+  if (!response || !Array.isArray(setCookies) || setCookies.length === 0) return response;
+  const headers = new Headers(response.headers);
+  setCookies.forEach(function (c) {
+    if (c) headers.append('Set-Cookie', c);
+  });
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: headers
+  });
+}
+
+function bytesToHex(bytes) {
+  const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let out = '';
+  for (let i = 0; i < arr.length; i++) {
+    out += arr[i].toString(16).padStart(2, '0');
+  }
+  return out;
+}
+
+function hexToBytes(hex) {
+  const clean = String(hex || '').trim();
+  if (!clean || clean.length % 2 !== 0) return new Uint8Array(0);
+  const out = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16) || 0;
+  }
+  return out;
+}
+
+function toBase64Url(bytesInput) {
+  const bytes = bytesInput instanceof Uint8Array ? bytesInput : new Uint8Array(bytesInput);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function fromBase64Url(str) {
+  const clean = String(str || '').replace(/-/g, '+').replace(/_/g, '/');
+  const pad = clean.length % 4 === 0 ? '' : '='.repeat(4 - (clean.length % 4));
+  const bin = atob(clean + pad);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function timingSafeEqualBytes(a, b) {
+  if (!(a instanceof Uint8Array) || !(b instanceof Uint8Array) || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a[i] ^ b[i];
+  }
+  return diff === 0;
+}
+
+function randomTokenUrl(byteLen) {
+  const bytes = new Uint8Array(byteLen || 32);
+  crypto.getRandomValues(bytes);
+  return toBase64Url(bytes);
+}
+
+async function sha256Hex(text) {
+  const data = new TextEncoder().encode(String(text || ''));
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return bytesToHex(new Uint8Array(digest));
+}
+
+function isPasswordHashed(stored) {
+  return String(stored || '').indexOf(PBKDF2_PREFIX) === 0;
+}
+
+async function hashPassword(plainPassword, iterations) {
+  const raw = String(plainPassword || '');
+  const iter = Math.min(100000, Math.max(1000, Number(iterations) || 100000));
+  if (isPasswordHashed(raw)) return raw;
+  const salt = new Uint8Array(16);
+  crypto.getRandomValues(salt);
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(raw),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: salt, iterations: iter, hash: 'SHA-256' },
+    keyMaterial,
+    256
+  );
+  return PBKDF2_PREFIX + iter + '$' + bytesToHex(salt) + '$' + bytesToHex(new Uint8Array(bits));
+}
+
+async function verifyPassword(plainInput, storedVal) {
+  const plain = String(plainInput || '').trim();
+  const stored = String(storedVal || '').trim();
+  if (!plain || !stored) return { valid: false, needsUpgrade: false };
+
+  if (isPasswordHashed(stored)) {
+    const parts = stored.split('$');
+    if (parts.length !== 4) return { valid: false, needsUpgrade: false };
+    const iter = parseInt(parts[1], 10);
+    const salt = hexToBytes(parts[2]);
+    const expected = hexToBytes(parts[3]);
+    if (!iter || iter < 1000 || iter > 100000 || salt.length === 0 || expected.length !== 32) {
+      return { valid: false, needsUpgrade: false };
+    }
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(plain),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveBits']
+    );
+    const derived = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', salt: salt, iterations: iter, hash: 'SHA-256' },
+      keyMaterial,
+      256
+    );
+    const valid = timingSafeEqualBytes(new Uint8Array(derived), expected);
+    return { valid: valid, needsUpgrade: valid && iter < 100000 };
+  }
+
+  if (stored.indexOf('sha256_v1$') === 0) {
+    const parts = stored.split('$');
+    if (parts.length !== 3 || !parts[1] || !parts[2]) return { valid: false, needsUpgrade: false };
+    const actualHex = await sha256Hex(parts[1] + ':' + plain);
+    const valid = timingSafeEqualBytes(hexToBytes(actualHex), hexToBytes(parts[2]));
+    return { valid: valid, needsUpgrade: valid };
+  }
+
+  const a = new TextEncoder().encode(plain);
+  const b = new TextEncoder().encode(stored);
+  const sameLen = a.length === b.length;
+  const maxLen = Math.max(a.length, b.length, 1);
+  let diff = sameLen ? 0 : 1;
+  for (let i = 0; i < maxLen; i++) {
+    diff |= (a[i] || 0) ^ (b[i] || 0);
+  }
+  const valid = diff === 0;
+  return { valid: valid, needsUpgrade: valid };
+}
+
+function parseCookies(request) {
+  const out = {};
+  const raw = request && request.headers ? String(request.headers.get('cookie') || '') : '';
+  if (!raw) return out;
+  raw.split(';').forEach(function (part) {
+    const idx = part.indexOf('=');
+    if (idx <= 0) return;
+    const name = part.slice(0, idx).trim();
+    const val = part.slice(idx + 1).trim();
+    if (!name) return;
+    try {
+      out[name] = decodeURIComponent(val);
+    } catch (e) {
+      out[name] = val;
+    }
+  });
+  return out;
+}
+
+function buildCookieString(name, value, maxAgeSec, isHttps) {
+  const attrs = [
+    name + '=' + encodeURIComponent(value),
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    'Max-Age=' + Math.max(0, Math.floor(Number(maxAgeSec) || 0))
+  ];
+  if (isHttps) attrs.push('Secure');
+  return attrs.join('; ');
+}
+
+function buildSessionSetCookies(url, accessToken, refreshToken) {
+  const isHttps = Boolean(url && url.protocol === 'https:');
+  return [
+    buildCookieString(ACCESS_COOKIE_NAME, accessToken, ACCESS_TTL_SEC, isHttps),
+    buildCookieString(REFRESH_COOKIE_NAME, refreshToken, REFRESH_TTL_SEC, isHttps)
+  ];
+}
+
+function buildClearSessionCookies(url) {
+  const isHttps = Boolean(url && url.protocol === 'https:');
+  return [
+    buildCookieString(ACCESS_COOKIE_NAME, '', 0, isHttps),
+    buildCookieString(REFRESH_COOKIE_NAME, '', 0, isHttps)
+  ];
+}
+
+async function getAuthHmacSecret(db, env) {
+  const envSecret = env && (env.AUTH_SECRET || env.SESSION_SECRET);
+  if (envSecret && String(envSecret).trim().length >= 16) {
+    return String(envSecret).trim();
+  }
+  const row = await db.prepare("SELECT value FROM app_meta WHERE key = 'auth_hmac_secret' LIMIT 1").first();
+  if (row && row.value && String(row.value).length >= 32) {
+    return String(row.value);
+  }
+  const generated = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
+  await db
+    .prepare("INSERT OR IGNORE INTO app_meta (key, value) VALUES ('auth_hmac_secret', ?)")
+    .bind(generated)
+    .run();
+  const stored = await db.prepare("SELECT value FROM app_meta WHERE key = 'auth_hmac_secret' LIMIT 1").first();
+  return stored && stored.value ? String(stored.value) : generated;
+}
+
+async function importHmacKey(secretText) {
+  return await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(String(secretText || '')),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign', 'verify']
+  );
+}
+
+async function signAccessToken(secretText, payloadObj) {
+  const payloadB64 = toBase64Url(new TextEncoder().encode(JSON.stringify(payloadObj)));
+  const key = await importHmacKey(secretText);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payloadB64));
+  return payloadB64 + '.' + toBase64Url(new Uint8Array(sig));
+}
+
+async function verifyAccessToken(secretText, tokenStr) {
+  try {
+    const parts = String(tokenStr || '').split('.');
+    if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+    const key = await importHmacKey(secretText);
+    const sigBytes = fromBase64Url(parts[1]);
+    const ok = await crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(parts[0]));
+    if (!ok) return null;
+    const decoded = new TextDecoder().decode(fromBase64Url(parts[0]));
+    const data = JSON.parse(decoded);
+    if (!data || !data.sid || !data.uid || !data.role || !data.exp) return null;
+    if (Number(data.exp) <= Date.now()) return null;
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function loadUserBySessionIdentity(db, role, userId) {
+  const uid = String(userId || '').trim();
+  if (!uid) return null;
+  if (role === 'teacher') {
+    const t = await db
+      .prepare('SELECT teacher_id, full_name, username, subject FROM teachers WHERE teacher_id = ? LIMIT 1')
+      .bind(uid)
+      .first();
+    if (!t) return null;
+    return {
+      role: 'teacher',
+      id: t.teacher_id,
+      full_name: t.full_name,
+      username: t.username,
+      subject: t.subject || 'Giáo viên phụ trách'
+    };
+  }
+  if (role === 'student') {
+    const s = await db
+      .prepare('SELECT student_id, full_name, class_name, avatar_initials, username FROM students WHERE student_id = ? LIMIT 1')
+      .bind(uid)
+      .first();
+    if (!s) return null;
+    return {
+      role: 'student',
+      id: s.student_id,
+      student_id: s.student_id,
+      full_name: s.full_name,
+      username: s.username || String(s.student_id || '').toLowerCase(),
+      class_name: s.class_name,
+      avatar_initials: s.avatar_initials
+    };
+  }
+  return null;
+}
+
+async function createAuthSession(db, env, url, user, request) {
+  const now = Date.now();
+  const sid = 'SES_' + randomTokenUrl(18);
+  const refreshSecret = randomTokenUrl(32);
+  const refreshHash = await sha256Hex(refreshSecret);
+  const expiresAt = now + REFRESH_TTL_SEC * 1000;
+  const ua = request && request.headers ? String(request.headers.get('user-agent') || '').slice(0, 180) : '';
+  const uid = String(user.student_id || user.id || '');
+  const role = String(user.role || '');
+
+  await db
+    .prepare('INSERT INTO auth_sessions (session_id, user_id, role, refresh_hash, expires_at, revoked, created_at, last_used_at, user_agent) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)')
+    .bind(sid, uid, role, refreshHash, expiresAt, now, now, ua)
+    .run();
+
+  const hmacSecret = await getAuthHmacSecret(db, env);
+  const accessToken = await signAccessToken(hmacSecret, {
+    sid: sid,
+    uid: uid,
+    role: role,
+    exp: now + ACCESS_TTL_SEC * 1000
+  });
+  const refreshCookieVal = sid + '.' + refreshSecret;
+
+  return {
+    sessionId: sid,
+    expiresAt: expiresAt,
+    setCookies: buildSessionSetCookies(url, accessToken, refreshCookieVal)
+  };
+}
+
+async function resolveRequestSession(request, db, env, url) {
+  const cookies = parseCookies(request);
+  const rawAccess = cookies[ACCESS_COOKIE_NAME] || '';
+  const rawRefresh = cookies[REFRESH_COOKIE_NAME] || '';
+  const hasAnyCookie = Boolean(rawAccess || rawRefresh);
+  if (!hasAnyCookie) {
+    return { session: null, user: null, setCookies: [], hadInvalidCookies: false };
+  }
+
+  const now = Date.now();
+  const hmacSecret = await getAuthHmacSecret(db, env);
+
+  if (rawAccess) {
+    const verified = await verifyAccessToken(hmacSecret, rawAccess);
+    if (verified) {
+      const sesRow = await db
+        .prepare('SELECT session_id, user_id, role, expires_at, revoked FROM auth_sessions WHERE session_id = ? LIMIT 1')
+        .bind(String(verified.sid))
+        .first();
+      if (sesRow && Number(sesRow.revoked || 0) === 0 && Number(sesRow.expires_at || 0) > now) {
+        const user = await loadUserBySessionIdentity(db, verified.role, verified.uid);
+        if (user) {
+          return {
+            session: {
+              sid: sesRow.session_id,
+              uid: String(user.student_id || user.id),
+              role: user.role,
+              expiresAt: Number(sesRow.expires_at)
+            },
+            user: user,
+            setCookies: [],
+            hadInvalidCookies: false
+          };
+        }
+      }
+    }
+  }
+
+  if (rawRefresh) {
+    const dotIdx = rawRefresh.indexOf('.');
+    if (dotIdx > 0) {
+      const sid = rawRefresh.slice(0, dotIdx);
+      const rawSecret = rawRefresh.slice(dotIdx + 1);
+      if (sid && rawSecret) {
+        const sesRow = await db
+          .prepare('SELECT session_id, user_id, role, refresh_hash, prev_refresh_hash, prev_refresh_until, expires_at, revoked FROM auth_sessions WHERE session_id = ? LIMIT 1')
+          .bind(sid)
+          .first();
+        if (sesRow && Number(sesRow.revoked || 0) === 0 && Number(sesRow.expires_at || 0) > now) {
+          const presentedHash = await sha256Hex(rawSecret);
+          const actualBytes = hexToBytes(presentedHash);
+          const expectedBytes = hexToBytes(sesRow.refresh_hash);
+          const matchesCurrent = timingSafeEqualBytes(actualBytes, expectedBytes);
+          const matchesPrev =
+            !matchesCurrent &&
+            sesRow.prev_refresh_hash &&
+            Number(sesRow.prev_refresh_until || 0) >= now &&
+            timingSafeEqualBytes(actualBytes, hexToBytes(sesRow.prev_refresh_hash));
+
+          if (matchesCurrent || matchesPrev) {
+            const user = await loadUserBySessionIdentity(db, sesRow.role, sesRow.user_id);
+            if (user) {
+              if (matchesCurrent) {
+                const nextRefreshSecret = randomTokenUrl(32);
+                const nextRefreshHash = await sha256Hex(nextRefreshSecret);
+                const nextExpiresAt = now + REFRESH_TTL_SEC * 1000;
+                const graceUntil = now + 20000;
+                await db
+                  .prepare('UPDATE auth_sessions SET refresh_hash = ?, prev_refresh_hash = ?, prev_refresh_until = ?, expires_at = ?, last_used_at = ? WHERE session_id = ?')
+                  .bind(nextRefreshHash, sesRow.refresh_hash, graceUntil, nextExpiresAt, now, sid)
+                  .run();
+                const nextAccessToken = await signAccessToken(hmacSecret, {
+                  sid: sid,
+                  uid: String(user.student_id || user.id),
+                  role: user.role,
+                  exp: now + ACCESS_TTL_SEC * 1000
+                });
+                return {
+                  session: {
+                    sid: sid,
+                    uid: String(user.student_id || user.id),
+                    role: user.role,
+                    expiresAt: nextExpiresAt
+                  },
+                  user: user,
+                  setCookies: buildSessionSetCookies(url, nextAccessToken, sid + '.' + nextRefreshSecret),
+                  hadInvalidCookies: false
+                };
+              }
+              // Concurrent sibling request within 20s grace window: mint fresh ss_access without clobbering rotated refresh_hash
+              const siblingAccessToken = await signAccessToken(hmacSecret, {
+                sid: sid,
+                uid: String(user.student_id || user.id),
+                role: user.role,
+                exp: now + ACCESS_TTL_SEC * 1000
+              });
+              return {
+                session: {
+                  sid: sid,
+                  uid: String(user.student_id || user.id),
+                  role: user.role,
+                  expiresAt: Number(sesRow.expires_at)
+                },
+                user: user,
+                setCookies: [
+                  buildCookieString(ACCESS_COOKIE_NAME, siblingAccessToken, ACCESS_TTL_SEC, url.protocol === 'https:')
+                ],
+                hadInvalidCookies: false
+              };
+            }
+          } else {
+            // Possible stolen refresh token replay after grace window: revoke session
+            await db.prepare('UPDATE auth_sessions SET revoked = 1 WHERE session_id = ?').bind(sid).run();
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    session: null,
+    user: null,
+    setCookies: buildClearSessionCookies(url),
+    hadInvalidCookies: true
+  };
 }
 
 function formatViDate(dateObj) {
@@ -205,6 +662,16 @@ async function ensureSchema(db) {
   } catch (e) {
     // Column practice_count already exists on existing D1 table
   }
+  try {
+    await db.prepare("ALTER TABLE auth_sessions ADD COLUMN prev_refresh_hash TEXT NOT NULL DEFAULT ''").run();
+  } catch (e) {
+    // Column prev_refresh_hash already exists
+  }
+  try {
+    await db.prepare('ALTER TABLE auth_sessions ADD COLUMN prev_refresh_until INTEGER NOT NULL DEFAULT 0').run();
+  } catch (e) {
+    // Column prev_refresh_until already exists
+  }
   initializedDatabases.add(db);
 }
 
@@ -233,12 +700,61 @@ async function bumpDataVersion(db) {
   return nextVer;
 }
 
-async function getBootstrapData(db, metaOverride) {
+function sanitizePracticeExerciseForStudent(exRow, hasSubmitted) {
+  if (!exRow) return exRow;
+  let sections = [];
+  try {
+    sections = typeof exRow.sections_json === 'string'
+      ? JSON.parse(exRow.sections_json || '[]')
+      : (Array.isArray(exRow.sections) ? exRow.sections : []);
+  } catch (e) {
+    sections = [];
+  }
+
+  const sanitizedSections = (Array.isArray(sections) ? sections : []).map(function (sec) {
+    const secCopy = Object.assign({}, sec);
+    const data = Object.assign({}, sec && sec.data ? sec.data : {});
+    if (!hasSubmitted) {
+      if (sec.type === 'matching') {
+        delete data.answer;
+      } else if (Array.isArray(data.items)) {
+        data.items = data.items.map(function (item) {
+          const cleanItem = Object.assign({}, item);
+          delete cleanItem.correctIndex;
+          delete cleanItem.answer;
+          delete cleanItem.accepted;
+          delete cleanItem.required_keywords;
+          delete cleanItem.explanation;
+          delete cleanItem.grading_note;
+          return cleanItem;
+        });
+      }
+    } else if (Array.isArray(data.items)) {
+      data.items = data.items.map(function (item) {
+        const cleanItem = Object.assign({}, item);
+        delete cleanItem.grading_note;
+        if (cleanItem.mode === 'manual' || (sec.type === 'short_answer' && (!Array.isArray(cleanItem.accepted) || cleanItem.accepted.length === 0))) {
+          delete cleanItem.accepted;
+          delete cleanItem.required_keywords;
+        }
+        return cleanItem;
+      });
+    }
+    secCopy.data = data;
+    return secCopy;
+  });
+
+  return Object.assign({}, exRow, {
+    sections_json: JSON.stringify(sanitizedSections)
+  });
+}
+
+async function getBootstrapData(db, metaOverride, session) {
   const meta = metaOverride || (await getMetaMap(db));
   const batchRes = await db.batch([
-    db.prepare('SELECT teacher_id, full_name, username, password, subject FROM teachers ORDER BY rowid ASC'),
+    db.prepare('SELECT teacher_id, full_name, username, subject FROM teachers ORDER BY rowid ASC'),
     db.prepare('SELECT class_id, class_name, created_at FROM classes ORDER BY rowid ASC'),
-    db.prepare('SELECT student_id, full_name, class_name, avatar_initials, username, password, created_at FROM students ORDER BY rowid ASC'),
+    db.prepare('SELECT student_id, full_name, class_name, avatar_initials, username, created_at FROM students ORDER BY rowid ASC'),
     db.prepare('SELECT assignment_id, title, lesson_tag, due_date, description, require_media, session_tag, class_name, exercise_id, lesson_id FROM assignments ORDER BY rowid ASC'),
     db.prepare('SELECT submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count FROM submissions ORDER BY rowid ASC'),
     db.prepare('SELECT record_id, ticket_id, student_id, student_name, score, total, submitted_at, answers_json FROM exit_tickets ORDER BY rowid ASC'),
@@ -251,12 +767,64 @@ async function getBootstrapData(db, metaOverride) {
     return batchRes[idx] && Array.isArray(batchRes[idx].results) ? batchRes[idx].results : [];
   };
 
+  const allClasses = rows(1).filter(function (c) {
+    return isValidRealClassName(c && c.class_name);
+  });
+
+  if (session && session.role === 'student') {
+    const uid = String(session.uid || '').trim();
+    const myStudent = rows(2).find(function (s) {
+      return String(s.student_id || '').trim() === uid;
+    });
+    const myClassLower = myStudent ? String(myStudent.class_name || '').trim().toLowerCase() : '';
+
+    const mySubs = rows(4).filter(function (sub) {
+      return String(sub.student_id || '').trim() === uid;
+    });
+    const myExitLogs = rows(5).filter(function (lg) {
+      return String(lg.student_id || '').trim() === uid;
+    });
+    const myPracticeSubs = rows(8).filter(function (ps) {
+      return String(ps.student_id || '').trim() === uid;
+    });
+    const submittedExSet = new Set(
+      myPracticeSubs.map(function (ps) { return String(ps.exercise_id || '').trim(); }).filter(Boolean)
+    );
+    const myAssignments = rows(3).filter(function (asg) {
+      const cls = String(asg.class_name || '').trim().toLowerCase();
+      return cls === 'all' || (myClassLower && cls === myClassLower);
+    });
+    const myExercises = rows(7).map(function (ex) {
+      const exId = String(ex.exercise_id || '').trim();
+      return sanitizePracticeExerciseForStudent(ex, submittedExSet.has(exId));
+    });
+
+    return {
+      isProduction: meta.is_production === 'true',
+      teachers: rows(0).map(function (t) {
+        return {
+          teacher_id: t.teacher_id,
+          full_name: t.full_name,
+          subject: t.subject
+        };
+      }),
+      classes: allClasses.filter(function (c) {
+        return !myClassLower || String(c.class_name || '').trim().toLowerCase() === myClassLower;
+      }),
+      students: myStudent ? [myStudent] : [],
+      assignments: myAssignments,
+      submissions: mySubs,
+      exitTicketLogs: myExitLogs,
+      vocabulary: rows(6),
+      practiceExercises: myExercises,
+      practiceSubmissions: myPracticeSubs
+    };
+  }
+
   return {
     isProduction: meta.is_production === 'true',
     teachers: rows(0),
-    classes: rows(1).filter(function (c) {
-      return isValidRealClassName(c && c.class_name);
-    }),
+    classes: allClasses,
     students: rows(2),
     assignments: rows(3),
     submissions: rows(4),
@@ -267,7 +835,7 @@ async function getBootstrapData(db, metaOverride) {
   };
 }
 
-async function buildMutationResponse(db, payload, preVer, extraFields) {
+async function buildMutationResponse(db, payload, preVer, extraFields, session, setCookies) {
   const nextVer = await bumpDataVersion(db);
   const clientVer = payload && payload.clientVersion ? String(payload.clientVersion).trim() : '';
   const wantsDeltaOnly = payload && payload.deltaOnly === true;
@@ -288,9 +856,9 @@ async function buildMutationResponse(db, payload, preVer, extraFields) {
   );
 
   if (needsBootstrap) {
-    out.data = await getBootstrapData(db);
+    out.data = await getBootstrapData(db, null, session);
   }
-  return jsonResponse(out);
+  return jsonResponse(out, 200, null, setCookies);
 }
 
 function isValidRealClassName(name) {
@@ -320,16 +888,22 @@ async function ensureClassRecord(db, className) {
   }
 }
 
-async function handleSetupDatabase(db) {
+async function handleSetupDatabase(db, session) {
+  const meta = await getMetaMap(db);
   const countRow = await db.prepare('SELECT COUNT(*) AS cnt FROM teachers').first();
-  if (!countRow || Number(countRow.cnt) === 0) {
+  const hasTeachers = countRow && Number(countRow.cnt) > 0;
+  if ((meta.d1_bootstrapped === '1' || hasTeachers) && (!session || session.role !== 'teacher')) {
+    return jsonResponse({ ok: false, error: 'Chỉ Giáo viên đã đăng nhập mới có quyền khởi tạo lại cấu trúc.' }, session ? 403 : 401);
+  }
+  if (!hasTeachers) {
+    const hashedDefaultPwd = await hashPassword(DEFAULT_TEACHER.password, 100000);
     await db
       .prepare('INSERT OR IGNORE INTO teachers (teacher_id, full_name, username, password, subject) VALUES (?, ?, ?, ?, ?)')
       .bind(
         DEFAULT_TEACHER.teacher_id,
         DEFAULT_TEACHER.full_name,
         DEFAULT_TEACHER.username,
-        DEFAULT_TEACHER.password,
+        hashedDefaultPwd,
         DEFAULT_TEACHER.subject
       )
       .run();
@@ -339,34 +913,54 @@ async function handleSetupDatabase(db) {
     db.prepare("INSERT OR REPLACE INTO app_meta (key, value) VALUES ('d1_bootstrapped', '1')")
   ]);
   const nextVer = await bumpDataVersion(db);
-  const data = await getBootstrapData(db);
+  if (session && session.role === 'teacher') {
+    const data = await getBootstrapData(db, null, session);
+    return jsonResponse({
+      ok: true,
+      backend: 'cloudflare-d1',
+      version: nextVer,
+      message: 'Đã khởi tạo cơ sở dữ liệu Cloudflare D1 với tài khoản Giáo viên: Hồ Châu Uyển Nhi (gv_uyennhi).',
+      data: data
+    });
+  }
   return jsonResponse({
     ok: true,
     backend: 'cloudflare-d1',
     version: nextVer,
-    message: 'Đã khởi tạo cơ sở dữ liệu Cloudflare D1 với tài khoản Giáo viên: Hồ Châu Uyển Nhi (gv_uyennhi).',
-    data: data
+    bootstrapped: true,
+    message: 'Đã khởi tạo cơ sở dữ liệu Cloudflare D1 với tài khoản Giáo viên: Hồ Châu Uyển Nhi (gv_uyennhi).'
   });
 }
 
-async function handleImportFromBootstrapData(db, payload) {
+async function handleImportFromBootstrapData(db, payload, session, env) {
   const meta = await getMetaMap(db);
   const teacherCntRow = await db.prepare('SELECT COUNT(*) AS cnt FROM teachers').first();
   const hasExistingTeachers = teacherCntRow && Number(teacherCntRow.cnt) > 0;
-  if ((meta.d1_bootstrapped === '1' || hasExistingTeachers) && payload.forceOverwrite !== true) {
-    return jsonResponse({
-      ok: true,
-      backend: 'cloudflare-d1',
-      skipped: true,
-      version: await getDataVersion(db, meta),
-      data: await getBootstrapData(db, meta)
-    });
+  const alreadyBootstrapped = meta.d1_bootstrapped === '1' || hasExistingTeachers;
+
+  if (alreadyBootstrapped) {
+    if (!session || session.role !== 'teacher') {
+      return jsonResponse({ ok: false, error: 'Bạn cần đăng nhập quyền Giáo viên để thực hiện thao tác đồng bộ dữ liệu.' }, session ? 403 : 401);
+    }
+    if (payload.forceOverwrite !== true) {
+      return jsonResponse({
+        ok: true,
+        backend: 'cloudflare-d1',
+        skipped: true,
+        version: await getDataVersion(db, meta),
+        data: await getBootstrapData(db, meta, session)
+      });
+    }
+    const adminSecret = env && env.ADMIN_SECRET ? String(env.ADMIN_SECRET).trim() : '';
+    if (adminSecret && String(payload.admin_secret || '').trim() !== adminSecret) {
+      return jsonResponse({ ok: false, error: 'Thiếu hoặc sai mã bảo mật quản trị (admin_secret) để ghi đè toàn bộ cơ sở dữ liệu.' }, 403);
+    }
   }
 
   const src = payload && payload.data && typeof payload.data === 'object' ? payload.data : {};
   const statements = [];
 
-  if (payload.forceOverwrite === true) {
+  if (alreadyBootstrapped && payload.forceOverwrite === true) {
     statements.push(
       db.prepare('DELETE FROM teachers'),
       db.prepare('DELETE FROM classes'),
@@ -381,7 +975,10 @@ async function handleImportFromBootstrapData(db, payload) {
   }
 
   const teachers = Array.isArray(src.teachers) && src.teachers.length > 0 ? src.teachers : [DEFAULT_TEACHER];
-  teachers.forEach(function (t, idx) {
+  for (let idx = 0; idx < teachers.length; idx++) {
+    const t = teachers[idx];
+    const rawPwd = String(t.password !== undefined && t.password !== null ? t.password : '123456');
+    const hashedTeacherPwd = await hashPassword(rawPwd, 100000);
     statements.push(
       db
         .prepare('INSERT OR REPLACE INTO teachers (teacher_id, full_name, username, password, subject) VALUES (?, ?, ?, ?, ?)')
@@ -389,11 +986,11 @@ async function handleImportFromBootstrapData(db, payload) {
           String(t.teacher_id || ('GV0' + (idx + 1))),
           String(t.full_name || 'Giáo viên'),
           String(t.username || ('gv_' + (idx + 1))),
-          String(t.password !== undefined && t.password !== null ? t.password : '123456'),
+          hashedTeacherPwd,
           String(t.subject || 'Tiếng Trung Giao Tiếp & HSK')
         )
     );
-  });
+  }
 
   const seenClasses = new Set();
   const queueClass = function (clsObj) {
@@ -418,9 +1015,13 @@ async function handleImportFromBootstrapData(db, payload) {
   }
 
   const students = Array.isArray(src.students) ? src.students : [];
-  students.forEach(function (s, idx) {
+  const studentIter = students.length > 5 ? 10000 : 100000;
+  for (let idx = 0; idx < students.length; idx++) {
+    const s = students[idx];
     const stId = String(s.student_id || ('HS' + String(idx + 1).padStart(2, '0')));
     const cname = String(s.class_name || '');
+    const rawStuPwd = String(s.password !== undefined && s.password !== null ? s.password : '123456');
+    const hashedStuPwd = await hashPassword(rawStuPwd, studentIter);
     queueClass({ class_name: cname, created_at: s.created_at });
     statements.push(
       db
@@ -431,11 +1032,11 @@ async function handleImportFromBootstrapData(db, payload) {
           cname,
           String(s.avatar_initials || getInitials(s.full_name)),
           String(s.username || stId.toLowerCase()),
-          String(s.password !== undefined && s.password !== null ? s.password : '123456'),
+          hashedStuPwd,
           String(s.created_at || formatViDate())
         )
     );
-  });
+  }
 
   const assignments = Array.isArray(src.assignments) ? src.assignments : [];
   assignments.forEach(function (a, idx) {
@@ -582,24 +1183,79 @@ async function handleImportFromBootstrapData(db, payload) {
 
   await runBatchedStatements(db, statements, 70);
   const nextVer = await bumpDataVersion(db);
-  const data = await getBootstrapData(db);
+  if (session && session.role === 'teacher') {
+    const data = await getBootstrapData(db, null, session);
+    return jsonResponse({
+      ok: true,
+      backend: 'cloudflare-d1',
+      imported: true,
+      version: nextVer,
+      data: data
+    });
+  }
   return jsonResponse({
     ok: true,
     backend: 'cloudflare-d1',
     imported: true,
-    version: nextVer,
-    data: data
+    bootstrapped: true,
+    version: nextVer
   });
 }
 
-async function handleLogin(db, payload) {
+async function getLoginAttemptKey(request, username) {
+  const ip = request && request.headers ? String(request.headers.get('cf-connecting-ip') || '').trim() : '';
+  return 'u:' + String(username || '').toLowerCase() + (ip ? '|ip:' + ip : '');
+}
+
+async function checkLoginRateLimit(db, attemptKey) {
+  const row = await db
+    .prepare('SELECT fail_count, first_fail_at, locked_until FROM login_attempts WHERE attempt_key = ? LIMIT 1')
+    .bind(attemptKey)
+    .first();
+  if (!row) return { limited: false };
+  const now = Date.now();
+  const lockedUntil = Number(row.locked_until || 0);
+  if (lockedUntil > now) {
+    const waitMin = Math.max(1, Math.ceil((lockedUntil - now) / 60000));
+    return {
+      limited: true,
+      message: 'Bạn đã nhập sai mật khẩu quá nhiều lần. Vui lòng thử lại sau khoảng ' + waitMin + ' phút.'
+    };
+  }
+  return { limited: false };
+}
+
+async function recordLoginFailure(db, attemptKey) {
+  const now = Date.now();
+  const row = await db
+    .prepare('SELECT fail_count, first_fail_at FROM login_attempts WHERE attempt_key = ? LIMIT 1')
+    .bind(attemptKey)
+    .first();
+  let failCount = 1;
+  let firstFailAt = now;
+  if (row && now - Number(row.first_fail_at || 0) <= LOGIN_WINDOW_MS) {
+    failCount = Number(row.fail_count || 0) + 1;
+    firstFailAt = Number(row.first_fail_at || now);
+  }
+  const lockedUntil = failCount >= LOGIN_MAX_FAILS ? now + LOGIN_LOCK_MS : 0;
+  await db
+    .prepare('INSERT OR REPLACE INTO login_attempts (attempt_key, fail_count, first_fail_at, locked_until) VALUES (?, ?, ?, ?)')
+    .bind(attemptKey, failCount, firstFailAt, lockedUntil)
+    .run();
+}
+
+async function clearLoginFailure(db, attemptKey) {
+  await db.prepare('DELETE FROM login_attempts WHERE attempt_key = ?').bind(attemptKey).run();
+}
+
+async function handleLogin(db, payload, request, env, url) {
   const username = String(payload.username || '').trim().toLowerCase();
   const password = String(payload.password || '').trim();
   if (!username || !password) {
     return jsonResponse({
       ok: false,
       error: 'Vui lòng nhập đầy đủ Tên đăng nhập và Mật khẩu.'
-    });
+    }, 400);
   }
 
   const meta = await getMetaMap(db);
@@ -612,37 +1268,57 @@ async function handleLogin(db, payload) {
     });
   }
 
+  const attemptKey = await getLoginAttemptKey(request, username);
+  const limitStatus = await checkLoginRateLimit(db, attemptKey);
+  if (limitStatus.limited) {
+    return jsonResponse({ ok: false, rateLimited: true, error: limitStatus.message }, 429);
+  }
+
   const teacher = await db
-    .prepare('SELECT teacher_id, full_name, username, password, subject FROM teachers WHERE LOWER(TRIM(username)) = ? AND TRIM(password) = ? LIMIT 1')
-    .bind(username, password)
+    .prepare('SELECT teacher_id, full_name, username, password, subject FROM teachers WHERE LOWER(TRIM(username)) = ? LIMIT 1')
+    .bind(username)
     .first();
 
   if (teacher) {
-    return jsonResponse({
-      ok: true,
-      backend: 'cloudflare-d1',
-      version: await getDataVersion(db, meta),
-      user: {
+    const tCheck = await verifyPassword(password, teacher.password);
+    if (tCheck.valid) {
+      await clearLoginFailure(db, attemptKey);
+      if (tCheck.needsUpgrade) {
+        const upgraded = await hashPassword(password, 100000);
+        await db.prepare('UPDATE teachers SET password = ? WHERE teacher_id = ?').bind(upgraded, teacher.teacher_id).run();
+      }
+      const userObj = {
         role: 'teacher',
         id: teacher.teacher_id,
         full_name: teacher.full_name,
         username: teacher.username,
         subject: teacher.subject || 'Giáo viên phụ trách'
-      }
-    });
+      };
+      const sesInfo = await createAuthSession(db, env, url, userObj, request);
+      return jsonResponse({
+        ok: true,
+        backend: 'cloudflare-d1',
+        version: await getDataVersion(db, meta),
+        expiresAt: sesInfo.expiresAt,
+        user: userObj
+      }, 200, null, sesInfo.setCookies);
+    }
   }
 
   const student = await db
-    .prepare('SELECT student_id, full_name, class_name, avatar_initials, username, password FROM students WHERE (LOWER(TRIM(username)) = ? OR LOWER(TRIM(student_id)) = ?) AND TRIM(password) = ? LIMIT 1')
-    .bind(username, username, password)
+    .prepare('SELECT student_id, full_name, class_name, avatar_initials, username, password FROM students WHERE (LOWER(TRIM(username)) = ? OR LOWER(TRIM(student_id)) = ?) LIMIT 1')
+    .bind(username, username)
     .first();
 
   if (student) {
-    return jsonResponse({
-      ok: true,
-      backend: 'cloudflare-d1',
-      version: await getDataVersion(db, meta),
-      user: {
+    const sCheck = await verifyPassword(password, student.password);
+    if (sCheck.valid) {
+      await clearLoginFailure(db, attemptKey);
+      if (sCheck.needsUpgrade) {
+        const upgradedStu = await hashPassword(password, 100000);
+        await db.prepare('UPDATE students SET password = ? WHERE student_id = ?').bind(upgradedStu, student.student_id).run();
+      }
+      const userObj = {
         role: 'student',
         id: student.student_id,
         student_id: student.student_id,
@@ -650,14 +1326,23 @@ async function handleLogin(db, payload) {
         username: student.username || String(student.student_id || '').toLowerCase(),
         class_name: student.class_name,
         avatar_initials: student.avatar_initials
-      }
-    });
+      };
+      const sesInfo = await createAuthSession(db, env, url, userObj, request);
+      return jsonResponse({
+        ok: true,
+        backend: 'cloudflare-d1',
+        version: await getDataVersion(db, meta),
+        expiresAt: sesInfo.expiresAt,
+        user: userObj
+      }, 200, null, sesInfo.setCookies);
+    }
   }
 
+  await recordLoginFailure(db, attemptKey);
   return jsonResponse({
     ok: false,
     error: 'Tên đăng nhập hoặc mật khẩu không chính xác.'
-  });
+  }, 401);
 }
 
 async function generateNextStudentId(db) {
@@ -799,7 +1484,7 @@ async function handleDriveMediaProxy(request, url, ctx) {
             partialHeaders.set('Accept-Ranges', 'bytes');
             partialHeaders.set('Content-Range', 'bytes ' + range.start + '-' + range.end + '/' + fullBuf.byteLength);
             partialHeaders.set('Content-Length', String(sliceBuf.byteLength));
-            partialHeaders.set('Access-Control-Allow-Origin', '*');
+            partialHeaders.delete('Access-Control-Allow-Origin');
             return new Response(sliceBuf, { status: 206, headers: partialHeaders });
           }
         } catch (rangeErr) {
@@ -846,7 +1531,6 @@ async function handleDriveMediaProxy(request, url, ctx) {
         const contentRange = upstream.headers.get('content-range');
         if (contentRange) headers.set('Content-Range', contentRange);
         headers.set('Cache-Control', 'public, max-age=604800, immutable');
-        headers.set('Access-Control-Allow-Origin', '*');
 
         const responseToServe = new Response(upstream.body, {
           status: upstream.status,
@@ -1195,33 +1879,373 @@ async function handleGoogleFormFetchProxy(request, url) {
   }
 }
 
-export async function handleApiRequest(request, env, ctx) {
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
+function normalizeChineseSentenceServer(str) {
+  if (!str) return '';
+  let s = String(str).trim();
+  s = s.replace(/！/g, '!')
+    .replace(/，/g, ',')
+    .replace(/。/g, '.')
+    .replace(/？/g, '?')
+    .replace(/：/g, ':')
+    .replace(/；/g, ';')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/（/g, '(')
+    .replace(/）/g, ')');
+  s = s.toLowerCase();
+  s = s.replace(/\s+/g, ' ').trim();
+  return s;
+}
+
+function isAnswerMatchServer(studentInput, acceptedList) {
+  if (!studentInput || !Array.isArray(acceptedList) || acceptedList.length === 0) return false;
+  const inputNorm = normalizeChineseSentenceServer(studentInput).toLowerCase();
+  const inputNoPunct = inputNorm.replace(/[!.,?:;'"()]/g, '').trim();
+  const inputCompactHyphen = inputNoPunct.replace(/\s*-\s*/g, '-').replace(/\s+/g, '');
+
+  return acceptedList.some(function (acc) {
+    const accNorm = normalizeChineseSentenceServer(acc).toLowerCase();
+    if (inputNorm === accNorm) return true;
+    const accNoPunct = accNorm.replace(/[!.,?:;'"()]/g, '').trim();
+    if (inputNoPunct === accNoPunct) return true;
+    if (/^[a-z0-9]+(?:\s*-\s*[a-z0-9]+)+$/i.test(accNoPunct)) {
+      const accHyphenTight = accNoPunct.replace(/\s*-\s*/g, '-');
+      const accBare = accHyphenTight.replace(/-/g, '');
+      if (inputNoPunct.replace(/\s*-\s*/g, '-') === accHyphenTight) return true;
+      if (inputCompactHyphen === accBare) return true;
+    }
+    return false;
+  });
+}
+
+function isKeywordsMatchServer(studentInput, requiredKeywords) {
+  if (!studentInput || !Array.isArray(requiredKeywords) || requiredKeywords.length === 0) return false;
+  const inputNorm = normalizeChineseSentenceServer(studentInput).toLowerCase();
+  return requiredKeywords.every(function (kw) {
+    const kwNorm = normalizeChineseSentenceServer(kw).toLowerCase();
+    return inputNorm.indexOf(kwNorm) !== -1;
+  });
+}
+
+function getEffectivePracticeThresholdsServer(thresholds, maxScore) {
+  const t = thresholds || {};
+  const max = Number(maxScore) || 0;
+  const rawGood = Number(t.good) || 0;
+  const rawVeryGood = Number(t.very_good) || 0;
+
+  if (max > 0) {
+    const hasValidCustom =
+      rawGood > 0 &&
+      rawVeryGood >= rawGood &&
+      rawVeryGood <= max &&
+      !(rawVeryGood <= 1 && max > 2);
+    if (hasValidCustom) {
+      return { good: rawGood, very_good: rawVeryGood };
+    }
+    return {
+      good: max <= 1 ? 1 : Math.max(1, Math.round(max * 0.7 * 10) / 10),
+      very_good: max <= 1 ? 1 : Math.max(1, Math.round(max * 0.85 * 10) / 10)
+    };
+  }
+
+  return {
+    good: rawGood > 0 ? rawGood : 25,
+    very_good: rawVeryGood > 0 ? rawVeryGood : 31
+  };
+}
+
+function calculateRatingServer(score, thresholds, maxScore) {
+  const t = getEffectivePracticeThresholdsServer(thresholds, maxScore);
+  const num = Number(score) || 0;
+  if (num >= t.very_good) return 'very_good';
+  if (num >= t.good) return 'good';
+  return 'needs_review';
+}
+
+function gradePracticeSubmissionServer(exRow, answersObj, existingManualGrades) {
+  let sections = [];
+  let thresholds = {};
+  try {
+    sections = typeof exRow.sections_json === 'string'
+      ? JSON.parse(exRow.sections_json || '[]')
+      : (Array.isArray(exRow.sections) ? exRow.sections : []);
+  } catch (e) {
+    sections = [];
+  }
+  try {
+    thresholds = typeof exRow.thresholds_json === 'string'
+      ? JSON.parse(exRow.thresholds_json || '{}')
+      : (exRow.thresholds || {});
+  } catch (e) {
+    thresholds = {};
+  }
+
+  const cleanManualGrades = {};
+  if (existingManualGrades && typeof existingManualGrades === 'object') {
+    Object.keys(existingManualGrades).forEach(function (k) {
+      if (existingManualGrades[k] && typeof existingManualGrades[k] === 'object') {
+        cleanManualGrades[k] = existingManualGrades[k];
       }
     });
   }
 
-  const url = new URL(request.url);
+  const sectionScores = {};
+  let totalEarnedScore = 0;
+  let hasManualQuestions = false;
+  let computedMaxScore = 0;
 
-  if (request.method === 'GET' && url.searchParams.get('action') === 'media') {
+  (Array.isArray(sections) ? sections : []).forEach(function (sec) {
+    if (!sec) return;
+    const secAns = (answersObj && answersObj[sec.section_id]) || {};
+    let secScore = 0;
+
+    if (sec.type === 'matching') {
+      const answerKey = (sec.data && sec.data.answer) || {};
+      const leftItems = (sec.data && sec.data.left) || [];
+      computedMaxScore += Number(sec.max_score || leftItems.length);
+      leftItems.forEach(function (l) {
+        const expected = answerKey[String(l.id)];
+        const userVal = secAns[String(l.id)];
+        if (userVal && userVal === expected) {
+          secScore += 1;
+        }
+      });
+    } else if (sec.type === 'multiple_choice' || sec.type === 'listening_mc') {
+      const items = (sec.data && sec.data.items) || [];
+      const secMax = Number(sec.max_score || items.length);
+      computedMaxScore += secMax;
+      let correctCount = 0;
+      items.forEach(function (item) {
+        const userVal = secAns[item.id];
+        if (
+          userVal !== undefined &&
+          userVal !== null &&
+          userVal !== '' &&
+          Number(userVal) === Number(item.correctIndex)
+        ) {
+          correctCount += 1;
+        }
+      });
+      if (items.length > 0 && secMax !== items.length) {
+        secScore = Math.round((correctCount / items.length) * secMax * 10) / 10;
+      } else {
+        secScore = correctCount;
+      }
+    } else if (sec.type === 'fill_blank_wordbank') {
+      const items = (sec.data && sec.data.items) || [];
+      computedMaxScore += Number(sec.max_score || items.length);
+      items.forEach(function (item) {
+        const userVal = secAns[item.id] || '';
+        if (isAnswerMatchServer(userVal, [item.answer])) {
+          secScore += 1;
+        }
+      });
+    } else if (sec.type === 'error_correction') {
+      const items = (sec.data && sec.data.items) || [];
+      computedMaxScore += Number(sec.max_score || items.length);
+      items.forEach(function (item) {
+        const userVal = secAns[item.id] || '';
+        if (isAnswerMatchServer(userVal, item.accepted || [])) {
+          secScore += 1;
+        }
+      });
+    } else if (sec.type === 'translation') {
+      const items = (sec.data && sec.data.items) || [];
+      computedMaxScore += Number(sec.max_score || items.length);
+      items.forEach(function (item) {
+        const userVal = secAns[item.id] || '';
+        if (item.mode === 'exact') {
+          if (isAnswerMatchServer(userVal, item.accepted || [])) {
+            secScore += 1;
+          }
+        } else if (item.mode === 'keywords') {
+          if (isKeywordsMatchServer(userVal, item.required_keywords || [])) {
+            secScore += 1;
+          }
+        } else if (item.mode === 'manual') {
+          hasManualQuestions = true;
+          if (cleanManualGrades[item.id]) {
+            secScore += Number(cleanManualGrades[item.id].score || 0);
+          }
+        }
+      });
+    } else if (sec.type === 'short_answer') {
+      const items = (sec.data && sec.data.items) || [];
+      computedMaxScore += Number(sec.max_score || items.length);
+      items.forEach(function (item) {
+        const userVal = secAns[item.id] || '';
+        const hasKey = Array.isArray(item.accepted) && item.accepted.length > 0;
+        const isManual = item.mode === 'manual' || !hasKey;
+        if (!isManual) {
+          if (isAnswerMatchServer(userVal, item.accepted || [])) {
+            secScore += 1;
+          }
+        } else {
+          hasManualQuestions = true;
+          if (cleanManualGrades[item.id]) {
+            secScore += Number(cleanManualGrades[item.id].score || 0);
+          }
+        }
+      });
+    }
+
+    sectionScores[sec.section_id] = secScore;
+    totalEarnedScore += secScore;
+  });
+
+  const maxScore = Number(exRow.total_score) || computedMaxScore || 35;
+  const rating = calculateRatingServer(totalEarnedScore, thresholds, maxScore);
+  const status = hasManualQuestions ? 'pending_manual' : 'graded';
+
+  return {
+    totalScore: totalEarnedScore,
+    maxScore: maxScore,
+    rating: rating,
+    sectionScores: sectionScores,
+    sectionScoresJson: JSON.stringify(sectionScores),
+    manualGrades: cleanManualGrades,
+    manualGradesJson: JSON.stringify(cleanManualGrades),
+    status: status
+  };
+}
+
+async function isDatabaseBootstrapped(db) {
+  const meta = await getMetaMap(db);
+  const teacherCntRow = await db.prepare('SELECT COUNT(*) AS cnt FROM teachers').first();
+  const teachersCount = teacherCntRow ? Number(teacherCntRow.cnt) : 0;
+  return {
+    meta: meta,
+    teachersCount: teachersCount,
+    bootstrapped: meta.d1_bootstrapped === '1' || teachersCount > 0
+  };
+}
+
+async function revokeSessionFromRequest(request, db, env) {
+  const cookies = parseCookies(request);
+  const rawAccess = cookies[ACCESS_COOKIE_NAME] || '';
+  const rawRefresh = cookies[REFRESH_COOKIE_NAME] || '';
+  let sidToRevoke = '';
+
+  if (rawRefresh) {
+    const dotIdx = rawRefresh.indexOf('.');
+    if (dotIdx > 0) {
+      const sid = rawRefresh.slice(0, dotIdx);
+      const rawSecret = rawRefresh.slice(dotIdx + 1);
+      if (sid && rawSecret) {
+        const sesRow = await db
+          .prepare('SELECT session_id, refresh_hash, prev_refresh_hash FROM auth_sessions WHERE session_id = ? LIMIT 1')
+          .bind(sid)
+          .first();
+        if (sesRow) {
+          const presented = hexToBytes(await sha256Hex(rawSecret));
+          if (
+            timingSafeEqualBytes(presented, hexToBytes(sesRow.refresh_hash)) ||
+            (sesRow.prev_refresh_hash && timingSafeEqualBytes(presented, hexToBytes(sesRow.prev_refresh_hash)))
+          ) {
+            sidToRevoke = sesRow.session_id;
+          }
+        }
+      }
+    }
+  }
+
+  if (!sidToRevoke && rawAccess) {
+    const hmacSecret = await getAuthHmacSecret(db, env);
+    const verified = await verifyAccessToken(hmacSecret, rawAccess);
+    if (verified && verified.sid) {
+      sidToRevoke = String(verified.sid);
+    }
+  }
+
+  if (sidToRevoke) {
+    await db
+      .prepare('UPDATE auth_sessions SET revoked = 1 WHERE session_id = ?')
+      .bind(sidToRevoke)
+      .run();
+  }
+}
+
+export async function handleApiRequest(request, env, ctx) {
+  const url = new URL(request.url);
+  const reqOrigin = request.headers ? String(request.headers.get('Origin') || '').trim() : '';
+
+  if (request.method === 'OPTIONS') {
+    if (reqOrigin && reqOrigin !== url.origin) {
+      return new Response(null, { status: 403 });
+    }
+    const optHeaders = {
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Vary': 'Origin'
+    };
+    if (reqOrigin && reqOrigin === url.origin) {
+      optHeaders['Access-Control-Allow-Origin'] = url.origin;
+      optHeaders['Access-Control-Allow-Credentials'] = 'true';
+    }
+    return new Response(null, { status: 204, headers: optHeaders });
+  }
+
+  if (request.method === 'POST' && reqOrigin && reqOrigin !== url.origin) {
+    return jsonResponse({ ok: false, error: 'Yêu cầu cross-origin không được phép.' }, 403);
+  }
+
+  const earlyAction = url.searchParams.get('action') || '';
+  const db = env && env.DB ? env.DB : null;
+
+  if (request.method === 'GET' && earlyAction === 'media') {
+    if (db) {
+      await ensureSchema(db);
+      const bState = await isDatabaseBootstrapped(db);
+      if (bState.bootstrapped) {
+        const auth = await resolveRequestSession(request, db, env, url);
+        if (!auth.session || !auth.user) {
+          return withSessionCookies(
+            jsonResponse(
+              { ok: false, sessionExpired: true, error: 'Vui lòng đăng nhập để xem tệp bài làm.' },
+              401
+            ),
+            auth.setCookies
+          );
+        }
+        const mediaRes = await handleDriveMediaProxy(request, url, ctx);
+        return withSessionCookies(mediaRes, auth.setCookies);
+      }
+    }
     return await handleDriveMediaProxy(request, url, ctx);
   }
 
-  if ((request.method === 'GET' || request.method === 'HEAD') && url.searchParams.get('action') === 'tts') {
+  if ((request.method === 'GET' || request.method === 'HEAD') && earlyAction === 'tts') {
     return await handleTtsProxy(request, url, ctx);
   }
 
-  if (url.searchParams.get('action') === 'fetchGoogleForm' && (request.method === 'GET' || request.method === 'POST')) {
+  if (earlyAction === 'fetchGoogleForm' && (request.method === 'GET' || request.method === 'POST')) {
+    if (db) {
+      await ensureSchema(db);
+      const bState = await isDatabaseBootstrapped(db);
+      if (bState.bootstrapped) {
+        const auth = await resolveRequestSession(request, db, env, url);
+        if (!auth.session || !auth.user) {
+          return withSessionCookies(
+            jsonResponse(
+              { ok: false, sessionExpired: true, error: 'Vui lòng đăng nhập tài khoản Giáo viên.' },
+              401
+            ),
+            auth.setCookies
+          );
+        }
+        if (auth.session.role !== 'teacher') {
+          return withSessionCookies(
+            jsonResponse({ ok: false, error: 'Chỉ Giáo viên mới có quyền nhập Google Form.' }, 403),
+            auth.setCookies
+          );
+        }
+        const formRes = await handleGoogleFormFetchProxy(request, url);
+        return withSessionCookies(formRes, auth.setCookies);
+      }
+    }
     return await handleGoogleFormFetchProxy(request, url);
   }
 
-  const db = env && env.DB ? env.DB : null;
   if (!db) {
     return jsonResponse(
       {
@@ -1239,13 +2263,12 @@ export async function handleApiRequest(request, env, ctx) {
 
     if (request.method === 'GET') {
       const action = url.searchParams.get('action') || 'bootstrap';
-      const meta = await getMetaMap(db);
+      const bState = await isDatabaseBootstrapped(db);
+      const meta = bState.meta;
       const curVer = await getDataVersion(db, meta);
+      const needsMigration = !bState.bootstrapped;
 
       if (action === 'ping') {
-        const teacherCntRow = await db.prepare('SELECT COUNT(*) AS cnt FROM teachers').first();
-        const teachersCount = teacherCntRow ? Number(teacherCntRow.cnt) : 0;
-        const needsMigration = meta.d1_bootstrapped !== '1' && teachersCount === 0;
         return jsonResponse({
           ok: true,
           backend: 'cloudflare-d1',
@@ -1255,9 +2278,69 @@ export async function handleApiRequest(request, env, ctx) {
         });
       }
 
-      const teacherCntRow = await db.prepare('SELECT COUNT(*) AS cnt FROM teachers').first();
-      const teachersCount = teacherCntRow ? Number(teacherCntRow.cnt) : 0;
-      const needsMigration = meta.d1_bootstrapped !== '1' && teachersCount === 0;
+      if (action === 'session' || action === 'refresh') {
+        if (needsMigration) {
+          return jsonResponse({
+            ok: true,
+            backend: 'cloudflare-d1',
+            authenticated: false,
+            needsMigration: true,
+            version: curVer,
+            user: null
+          });
+        }
+        const auth = await resolveRequestSession(request, db, env, url);
+        if (!auth.session || !auth.user) {
+          return jsonResponse(
+            {
+              ok: true,
+              backend: 'cloudflare-d1',
+              authenticated: false,
+              needsMigration: false,
+              sessionExpired: auth.hadInvalidCookies,
+              version: curVer,
+              user: null
+            },
+            200,
+            null,
+            auth.setCookies
+          );
+        }
+        let cookiesOut = auth.setCookies;
+        let nextExpiresAt = auth.session.expiresAt;
+        if (action === 'refresh' && (!cookiesOut || cookiesOut.length === 0)) {
+          const nowMs = Date.now();
+          nextExpiresAt = nowMs + REFRESH_TTL_SEC * 1000;
+          await db
+            .prepare('UPDATE auth_sessions SET expires_at = ?, last_used_at = ? WHERE session_id = ?')
+            .bind(nextExpiresAt, nowMs, auth.session.sid)
+            .run();
+          const hmacSecret = await getAuthHmacSecret(db, env);
+          const freshAccess = await signAccessToken(hmacSecret, {
+            sid: auth.session.sid,
+            uid: auth.session.uid,
+            role: auth.session.role,
+            exp: nowMs + ACCESS_TTL_SEC * 1000
+          });
+          cookiesOut = [
+            buildCookieString(ACCESS_COOKIE_NAME, freshAccess, ACCESS_TTL_SEC, url.protocol === 'https:')
+          ];
+        }
+        return jsonResponse(
+          {
+            ok: true,
+            backend: 'cloudflare-d1',
+            authenticated: true,
+            needsMigration: false,
+            version: curVer,
+            expiresAt: nextExpiresAt,
+            user: auth.user
+          },
+          200,
+          null,
+          cookiesOut
+        );
+      }
 
       if (needsMigration) {
         return jsonResponse({
@@ -1280,23 +2363,52 @@ export async function handleApiRequest(request, env, ctx) {
         });
       }
 
-      const clientVer = String(url.searchParams.get('v') || '').trim();
-      if (clientVer && curVer && curVer !== '0' && clientVer === curVer) {
-        return jsonResponse({
-          ok: true,
-          backend: 'cloudflare-d1',
-          unchanged: true,
-          version: curVer
-        });
+      const auth = await resolveRequestSession(request, db, env, url);
+      if (!auth.session || !auth.user) {
+        return jsonResponse(
+          {
+            ok: false,
+            backend: 'cloudflare-d1',
+            sessionExpired: true,
+            error: 'Phiên đăng nhập đã hết hạn hoặc chưa đăng nhập.'
+          },
+          401,
+          null,
+          auth.setCookies
+        );
       }
 
-      const bootstrapData = await getBootstrapData(db, meta);
-      return jsonResponse({
-        ok: true,
-        backend: 'cloudflare-d1',
-        version: curVer,
-        data: bootstrapData
-      });
+      const clientVer = String(url.searchParams.get('v') || '').trim();
+      if (clientVer && curVer && curVer !== '0' && clientVer === curVer) {
+        return jsonResponse(
+          {
+            ok: true,
+            backend: 'cloudflare-d1',
+            unchanged: true,
+            version: curVer,
+            expiresAt: auth.session.expiresAt,
+            currentUser: auth.user
+          },
+          200,
+          null,
+          auth.setCookies
+        );
+      }
+
+      const bootstrapData = await getBootstrapData(db, meta, auth.session);
+      return jsonResponse(
+        {
+          ok: true,
+          backend: 'cloudflare-d1',
+          version: curVer,
+          expiresAt: auth.session.expiresAt,
+          currentUser: auth.user,
+          data: bootstrapData
+        },
+        200,
+        null,
+        auth.setCookies
+      );
     }
 
     if (request.method !== 'POST') {
@@ -1313,41 +2425,191 @@ export async function handleApiRequest(request, env, ctx) {
 
     const action = String(payload.action || '').trim();
 
-    if (action === 'setupDatabase') {
-      return await handleSetupDatabase(db);
+    if (action === 'logout') {
+      await revokeSessionFromRequest(request, db, env);
+      return jsonResponse(
+        { ok: true, backend: 'cloudflare-d1', loggedOut: true },
+        200,
+        null,
+        buildClearSessionCookies(url)
+      );
     }
 
-    if (action === 'importFromBootstrapData') {
-      return await handleImportFromBootstrapData(db, payload);
+    if (action === 'login') {
+      return await handleLogin(db, payload, request, env, url);
     }
 
     if (action === 'clearAllData' || action === 'clearAllDataCompletely') {
       return jsonResponse({
         ok: false,
         error: 'Chức năng quản trị và làm sạch dữ liệu không thực hiện từ giao diện web.'
-      });
+      }, 403);
     }
 
-    if (action === 'login') {
-      return await handleLogin(db, payload);
+    if (action === 'setupDatabase') {
+      const auth = await resolveRequestSession(request, db, env, url);
+      const setupRes = await handleSetupDatabase(db, auth.session);
+      return withSessionCookies(setupRes, auth.setCookies);
     }
+
+    if (action === 'importFromBootstrapData') {
+      const auth = await resolveRequestSession(request, db, env, url);
+      const importRes = await handleImportFromBootstrapData(db, payload, auth.session, env);
+      return withSessionCookies(importRes, auth.setCookies);
+    }
+
+    const auth = await resolveRequestSession(request, db, env, url);
+    if (action === 'session' || action === 'refresh') {
+      const metaSes = await getMetaMap(db);
+      const curVerSes = await getDataVersion(db, metaSes);
+      if (!auth.session || !auth.user) {
+        return jsonResponse(
+          {
+            ok: false,
+            backend: 'cloudflare-d1',
+            authenticated: false,
+            sessionExpired: true,
+            error: 'Phiên đăng nhập đã hết hạn.'
+          },
+          401,
+          null,
+          auth.setCookies
+        );
+      }
+      return jsonResponse(
+        {
+          ok: true,
+          backend: 'cloudflare-d1',
+          authenticated: true,
+          version: curVerSes,
+          expiresAt: auth.session.expiresAt,
+          user: auth.user
+        },
+        200,
+        null,
+        auth.setCookies
+      );
+    }
+
+    if (!auth.session || !auth.user) {
+      return jsonResponse(
+        {
+          ok: false,
+          backend: 'cloudflare-d1',
+          sessionExpired: true,
+          error: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+        },
+        401,
+        null,
+        auth.setCookies
+      );
+    }
+
+    const session = auth.session;
+    const sessionCookies = auth.setCookies;
+    const isTeacher = session.role === 'teacher';
+    const respond = function (res) {
+      return withSessionCookies(res, sessionCookies);
+    };
+    const mutate = async function (extra) {
+      return await buildMutationResponse(db, payload, preVer, extra, session, sessionCookies);
+    };
 
     const preVer = await getDataVersion(db);
+
+    if (action === 'changePassword') {
+      const currentPwd = String(payload.current_password || '').trim();
+      const newPwd = String(payload.new_password || '').trim();
+      if (!currentPwd || !newPwd || newPwd.length < 6) {
+        return respond(
+          jsonResponse(
+            { ok: false, error: 'Mật khẩu mới phải có tối thiểu 6 ký tự.' },
+            400
+          )
+        );
+      }
+      if (session.role === 'teacher') {
+        const tRow = await db
+          .prepare('SELECT teacher_id, password FROM teachers WHERE teacher_id = ? LIMIT 1')
+          .bind(session.uid)
+          .first();
+        const chkT = tRow ? await verifyPassword(currentPwd, tRow.password) : { valid: false };
+        if (!chkT.valid) {
+          return respond(jsonResponse({ ok: false, error: 'Mật khẩu hiện tại không chính xác.' }, 403));
+        }
+        const hashedT = await hashPassword(newPwd, 100000);
+        await db.prepare('UPDATE teachers SET password = ? WHERE teacher_id = ?').bind(hashedT, session.uid).run();
+      } else {
+        const sRow = await db
+          .prepare('SELECT student_id, password FROM students WHERE student_id = ? LIMIT 1')
+          .bind(session.uid)
+          .first();
+        const chkS = sRow ? await verifyPassword(currentPwd, sRow.password) : { valid: false };
+        if (!chkS.valid) {
+          return respond(jsonResponse({ ok: false, error: 'Mật khẩu hiện tại không chính xác.' }, 403));
+        }
+        const hashedS = await hashPassword(newPwd, 100000);
+        await db.prepare('UPDATE students SET password = ? WHERE student_id = ?').bind(hashedS, session.uid).run();
+      }
+      await db
+        .prepare('UPDATE auth_sessions SET revoked = 1 WHERE user_id = ? AND role = ? AND session_id != ?')
+        .bind(session.uid, session.role, session.sid)
+        .run();
+      const nextVerPwd = await bumpDataVersion(db);
+      return respond(
+        jsonResponse({
+          ok: true,
+          backend: 'cloudflare-d1',
+          version: nextVerPwd,
+          passwordChanged: true
+        })
+      );
+    }
+
+    const TEACHER_ONLY_ACTIONS = new Set([
+      'createClass',
+      'deleteClass',
+      'changeStudentClass',
+      'createStudentAccount',
+      'resetStudentPassword',
+      'deleteStudentAccount',
+      'saveTeacherFeedback',
+      'copyTeacherFeedback',
+      'addVocabulary',
+      'batchAddVocabulary',
+      'deleteVocabulary',
+      'addAssignment',
+      'renameAssignmentSession',
+      'assignExercisesToClass',
+      'unassignAssignment',
+      'deleteAssignment',
+      'gradeManualTranslation',
+      'savePracticeExercise',
+      'deletePracticeExercise'
+    ]);
+    if (TEACHER_ONLY_ACTIONS.has(action) && !isTeacher) {
+      return respond(
+        jsonResponse(
+          { ok: false, error: 'Bạn không có quyền thực hiện thao tác dành cho Giáo viên.' },
+          403
+        )
+      );
+    }
 
     if (action === 'createClass') {
       const className = String(payload.class_name || '').trim();
       if (!className) {
-        return jsonResponse({ ok: false, error: 'Thiếu tên lớp học.' }, 400);
+        return respond(jsonResponse({ ok: false, error: 'Thiếu tên lớp học.' }, 400));
       }
       if (!isValidRealClassName(className)) {
-        return jsonResponse({ ok: false, error: 'Tên lớp không hợp lệ hoặc trùng từ khóa hệ thống.' }, 400);
+        return respond(jsonResponse({ ok: false, error: 'Tên lớp không hợp lệ hoặc trùng từ khóa hệ thống.' }, 400));
       }
       const existing = await db
         .prepare('SELECT class_id, class_name, created_at FROM classes WHERE LOWER(TRIM(class_name)) = LOWER(TRIM(?)) LIMIT 1')
         .bind(className)
         .first();
       if (existing) {
-        return await buildMutationResponse(db, payload, preVer, { classItem: existing });
+        return await mutate({ classItem: existing });
       }
       const classId = String(payload.class_id || makeShortId('CLS'));
       const createdAt = formatViDate();
@@ -1355,7 +2617,7 @@ export async function handleApiRequest(request, env, ctx) {
         .prepare('INSERT INTO classes (class_id, class_name, created_at) VALUES (?, ?, ?)')
         .bind(classId, className, createdAt)
         .run();
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         classItem: { class_id: classId, class_name: className, created_at: createdAt }
       });
     }
@@ -1363,7 +2625,7 @@ export async function handleApiRequest(request, env, ctx) {
     if (action === 'deleteClass') {
       const className = String(payload.class_name || '').trim();
       if (!className) {
-        return jsonResponse({ ok: false, error: 'Thiếu tên lớp học.' }, 400);
+        return respond(jsonResponse({ ok: false, error: 'Thiếu tên lớp học.' }, 400));
       }
       await db.batch([
         db.prepare('DELETE FROM classes WHERE LOWER(TRIM(class_name)) = LOWER(TRIM(?))').bind(className),
@@ -1371,7 +2633,7 @@ export async function handleApiRequest(request, env, ctx) {
           .prepare("UPDATE students SET class_name = 'Chưa xếp lớp' WHERE LOWER(TRIM(class_name)) = LOWER(TRIM(?))")
           .bind(className)
       ]);
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         deletedClass: { deleted: true, class_name: className }
       });
     }
@@ -1380,14 +2642,14 @@ export async function handleApiRequest(request, env, ctx) {
       const studentId = String(payload.student_id || '').trim();
       const targetClass = String(payload.class_name || '').trim();
       if (!studentId || !targetClass) {
-        return jsonResponse({ ok: false, error: 'Thiếu thông tin học sinh hoặc lớp mới.' }, 400);
+        return respond(jsonResponse({ ok: false, error: 'Thiếu thông tin học sinh hoặc lớp mới.' }, 400));
       }
       await ensureClassRecord(db, targetClass);
       await db
         .prepare('UPDATE students SET class_name = ? WHERE student_id = ?')
         .bind(targetClass, studentId)
         .run();
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         student: { student_id: studentId, class_name: targetClass }
       });
     }
@@ -1399,15 +2661,16 @@ export async function handleApiRequest(request, env, ctx) {
       const initials = String(payload.avatar_initials || getInitials(fullName)).trim();
       const username = String(payload.username || studentId.toLowerCase()).trim().toLowerCase();
       const password = String(payload.password || '123456').trim();
+      const hashedPassword = await hashPassword(password, 100000);
       const createdAt = formatViDate();
 
       await ensureClassRecord(db, className);
       await db
         .prepare('INSERT OR REPLACE INTO students (student_id, full_name, class_name, avatar_initials, username, password, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .bind(studentId, fullName, className, initials, username, password, createdAt)
+        .bind(studentId, fullName, className, initials, username, hashedPassword, createdAt)
         .run();
 
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         student: {
           student_id: studentId,
           full_name: fullName,
@@ -1423,12 +2686,17 @@ export async function handleApiRequest(request, env, ctx) {
     if (action === 'resetStudentPassword') {
       const studentId = String(payload.student_id || '').trim();
       const newPwd = String(payload.new_password || '123456').trim();
+      const hashedNewPwd = await hashPassword(newPwd, 100000);
       const info = await db
         .prepare('UPDATE students SET password = ? WHERE student_id = ?')
-        .bind(newPwd, studentId)
+        .bind(hashedNewPwd, studentId)
+        .run();
+      await db
+        .prepare("UPDATE auth_sessions SET revoked = 1 WHERE user_id = ? AND role = 'student'")
+        .bind(studentId)
         .run();
       const updatedCount = info && info.meta ? Number(info.meta.changes || 0) : 1;
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         student: updatedCount > 0 ? { student_id: studentId, password: newPwd } : null
       });
     }
@@ -1436,7 +2704,7 @@ export async function handleApiRequest(request, env, ctx) {
     if (action === 'deleteStudentAccount') {
       const studentId = String(payload.student_id || '').trim();
       if (!studentId) {
-        return await buildMutationResponse(db, payload, preVer, {
+        return await mutate({
           deletedStudent: { deleted: false, student_id: '' },
           deletedMediaUrls: []
         });
@@ -1455,12 +2723,13 @@ export async function handleApiRequest(request, env, ctx) {
         db.prepare('DELETE FROM students WHERE TRIM(student_id) = ?').bind(studentId),
         db.prepare('DELETE FROM submissions WHERE TRIM(student_id) = ?').bind(studentId),
         db.prepare('DELETE FROM exit_tickets WHERE TRIM(student_id) = ?').bind(studentId),
-        db.prepare('DELETE FROM practice_submissions WHERE TRIM(student_id) = ?').bind(studentId)
+        db.prepare('DELETE FROM practice_submissions WHERE TRIM(student_id) = ?').bind(studentId),
+        db.prepare("DELETE FROM auth_sessions WHERE user_id = ? AND role = 'student'").bind(studentId)
       ]);
       const changesOf = function (i) {
         return batchOut[i] && batchOut[i].meta ? Number(batchOut[i].meta.changes || 0) : 0;
       };
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         deletedStudent: {
           deleted: changesOf(0) > 0,
           student_id: studentId,
@@ -1475,15 +2744,19 @@ export async function handleApiRequest(request, env, ctx) {
 
     if (action === 'submitHomework') {
       const assignmentId = String(payload.assignment_id || '').trim();
-      const studentId = String(payload.student_id || '').trim();
+      const requestedStudentId = String(payload.student_id || '').trim();
+      if (session.role === 'student' && requestedStudentId && requestedStudentId !== session.uid) {
+        return respond(jsonResponse({ ok: false, error: 'Không thể nộp bài thay học sinh khác.' }, 403));
+      }
+      const studentId = session.role === 'student' ? String(session.uid) : requestedStudentId;
       const nowStr = formatViDateTime();
       const incomingUrl = String(payload.media_url || '').trim();
 
       if (payload.media_base64 || (incomingUrl.indexOf('data:') === 0 && incomingUrl.length > 262144)) {
-        return jsonResponse({
+        return respond(jsonResponse({
           ok: false,
           error: 'Tệp ghi âm/video phải được tải lên Google Drive trước khi lưu vào Cloudflare D1.'
-        }, 400);
+        }, 400));
       }
 
       const existing = await db
@@ -1504,8 +2777,12 @@ export async function handleApiRequest(request, env, ctx) {
         const nextStatus = isVocabTrack
           ? String(payload.status || 'graded')
           : (existing.status === 'graded' ? 'graded' : 'submitted');
+        const allowClientScore = isVocabTrack || isTeacher;
         const hasIncomingScore =
-          payload.score !== undefined && payload.score !== null && (!isVocabTrack || String(payload.score) !== '');
+          allowClientScore &&
+          payload.score !== undefined &&
+          payload.score !== null &&
+          (!isVocabTrack || String(payload.score) !== '');
         const nextScore = hasIncomingScore ? String(payload.score) : (existing.score || '');
         const rawPriorCount = Number(existing.practice_count || 0) || 0;
         const effectivePrior = isVocabTrack && rawPriorCount === 0 && (existing.submitted_at || existing.status === 'graded')
@@ -1527,7 +2804,7 @@ export async function handleApiRequest(request, env, ctx) {
           .bind(nowStr, nextNote, nextType, nextMediaUrl, nextDur, nextStatus, nextScore, nextPracticeCount, existing.submission_id)
           .run();
 
-        return await buildMutationResponse(db, payload, preVer, {
+        return await mutate({
           submission: {
             submission_id: existing.submission_id,
             media_url: nextMediaUrl,
@@ -1547,8 +2824,11 @@ export async function handleApiRequest(request, env, ctx) {
         const nextDur = String(payload.media_duration || '01:00');
         const isVocabTrack = nextType === 'vocab' || nextType === 'vocab_log';
         const nextStatus = isVocabTrack ? String(payload.status || 'graded') : 'submitted';
+        const allowClientScore = isVocabTrack || isTeacher;
         const nextScore =
-          payload.score !== undefined && payload.score !== null ? String(payload.score) : '';
+          allowClientScore && payload.score !== undefined && payload.score !== null
+            ? String(payload.score)
+            : '';
         const incrementPractice = isVocabTrack
           ? (payload.increment_practice !== false && payload.increment_practice !== 0)
           : false;
@@ -1559,7 +2839,7 @@ export async function handleApiRequest(request, env, ctx) {
           .prepare('INSERT INTO submissions (submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
           .bind(newId, assignmentId, studentId, nowStr, nextNote, nextType, incomingUrl, nextDur, nextStatus, nextScore, '', '', '', '', nextPracticeCount)
           .run();
-        return await buildMutationResponse(db, payload, preVer, {
+        return await mutate({
           submission: {
             submission_id: newId,
             media_url: incomingUrl,
@@ -1582,10 +2862,10 @@ export async function handleApiRequest(request, env, ctx) {
       const incomingVoiceUrl = rawVoiceUrl.indexOf('demo:') === 0 ? '' : rawVoiceUrl;
 
       if (payload.teacher_voice_base64 || (incomingVoiceUrl.indexOf('data:') === 0 && incomingVoiceUrl.length > 262144)) {
-        return jsonResponse({
+        return respond(jsonResponse({
           ok: false,
           error: 'Bản ghi âm phản hồi phải được tải lên Google Drive trước khi lưu vào Cloudflare D1.'
-        }, 400);
+        }, 400));
       }
 
       const existing = await db
@@ -1623,7 +2903,7 @@ export async function handleApiRequest(request, env, ctx) {
           .bind(nextSubmittedAt, 'graded', nextScore, nextComment, nextVoiceUrl, nextVoiceDur, nowStr, existing.submission_id)
           .run();
 
-        return await buildMutationResponse(db, payload, preVer, {
+        return await mutate({
           submission: {
             submission_id: existing.submission_id,
             status: 'graded',
@@ -1644,7 +2924,7 @@ export async function handleApiRequest(request, env, ctx) {
           .prepare('INSERT INTO submissions (submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
           .bind(newId, assignmentId, studentId, '', '', '', '', '', nextStatus, nextScore, nextComment, incomingVoiceUrl, nextVoiceDur, nowStr, 0)
           .run();
-        return await buildMutationResponse(db, payload, preVer, {
+        return await mutate({
           submission: {
             submission_id: newId,
             status: nextStatus,
@@ -1670,16 +2950,16 @@ export async function handleApiRequest(request, env, ctx) {
       if (includeSource) targetSet.add(sourceStudentId);
 
       if (!assignmentId || targetSet.size === 0) {
-        return jsonResponse({ ok: false, error: 'Thiếu mã BVN hoặc danh sách học sinh cần copy phản hồi.' }, 400);
+        return respond(jsonResponse({ ok: false, error: 'Thiếu mã BVN hoặc danh sách học sinh cần copy phản hồi.' }, 400));
       }
 
       const rawVoiceUrl = String(payload.teacher_voice_url || '').trim();
       const incomingVoiceUrl = rawVoiceUrl.indexOf('demo:') === 0 ? '' : rawVoiceUrl;
       if (payload.teacher_voice_base64 || (incomingVoiceUrl.indexOf('data:') === 0 && incomingVoiceUrl.length > 262144)) {
-        return jsonResponse({
+        return respond(jsonResponse({
           ok: false,
           error: 'Bản ghi âm phản hồi phải được tải lên Google Drive trước khi sao chép sang nhiều học sinh.'
-        }, 400);
+        }, 400));
       }
 
       const copyComment = payload.copy_comment !== false;
@@ -1777,7 +3057,7 @@ export async function handleApiRequest(request, env, ctx) {
       });
 
       await runBatchedStatements(db, stmts);
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         copiedFeedback: {
           assignment_id: assignmentId,
           updated_count: updatedSubmissions.length,
@@ -1789,6 +3069,14 @@ export async function handleApiRequest(request, env, ctx) {
     }
 
     if (action === 'submitExitTicket') {
+      const requestedStudentId = String(payload.student_id || '').trim();
+      if (session.role === 'student' && requestedStudentId && requestedStudentId !== session.uid) {
+        return respond(jsonResponse({ ok: false, error: 'Không thể nộp bài thay học sinh khác.' }, 403));
+      }
+      const studentId = session.role === 'student' ? String(session.uid) : requestedStudentId;
+      const studentName = session.role === 'student'
+        ? String(auth.user.full_name || payload.student_name || '')
+        : String(payload.student_name || '');
       const recordId = makeShortId('EXT');
       const nowStr = formatViDateTime();
       await db
@@ -1796,15 +3084,15 @@ export async function handleApiRequest(request, env, ctx) {
         .bind(
           recordId,
           String(payload.ticket_id || 'EXIT_BAI_1'),
-          String(payload.student_id || ''),
-          String(payload.student_name || ''),
+          studentId,
+          studentName,
           Number(payload.score) || 0,
           Number(payload.total) || 0,
           nowStr,
           JSON.stringify(payload.answers || [])
         )
         .run();
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         exitResult: { record_id: recordId, submitted_at: nowStr }
       });
     }
@@ -1825,13 +3113,13 @@ export async function handleApiRequest(request, env, ctx) {
           String(payload.example_vi || '')
         )
         .run();
-      return await buildMutationResponse(db, payload, preVer, { vocab: { vocab_id: vocabId } });
+      return await mutate({ vocab: { vocab_id: vocabId } });
     }
 
     if (action === 'batchAddVocabulary') {
       const list = Array.isArray(payload.vocabulary) ? payload.vocabulary : [];
       if (list.length === 0) {
-        return await buildMutationResponse(db, payload, preVer, {
+        return await mutate({
           importedVocab: { importedCount: 0, lessonIds: [] }
         });
       }
@@ -1854,7 +3142,7 @@ export async function handleApiRequest(request, env, ctx) {
           );
       });
       await runBatchedStatements(db, stmts, 80);
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         importedVocab: { importedCount: list.length, lessonIds: Array.from(lessonIdSet) }
       });
     }
@@ -1876,7 +3164,7 @@ export async function handleApiRequest(request, env, ctx) {
           .run();
         deletedCount = delRes && delRes.meta ? Number(delRes.meta.changes || 0) : 0;
       }
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         deletedVocab: { vocab_id: vocabId, lesson_id: lessonId, deleted_count: deletedCount }
       });
     }
@@ -1903,21 +3191,21 @@ export async function handleApiRequest(request, env, ctx) {
           String(payload.lesson_id || '')
         )
         .run();
-      return await buildMutationResponse(db, payload, preVer, { assignment: { assignment_id: asgId } });
+      return await mutate({ assignment: { assignment_id: asgId } });
     }
 
     if (action === 'renameAssignmentSession') {
       const oldName = String(payload.old_session_tag || '').trim();
       const newName = String(payload.new_session_tag || '').trim();
       if (!oldName || !newName) {
-        return jsonResponse({ ok: false, error: 'Thiếu tên buổi học cũ hoặc mới.' }, 400);
+        return respond(jsonResponse({ ok: false, error: 'Thiếu tên buổi học cũ hoặc mới.' }, 400));
       }
       const res = await db
         .prepare("UPDATE assignments SET session_tag = ? WHERE TRIM(COALESCE(session_tag, 'Buổi 1')) = ? AND LOWER(TRIM(COALESCE(require_media, 'audio_or_video'))) NOT IN ('practice', 'vocab')")
         .bind(newName, oldName)
         .run();
       const updatedCount = res && res.meta ? Number(res.meta.changes || 0) : 0;
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         renamedSession: { old_session_tag: oldName, new_session_tag: newName, updated_count: updatedCount }
       });
     }
@@ -1934,7 +3222,7 @@ export async function handleApiRequest(request, env, ctx) {
         .map(function (id) { return String(id || '').trim(); })
         .filter(Boolean);
       if (cleanIds.length === 0) {
-        return await buildMutationResponse(db, payload, preVer, {
+        return await mutate({
           updated: { updated_count: 0, target_class: targetClass }
         });
       }
@@ -1948,7 +3236,7 @@ export async function handleApiRequest(request, env, ctx) {
       res.forEach(function (r) {
         if (r && r.meta && r.meta.changes) updatedCount += Number(r.meta.changes);
       });
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         updated: { updated_count: updatedCount, target_class: targetClass }
       });
     }
@@ -1956,7 +3244,7 @@ export async function handleApiRequest(request, env, ctx) {
     if (action === 'deleteAssignment') {
       const assignmentId = String(payload.assignment_id || '').trim();
       if (!assignmentId) {
-        return await buildMutationResponse(db, payload, preVer, {
+        return await mutate({
           deletedAssignment: { deleted: false, assignment_id: '' },
           deletedMediaUrls: []
         });
@@ -1977,7 +3265,7 @@ export async function handleApiRequest(request, env, ctx) {
       const changesOf = function (i) {
         return batchOut[i] && batchOut[i].meta ? Number(batchOut[i].meta.changes || 0) : 0;
       };
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         deletedAssignment: {
           deleted: changesOf(0) > 0,
           assignment_id: assignmentId,
@@ -1989,35 +3277,50 @@ export async function handleApiRequest(request, env, ctx) {
     }
 
     if (action === 'submitPracticeExercise') {
-      const exerciseId = String(payload.exercise_id || '');
-      const studentId = String(payload.student_id || '');
-      const nowStr = formatViDateTime();
+      const exerciseId = String(payload.exercise_id || '').trim();
+      const requestedStudentId = String(payload.student_id || '').trim();
+      if (session.role === 'student' && requestedStudentId && requestedStudentId !== session.uid) {
+        return respond(jsonResponse({ ok: false, error: 'Không thể nộp bài thay học sinh khác.' }, 403));
+      }
+      const studentId = session.role === 'student' ? String(session.uid) : requestedStudentId;
+      const studentName = session.role === 'student'
+        ? String(auth.user.full_name || payload.student_name || '')
+        : String(payload.student_name || '');
+
+      const exRow = await db
+        .prepare('SELECT exercise_id, total_score, thresholds_json, sections_json FROM practice_exercises WHERE exercise_id = ? LIMIT 1')
+        .bind(exerciseId)
+        .first();
+      if (!exRow) {
+        return respond(jsonResponse({ ok: false, error: 'Không tìm thấy bài luyện tập trên máy chủ.' }, 404));
+      }
 
       const existing = await db
-        .prepare('SELECT submission_id FROM practice_submissions WHERE exercise_id = ? AND student_id = ? LIMIT 1')
+        .prepare('SELECT submission_id, manual_grades_json FROM practice_submissions WHERE exercise_id = ? AND student_id = ? LIMIT 1')
         .bind(exerciseId, studentId)
         .first();
       const subId = existing && existing.submission_id ? String(existing.submission_id) : makeShortId('PRAC_SUB');
-      const totalScore = payload.total_score !== undefined ? Number(payload.total_score) : 0;
-      const maxScore = payload.max_score !== undefined ? Number(payload.max_score) : 35;
-      const rawRating = payload.rating && typeof payload.rating === 'object' && payload.rating.key
-        ? payload.rating.key
-        : payload.rating;
-      const ratingStr = String(rawRating || '').trim();
-      const rating = (ratingStr === 'very_good' || ratingStr === 'good' || ratingStr === 'needs_review')
-        ? ratingStr
-        : '';
-      const secScoresJson =
-        typeof payload.section_scores === 'object'
-          ? JSON.stringify(payload.section_scores)
-          : String(payload.section_scores_json || '{}');
-      const answersJson =
-        typeof payload.answers === 'object' ? JSON.stringify(payload.answers) : String(payload.answers_json || '{}');
-      const manualGradesJson =
-        typeof payload.manual_grades === 'object'
-          ? JSON.stringify(payload.manual_grades)
-          : String(payload.manual_grades_json || '{}');
-      const status = String(payload.status || 'submitted');
+      const nowStr = formatViDateTime();
+
+      let answersObj = {};
+      try {
+        answersObj = payload.answers && typeof payload.answers === 'object'
+          ? payload.answers
+          : JSON.parse(String(payload.answers_json || '{}'));
+      } catch (e) {
+        answersObj = {};
+      }
+      let existingManual = {};
+      try {
+        existingManual = existing && existing.manual_grades_json
+          ? JSON.parse(existing.manual_grades_json || '{}')
+          : {};
+      } catch (e) {
+        existingManual = {};
+      }
+
+      const graded = gradePracticeSubmissionServer(exRow, answersObj, existingManual);
+      const answersJson = JSON.stringify(answersObj || {});
 
       await db
         .prepare('INSERT OR REPLACE INTO practice_submissions (submission_id, exercise_id, student_id, student_name, total_score, max_score, rating, submitted_at, section_scores_json, answers_json, manual_grades_json, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
@@ -2025,20 +3328,41 @@ export async function handleApiRequest(request, env, ctx) {
           subId,
           exerciseId,
           studentId,
-          String(payload.student_name || ''),
-          totalScore,
-          maxScore,
-          rating,
+          studentName,
+          graded.totalScore,
+          graded.maxScore,
+          graded.rating,
           nowStr,
-          secScoresJson,
+          graded.sectionScoresJson,
           answersJson,
-          manualGradesJson,
-          status
+          graded.manualGradesJson,
+          graded.status
         )
         .run();
 
-      return await buildMutationResponse(db, payload, preVer, {
-        practiceSubmission: { submission_id: subId, status: status }
+      const fullExRow = await db
+        .prepare('SELECT exercise_id, title, lesson_tag, total_score, thresholds_json, sections_json, created_at FROM practice_exercises WHERE exercise_id = ? LIMIT 1')
+        .bind(exerciseId)
+        .first();
+      const unlockedExercise = fullExRow
+        ? (session.role === 'teacher' ? fullExRow : sanitizePracticeExerciseForStudent(fullExRow, true))
+        : null;
+
+      return await mutate({
+        practiceSubmission: {
+          submission_id: subId,
+          exercise_id: exerciseId,
+          student_id: studentId,
+          student_name: studentName,
+          submitted_at: nowStr,
+          status: graded.status,
+          total_score: graded.totalScore,
+          max_score: graded.maxScore,
+          rating: graded.rating,
+          section_scores: graded.sectionScores,
+          manual_grades: graded.manualGrades
+        },
+        practiceExercise: unlockedExercise
       });
     }
 
@@ -2049,7 +3373,7 @@ export async function handleApiRequest(request, env, ctx) {
         .bind(subId)
         .first();
       if (!existing) {
-        return await buildMutationResponse(db, payload, preVer, { practiceSubmission: null });
+        return await mutate({ practiceSubmission: null });
       }
       const nextScore = payload.total_score !== undefined ? Number(payload.total_score) : Number(existing.total_score || 0);
       const rawNextRating = payload.rating && typeof payload.rating === 'object' && payload.rating.key
@@ -2073,7 +3397,7 @@ export async function handleApiRequest(request, env, ctx) {
         .bind(nextScore, nextRating, nextSectionScores, nextManualGrades, subId)
         .run();
 
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         practiceSubmission: { submission_id: subId, status: 'graded', total_score: nextScore }
       });
     }
@@ -2102,7 +3426,7 @@ export async function handleApiRequest(request, env, ctx) {
           .bind(formattedAsgTitle, cleanTag, exId)
       ]);
 
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         practiceExercise: {
           exercise_id: exId,
           title: cleanTitle,
@@ -2124,14 +3448,14 @@ export async function handleApiRequest(request, env, ctx) {
       const deletedMediaUrls = existing ? collectPracticeMediaUrls(existing.sections_json) : [];
       const res = await db.prepare('DELETE FROM practice_exercises WHERE exercise_id = ?').bind(exId).run();
       const deleted = res && res.meta ? Number(res.meta.changes || 0) > 0 : false;
-      return await buildMutationResponse(db, payload, preVer, {
+      return await mutate({
         deleted: deleted,
         exercise_id: exId,
         deletedMediaUrls: deletedMediaUrls
       });
     }
 
-    return jsonResponse({ ok: false, error: 'Yêu cầu không hợp lệ.' }, 400);
+    return respond(jsonResponse({ ok: false, error: 'Yêu cầu không hợp lệ.' }, 400));
   } catch (err) {
     return jsonResponse(
       {

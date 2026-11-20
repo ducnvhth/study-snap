@@ -3882,11 +3882,12 @@
           }
 
           ui.practiceViewingResult = true;
+          const finalSub = findStudentPracticeSubmission(exercise.exercise_id) || newSubmission;
           showToast(
             'Đã nộp bài tập thành công! Điểm số: ' +
-              totalEarnedScore +
+              finalSub.total_score +
               '/' +
-              (exercise.total_score || 35) +
+              (finalSub.max_score || exercise.total_score || 35) +
               ' điểm'
           );
           renderStudentHeaderAndStats();
@@ -4250,6 +4251,85 @@
         window.StudySnapAuth.logout();
       });
     }
+
+    const btnOpenChangePwd = document.getElementById('btn-student-change-password');
+    const modalStudentPwd = document.getElementById('modal-student-change-password');
+    const btnCloseStudentPwd = document.getElementById('btn-close-student-pwd-modal');
+    const btnCancelStudentPwd = document.getElementById('btn-cancel-student-pwd-modal');
+    const formStudentPwd = document.getElementById('student-change-password-form');
+
+    function setStudentPwdModalOpen(open) {
+      if (!modalStudentPwd) return;
+      modalStudentPwd.classList.toggle('is-open', Boolean(open));
+      modalStudentPwd.classList.toggle('is-visible', Boolean(open));
+      if (open) {
+        if (formStudentPwd) formStudentPwd.reset();
+        const curInput = document.getElementById('student-current-password');
+        if (curInput) setTimeout(function () { curInput.focus(); }, 40);
+      }
+    }
+
+    if (btnOpenChangePwd && modalStudentPwd) {
+      btnOpenChangePwd.addEventListener('click', function () {
+        setStudentPwdModalOpen(true);
+      });
+    }
+    if (btnCloseStudentPwd) {
+      btnCloseStudentPwd.addEventListener('click', function () {
+        setStudentPwdModalOpen(false);
+      });
+    }
+    if (btnCancelStudentPwd) {
+      btnCancelStudentPwd.addEventListener('click', function () {
+        setStudentPwdModalOpen(false);
+      });
+    }
+    if (modalStudentPwd) {
+      modalStudentPwd.addEventListener('click', function (ev) {
+        if (ev.target === modalStudentPwd) setStudentPwdModalOpen(false);
+      });
+      document.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape' && modalStudentPwd.classList.contains('is-open')) {
+          setStudentPwdModalOpen(false);
+        }
+      });
+    }
+    if (formStudentPwd) {
+      formStudentPwd.addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        const curPwd = String((document.getElementById('student-current-password') || {}).value || '').trim();
+        const newPwd = String((document.getElementById('student-new-password') || {}).value || '').trim();
+        const confirmPwd = String((document.getElementById('student-confirm-password') || {}).value || '').trim();
+        if (!curPwd || newPwd.length < 6) {
+          showToast('Mật khẩu mới phải có tối thiểu 6 ký tự.');
+          return;
+        }
+        if (newPwd !== confirmPwd) {
+          showToast('Mật khẩu xác nhận không khớp với mật khẩu mới.');
+          return;
+        }
+        const submitBtn = document.getElementById('btn-submit-student-change-pwd');
+        const stu = getActiveStudent();
+        const doChange = async function () {
+          return await window.StudySnapStore.syncPostToGas(state, {
+            action: 'changePassword',
+            role: 'student',
+            user_id: stu.student_id,
+            current_password: curPwd,
+            new_password: newPwd
+          });
+        };
+        const res = window.StudySnapLoading && submitBtn
+          ? await window.StudySnapLoading.withButtonLoading(submitBtn, 'Đang cập nhật...', doChange)
+          : await doChange();
+        if (!res || !res.ok) {
+          showToast((res && res.error) || 'Không thể đổi mật khẩu lúc này.');
+          return;
+        }
+        setStudentPwdModalOpen(false);
+        showToast('Đã cập nhật mật khẩu đăng nhập thành công!');
+      });
+    }
   }
 
   function renderAll() {
@@ -4267,13 +4347,25 @@
     initVocabularyEvents();
     renderAll();
 
-    if (window.StudySnapStore.getGasUrl()) {
+    if (
+      window.StudySnapStore.getGasUrl() ||
+      (window.StudySnapAuth && typeof window.StudySnapAuth.isHttpRuntime === 'function' && window.StudySnapAuth.isHttpRuntime())
+    ) {
       window.StudySnapStore.fetchBootstrapFromGas(state).then(function (remoteRes) {
         state = window.StudySnapStore.loadState();
+        if (remoteRes && remoteRes.sessionExpired) {
+          return;
+        }
         if (remoteRes && remoteRes.ok && remoteRes.data) {
-          const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
+          const isPreview = window.StudySnapAuth && typeof window.StudySnapAuth.isPreviewAllowed === 'function'
+            ? window.StudySnapAuth.isPreviewAllowed()
+            : false;
           if (!isPreview && !window.StudySnapAuth.revalidateActiveSession(state)) {
-            window.location.replace('index.html?session=expired');
+            if (window.StudySnapAuth && typeof window.StudySnapAuth.handleSessionExpired === 'function') {
+              window.StudySnapAuth.handleSessionExpired();
+            } else {
+              window.location.replace('index.html?session=expired');
+            }
             return;
           }
         }

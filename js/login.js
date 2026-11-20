@@ -131,18 +131,32 @@
       }
     });
 
-    // Đồng bộ ngầm dữ liệu mới nhất từ hệ thống và xác thực lại phiên đang lưu
-    if (window.StudySnapStore.getGasUrl()) {
+    // Không tự động tải bootstrap chứa dữ liệu lớp trước khi đăng nhập; chỉ kiểm tra phiên /api?action=session
+    if (window.StudySnapAuth && typeof window.StudySnapAuth.isHttpRuntime === 'function' && window.StudySnapAuth.isHttpRuntime()) {
       setSyncBadgeState(true);
-      window.StudySnapStore.fetchBootstrapFromGas(state)
-        .then(function (remoteRes) {
-          state = window.StudySnapStore.loadState();
-          if (remoteRes && remoteRes.ok && remoteRes.data) {
-            window.StudySnapAuth.revalidateActiveSession(state);
-            if (window.StudySnapAuth && typeof window.StudySnapAuth.redirectIfAuthenticated === 'function' && window.StudySnapAuth.redirectIfAuthenticated()) {
-              return;
+      const checkPromise =
+        window.StudySnapStore && typeof window.StudySnapStore.fetchSessionFromD1 === 'function'
+          ? window.StudySnapStore.fetchSessionFromD1(state)
+          : Promise.resolve(null);
+      checkPromise
+        .then(function (sesRes) {
+          if (sesRes && sesRes.backend === 'd1') {
+            if (sesRes.authenticated && sesRes.user) {
+              window.StudySnapAuth.setCurrentUser(
+                Object.assign({}, sesRes.user, {
+                  expires_at: Number(sesRes.expiresAt || 0) || undefined
+                })
+              );
+              if (window.StudySnapAuth.redirectIfAuthenticated()) {
+                return;
+              }
+            } else {
+              window.StudySnapAuth.setCurrentUser(null);
+              renderSessionBanner();
+              if (sesRes.sessionExpired) {
+                showToast('Phiên đăng nhập trước đã hết hiệu lực. Vui lòng đăng nhập lại.');
+              }
             }
-            renderSessionBanner();
           }
         })
         .finally(function () {
@@ -169,9 +183,7 @@
     const clearSessionBtn = document.getElementById('btn-clear-session');
     if (clearSessionBtn) {
       clearSessionBtn.addEventListener('click', function () {
-        window.StudySnapAuth.setCurrentUser(null);
-        renderSessionBanner();
-        showToast('Đã đăng xuất phiên hiện tại.');
+        window.StudySnapAuth.logout();
       });
     }
 
@@ -200,7 +212,12 @@
         let didRedirect = false;
 
         try {
-          if (window.StudySnapStore.getGasUrl()) {
+          const isHttp = window.StudySnapAuth && typeof window.StudySnapAuth.isHttpRuntime === 'function'
+            ? window.StudySnapAuth.isHttpRuntime()
+            : false;
+          const canTryServer = isHttp || Boolean(window.StudySnapStore.getGasUrl());
+
+          if (canTryServer) {
             const remoteAuth = await window.StudySnapStore.syncPostToGas(state, {
               action: 'login',
               username: u,
@@ -208,7 +225,9 @@
             });
 
             if (remoteAuth && remoteAuth.ok && remoteAuth.user) {
-              const authUser = remoteAuth.user;
+              const authUser = Object.assign({}, remoteAuth.user, {
+                expires_at: Number(remoteAuth.expiresAt || 0) || undefined
+              });
               if (authUser.role === 'teacher') {
                 if (!Array.isArray(state.teachers)) state.teachers = [];
                 const hasTeacher = state.teachers.some(function (t) {
@@ -252,24 +271,18 @@
               }
               result = { ok: true, user: authUser };
             } else if (remoteAuth) {
-              if (loading && submitBtn) {
-                loading.setButtonLoading(submitBtn, true, 'Đang cập nhật thông tin...');
-              }
-              await window.StudySnapStore.fetchBootstrapFromGas(state);
-              state = window.StudySnapStore.loadState();
-              renderSessionBanner();
-              const isNoAccounts =
-                (!state.teachers || state.teachers.length === 0) &&
-                (!state.students || state.students.length === 0);
               result = {
                 ok: false,
-                error: isNoAccounts
-                  ? 'Hệ thống hiện chưa có tài khoản nào khả dụng. Vui lòng liên hệ quản trị viên để được cấp tài khoản.'
-                  : 'Tên đăng nhập hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.'
+                error: remoteAuth.error || 'Tên đăng nhập hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.'
               };
-            } else {
-              // Ngoại tuyến / mất mạng mới kiểm tra cục bộ
+            } else if (!isHttp) {
+              // Ngoại tuyến file:// mới kiểm tra cục bộ
               result = window.StudySnapAuth.authenticate(u, p);
+            } else {
+              result = {
+                ok: false,
+                error: 'Không thể kết nối máy chủ xác thực lúc này. Vui lòng kiểm tra mạng và thử lại.'
+              };
             }
           } else {
             result = window.StudySnapAuth.authenticate(u, p);

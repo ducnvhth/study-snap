@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css?v=20261116x">
+  <link rel="stylesheet" href="styles/main.css?v=20261116y">
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
 </head>
 <body>
@@ -67,6 +67,7 @@
 
       <div class="utility-group">
         <span class="user-profile-pill" id="student-profile-pill">Nguyễn Minh Anh</span>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-student-change-password" title="Đổi mật khẩu đăng nhập">Đổi mật khẩu</button>
         <button type="button" class="btn btn-outline btn-sm" id="btn-student-logout">Đăng xuất</button>
       </div>
     </header>
@@ -679,14 +680,50 @@
     </main>
   </div>
 
+  <!-- Modal Đổi mật khẩu Học sinh -->
+  <div class="modal-backdrop" id="modal-student-change-password" role="dialog" aria-modal="true" aria-labelledby="modal-student-pwd-title">
+    <div class="modal-dialog">
+      <div class="panel-header" style="margin-bottom: 14px;">
+        <div class="panel-title-row">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--color-primary-deep);">
+            <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <h2 id="modal-student-pwd-title">Đổi mật khẩu đăng nhập</h2>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-close-student-pwd-modal" aria-label="Đóng hộp thoại">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <form id="student-change-password-form">
+        <div class="form-group">
+          <label class="form-label" for="student-current-password">Mật khẩu hiện tại</label>
+          <input type="password" id="student-current-password" class="form-control" autocomplete="current-password" required placeholder="Nhập mật khẩu đang dùng">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="student-new-password">Mật khẩu mới (tối thiểu 6 ký tự)</label>
+          <input type="password" id="student-new-password" class="form-control" autocomplete="new-password" minlength="6" required placeholder="Nhập mật khẩu mới">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="student-confirm-password">Nhập lại mật khẩu mới</label>
+          <input type="password" id="student-confirm-password" class="form-control" autocomplete="new-password" minlength="6" required placeholder="Xác nhận lại mật khẩu mới">
+        </div>
+        <div class="banner-actions" style="justify-content: flex-end; gap: 10px; margin-top: 16px;">
+          <button type="button" class="btn btn-outline" id="btn-cancel-student-pwd-modal">Hủy</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-student-change-pwd" style="font-weight: 700;">Cập nhật mật khẩu</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Toast Thông Báo -->
   <div class="toast-banner" id="app-toast" role="status" aria-live="polite"></div>
 
   <script src="js/vocab_data.js?v=20261114h"></script>
   <script src="js/vocab_suite.js?v=20261116e"></script>
-  <script src="js/data.js?v=20261116w"></script>
-  <script src="js/auth.js?v=20261116u"></script>
-  <script src="js/audio.js?v=20261116s"></script>
-  <script src="js/student.js?v=20261116x"></script>
+  <script src="js/data.js?v=20261116y"></script>
+  <script src="js/auth.js?v=20261116y"></script>
+  <script src="js/audio.js?v=20261116y"></script>
+  <script src="js/student.js?v=20261116y"></script>
 </body>
 </html>

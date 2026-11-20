@@ -1700,9 +1700,32 @@ window.StudySnapStore = (function () {
     return seed;
   }
 
+  function stripSensitiveStateForStorage(stateObj) {
+    if (!stateObj || typeof stateObj !== 'object') return stateObj;
+    const copy = Object.assign({}, stateObj);
+    if (Array.isArray(copy.teachers)) {
+      copy.teachers = copy.teachers.map(function (t) {
+        if (!t || typeof t !== 'object') return t;
+        const c = Object.assign({}, t);
+        delete c.password;
+        return c;
+      });
+    }
+    if (Array.isArray(copy.students)) {
+      copy.students = copy.students.map(function (s) {
+        if (!s || typeof s !== 'object') return s;
+        const c = Object.assign({}, s);
+        delete c.password;
+        return c;
+      });
+    }
+    return copy;
+  }
+
   function saveState(stateObj) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(stateObj));
+      const sanitized = stripSensitiveStateForStorage(stateObj);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
     } catch (e) {
       // Ignore quota exceeded
     }
@@ -1874,7 +1897,6 @@ window.StudySnapStore = (function () {
             teacher_id: t.teacher_id || 'GV01',
             full_name: t.full_name || 'Hồ Châu Uyển Nhi',
             username: String(t.username || 'gv_uyennhi'),
-            password: String(t.password || '123456'),
             subject: !subj || subj.indexOf('Tiếng Anh') >= 0 ? 'Tiếng Trung Giao Tiếp & HSK' : subj
           };
         });
@@ -1909,7 +1931,6 @@ window.StudySnapStore = (function () {
           class_name: !cls || cls === 'Lớp Giao Tiếp B1' ? 'Lớp Tiếng Trung HSK 2' : cls,
           avatar_initials: st.avatar_initials || getInitials(st.full_name),
           username: String(st.username || String(st.student_id || '').toLowerCase()),
-          password: String(st.password || '123456'),
           created_at: formatCleanDate(st.created_at) || '01/11/2026'
         };
       });
@@ -2199,7 +2220,12 @@ window.StudySnapStore = (function () {
       controller.abort();
     }, timeoutMs || 25000);
     try {
-      const fetchOpts = Object.assign({}, options || {}, { signal: controller.signal });
+      const isSameOriginApi = typeof url === 'string' && url.indexOf('/api') === 0;
+      const fetchOpts = Object.assign(
+        isSameOriginApi ? { credentials: 'same-origin' } : {},
+        options || {},
+        { signal: controller.signal }
+      );
       return await fetch(url, fetchOpts);
     } finally {
       clearTimeout(timer);
@@ -2215,18 +2241,73 @@ window.StudySnapStore = (function () {
     );
   }
 
+  function notifySessionExpiredIfNeeded(status, json, actionName) {
+    const act = String(actionName || '').trim();
+    if (act === 'login' || act === 'logout' || act === 'session' || act === 'refresh') return;
+    if (status === 401 || (json && json.sessionExpired === true)) {
+      if (
+        typeof window !== 'undefined' &&
+        window.StudySnapAuth &&
+        typeof window.StudySnapAuth.handleSessionExpired === 'function'
+      ) {
+        window.StudySnapAuth.handleSessionExpired();
+      }
+    }
+  }
+
   async function postD1Json(bodyObj, timeoutMs) {
     const response = await fetchWithTimeout(
       D1_API_ENDPOINT,
       {
         method: 'POST',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyObj)
       },
       timeoutMs || 20000
     );
-    const json = await response.json();
-    return { response: response, json: json };
+    let json = null;
+    try {
+      json = await response.json();
+    } catch (e) {
+      json = null;
+    }
+    notifySessionExpiredIfNeeded(response.status, json, bodyObj && bodyObj.action);
+    return { response: response, json: json || {} };
+  }
+
+  async function fetchSessionFromD1(stateObj) {
+    if (!canProbeD1Endpoint()) {
+      return { backend: 'gas', authenticated: false };
+    }
+    try {
+      const res = await fetchWithTimeout(
+        D1_API_ENDPOINT + '?action=session',
+        { credentials: 'same-origin', cache: 'no-store' },
+        7000
+      );
+      const json = await res.json();
+      if (json && json.backend === 'cloudflare-d1' && !json.d1Missing) {
+        backendMode = 'd1';
+        if (json.needsMigration) {
+          await ensureD1Migrated(stateObj);
+          const recheck = await fetchWithTimeout(
+            D1_API_ENDPOINT + '?action=session',
+            { credentials: 'same-origin', cache: 'no-store' },
+            7000
+          );
+          const reJson = await recheck.json();
+          return Object.assign({ backend: 'd1' }, reJson || {});
+        }
+        return Object.assign({ backend: 'd1' }, json);
+      }
+      if (json && json.d1Missing) {
+        backendMode = 'gas';
+      }
+    } catch (e) {
+      // Fallback sang GAS neu /api khong san sang
+    }
+    return { backend: backendMode === 'gas' ? 'gas' : 'unknown', authenticated: false };
   }
 
   async function probeD1Mode() {
@@ -2615,7 +2696,7 @@ window.StudySnapStore = (function () {
         }
         const cleanedPayload = prepared.payload;
         const wirePayload =
-          act === 'login' || act === 'setupDatabase' || act === 'importFromBootstrapData'
+          act === 'login' || act === 'logout' || act === 'session' || act === 'refresh' || act === 'setupDatabase' || act === 'importFromBootstrapData'
             ? cleanedPayload
             : Object.assign({}, cleanedPayload, {
                 deltaOnly: true,
@@ -2642,7 +2723,7 @@ window.StudySnapStore = (function () {
               stateObj.syncVersion = String(json.version);
             }
             mergeRemoteData(stateObj, json.data);
-          } else if (act !== 'login') {
+          } else if (act !== 'login' && act !== 'logout' && act !== 'changePassword') {
             applyDeltaResponseToState(stateObj, cleanedPayload, json);
           }
         }
@@ -2716,8 +2797,23 @@ window.StudySnapStore = (function () {
               D1_API_ENDPOINT +
               '?action=bootstrap' +
               (hasD1State ? '&v=' + encodeURIComponent(String(stateObj.syncVersion)) : '');
-            const d1Res = await fetchWithTimeout(d1BootUrl, {}, 12000);
-            const d1Json = await d1Res.json();
+            const d1Res = await fetchWithTimeout(
+              d1BootUrl,
+              { credentials: 'same-origin', cache: 'no-store' },
+              12000
+            );
+            let d1Json = null;
+            try {
+              d1Json = await d1Res.json();
+            } catch (parseErr) {
+              d1Json = null;
+            }
+
+            if (d1Res.status === 401 || (d1Json && d1Json.sessionExpired === true)) {
+              backendMode = 'd1';
+              notifySessionExpiredIfNeeded(d1Res.status, d1Json, 'bootstrap');
+              return d1Json || { ok: false, backend: 'cloudflare-d1', sessionExpired: true };
+            }
 
             if (d1Res.ok && d1Json && d1Json.backend === 'cloudflare-d1' && !d1Json.d1Missing) {
               backendMode = 'd1';
@@ -2807,7 +2903,7 @@ window.StudySnapStore = (function () {
       stateObj.practiceSubmissions.push(sub);
     }
     saveState(stateObj);
-    return await syncPostToGas(stateObj, {
+    const res = await syncPostToGas(stateObj, {
       action: 'submitPracticeExercise',
       exercise_id: sub.exercise_id,
       student_id: sub.student_id,
@@ -2820,6 +2916,42 @@ window.StudySnapStore = (function () {
       manual_grades: sub.manual_grades,
       status: sub.status
     });
+    if (res && res.ok) {
+      if (res.practiceSubmission) {
+        const srvSub = res.practiceSubmission;
+        if (srvSub.submission_id) sub.submission_id = srvSub.submission_id;
+        if (srvSub.total_score !== undefined) sub.total_score = srvSub.total_score;
+        if (srvSub.max_score !== undefined) sub.max_score = srvSub.max_score;
+        if (srvSub.rating) sub.rating = srvSub.rating;
+        if (srvSub.section_scores && typeof srvSub.section_scores === 'object') {
+          sub.section_scores = srvSub.section_scores;
+        }
+        if (srvSub.manual_grades && typeof srvSub.manual_grades === 'object') {
+          sub.manual_grades = srvSub.manual_grades;
+        }
+        if (srvSub.status) sub.status = srvSub.status;
+        if (srvSub.submitted_at) sub.submitted_at = srvSub.submitted_at;
+      }
+      if (res.practiceExercise && Array.isArray(stateObj.practiceExercises)) {
+        const srvEx = res.practiceExercise;
+        const exIdx = stateObj.practiceExercises.findIndex(function (e) {
+          return e.exercise_id === srvEx.exercise_id;
+        });
+        let parsedSecs = srvEx.sections;
+        if (!Array.isArray(parsedSecs) && typeof srvEx.sections_json === 'string') {
+          try {
+            parsedSecs = JSON.parse(srvEx.sections_json || '[]');
+          } catch (e) {
+            parsedSecs = null;
+          }
+        }
+        if (exIdx >= 0 && Array.isArray(parsedSecs)) {
+          stateObj.practiceExercises[exIdx].sections = parsedSecs;
+        }
+      }
+      saveState(stateObj);
+    }
+    return res;
   }
 
   function formatPracticeAssignmentTitle(rawTitle) {
@@ -3413,7 +3545,11 @@ window.StudySnapStore = (function () {
 
   function resolveMediaDisplayUrl(rawUrl, fallbackMime) {
     const clean = String(rawUrl || '').trim();
-    if (!clean || clean.indexOf('data:') === 0 || clean.indexOf('/api?') === 0) return clean;
+    if (!clean) return '';
+    if (clean.indexOf('/api?') === 0) return clean;
+    if (/^data:(?:image|audio|video)\//i.test(clean) || /^blob:/i.test(clean)) return clean;
+    if (/^(?:javascript|vbscript|data):/i.test(clean)) return '';
+    if (!/^https?:\/\//i.test(clean)) return '';
     const isDrive =
       clean.indexOf('drive.google.com') >= 0 || clean.indexOf('drive.usercontent.google.com') >= 0;
     if (!isDrive) return clean;
@@ -3503,6 +3639,7 @@ window.StudySnapStore = (function () {
     isUsingD1: function () { return backendMode === 'd1'; },
     getBackendMode: function () { return backendMode; },
     syncPostToGas: syncPostToGas,
+    fetchSessionFromD1: fetchSessionFromD1,
     fetchBootstrapFromGas: fetchBootstrapFromGas,
     fetchGoogleFormFromServer: fetchGoogleFormFromServer,
     resolveMediaDisplayUrl: resolveMediaDisplayUrl,
