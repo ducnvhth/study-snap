@@ -2816,6 +2816,21 @@
     const ex = getActivePracticeExercise();
     if (!ex) return;
 
+    function normalizeCollectedOptions(rawOpts, rawCorrectIdx) {
+      const cleaned = (rawOpts || []).slice();
+      while (cleaned.length > 2 && String(cleaned[cleaned.length - 1] || '').trim() === '') {
+        cleaned.pop();
+      }
+      const finalOpts = cleaned.length > 0 ? cleaned : ['', '', '', ''];
+      let idx = Number(rawCorrectIdx) || 0;
+      if (finalOpts[idx] === '' && finalOpts.some(function (o) { return o !== ''; })) {
+        const firstNonEmpty = finalOpts.findIndex(function (o) { return o !== ''; });
+        if (firstNonEmpty >= 0) idx = firstNonEmpty;
+      }
+      if (idx < 0 || idx >= finalOpts.length) idx = 0;
+      return { options: finalOpts, correctIndex: idx };
+    }
+
     const titleInp = document.getElementById('ex-meta-title');
     const tagInp = document.getElementById('ex-meta-tag');
     const goodInp = document.getElementById('ex-meta-thresh-good');
@@ -2882,14 +2897,15 @@
           if (checkedRadio) {
             correctIdx = parseInt(checkedRadio.value, 10) || 0;
           }
+          const normMc = normalizeCollectedOptions(options, correctIdx);
 
           items.push({
             id: itemId,
             prompt: prompt.trim(),
             speakWord: speak.trim(),
             image_url: prevData.items && prevData.items[qIdx] && prevData.items[qIdx].image_url ? prevData.items[qIdx].image_url : undefined,
-            options: options.length > 0 ? options : ['', '', '', ''],
-            correctIndex: correctIdx,
+            options: normMc.options,
+            correctIndex: normMc.correctIndex,
             explanation: exp.trim()
           });
         });
@@ -3040,10 +3056,7 @@
           if (checkedRadio) {
             correctIdx = parseInt(checkedRadio.value, 10) || 0;
           }
-          if (options[correctIdx] === '' && options.some(function (o) { return o !== ''; })) {
-            const firstNonEmpty = options.findIndex(function (o) { return o !== ''; });
-            if (firstNonEmpty >= 0) correctIdx = firstNonEmpty;
-          }
+          const normLs = normalizeCollectedOptions(options, correctIdx);
 
           items.push({
             id: itemId,
@@ -3051,8 +3064,8 @@
             audio_label: itemAudio.audio_label,
             audio_url: itemAudio.audio_url,
             audio_duration: itemAudio.audio_duration,
-            options: options.length > 0 ? options : ['', '', '', ''],
-            correctIndex: correctIdx,
+            options: normLs.options,
+            correctIndex: normLs.correctIndex,
             explanation: exp.trim()
           });
         });
@@ -3313,6 +3326,7 @@
           '<p style="margin:0 auto 18px;font-size:0.875rem;color:var(--color-muted-foreground);">Bạn có thể tạo bài tập mới từ đầu, nhập nhanh từ file Excel, hoặc nạp bộ câu hỏi mẫu chuẩn HSK.</p>' +
           '<div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">' +
           '<button type="button" class="btn btn-primary" id="btn-empty-new-practice">+ Tạo bài tập mới</button>' +
+          '<button type="button" class="btn btn-outline-primary" id="btn-empty-import-pptx">Nhập từ PPTX</button>' +
           '<button type="button" class="btn btn-outline-primary" id="btn-empty-import-gform">Nhập Google Form</button>' +
           '<button type="button" class="btn btn-outline-primary" id="btn-empty-import-practice">Nhập từ Excel</button>' +
           '<button type="button" class="btn btn-ghost" id="btn-empty-fill-template">Nạp bộ câu hỏi mẫu HSK</button>' +
@@ -3329,6 +3343,13 @@
             switchPracticeSubView('builder');
             renderTeacherPracticeTab();
             showToast('Đã tạo bài luyện tập cuối buổi mới!');
+          });
+        }
+        const btnEmptyImportPptx = document.getElementById('btn-empty-import-pptx');
+        if (btnEmptyImportPptx) {
+          btnEmptyImportPptx.addEventListener('click', function () {
+            const openPptxBtn = document.getElementById('btn-open-import-pptx-modal');
+            if (openPptxBtn) openPptxBtn.click();
           });
         }
         const btnEmptyImportGform = document.getElementById('btn-empty-import-gform');
@@ -10213,14 +10234,15 @@
         const title = (opts && opts.title && opts.title.trim()) || ((opts && opts.defaultTitlePrefix ? opts.defaultTitlePrefix : 'Bài luyện tập mới #') + nextNum);
         const tag = (opts && opts.tag && opts.tag.trim()) || ('Bài ' + nextNum);
         const totalScore = importedSections.reduce(function (sum, s) { return sum + Number(s.max_score || 0); }, 0);
+        const customThresh = opts && opts.thresholds;
         targetEx = {
           exercise_id: 'EX_' + Date.now(),
           title: title,
           lesson_tag: tag,
           total_score: totalScore,
           thresholds: {
-            good: Math.max(1, Math.round(totalScore * 0.7)),
-            very_good: Math.max(1, Math.round(totalScore * 0.85))
+            good: (customThresh && Number(customThresh.good) > 0) ? Number(customThresh.good) : Math.max(1, Math.round(totalScore * 0.7)),
+            very_good: (customThresh && Number(customThresh.very_good) > 0) ? Number(customThresh.very_good) : Math.max(1, Math.round(totalScore * 0.85))
           },
           sections: importedSections
         };
@@ -10512,6 +10534,379 @@
             ' câu • ' +
             totalScore +
             ' điểm) vào StudySnap!'
+        );
+      });
+    }
+
+    // =========================================================================
+    // XỬ LÝ NHẬP BÀI TẬP TỪ FILE POWERPOINT (.PPTX) (TAB 1)
+    // =========================================================================
+    const modalPptxImport = document.getElementById('modal-import-pptx');
+    const btnOpenPptxModal = document.getElementById('btn-open-import-pptx-modal');
+    const btnOpenPptxSticky = document.getElementById('btn-open-import-pptx-sticky');
+    const btnClosePptxModal = document.getElementById('btn-close-pptx-import');
+    const btnCancelPptxModal = document.getElementById('btn-cancel-pptx-import');
+    const pptxFileInput = document.getElementById('import-pptx-file-input');
+    const pptxDropZone = document.getElementById('pptx-drop-zone');
+    const pptxErrorBox = document.getElementById('pptx-import-error');
+    const pptxRangeConfigEl = document.getElementById('pptx-range-config');
+    const pptxFileSummaryLabel = document.getElementById('pptx-file-summary-label');
+    const pptxSlideChipsEl = document.getElementById('pptx-detected-slides-chips');
+    const pptxStartInp = document.getElementById('pptx-slide-start');
+    const pptxEndInp = document.getElementById('pptx-slide-end');
+    const btnPptxReanalyze = document.getElementById('btn-pptx-reanalyze');
+    const pptxModeSel = document.getElementById('import-pptx-mode');
+    const pptxTransModeSel = document.getElementById('import-pptx-translation-mode');
+    const pptxTitleWrap = document.getElementById('import-pptx-title-wrap');
+    const pptxTagWrap = document.getElementById('import-pptx-tag-wrap');
+    const pptxTitleInp = document.getElementById('import-pptx-new-title');
+    const pptxTagInp = document.getElementById('import-pptx-new-tag');
+    const pptxPreviewEl = document.getElementById('pptx-import-preview');
+    const pptxPreviewTbody = document.getElementById('pptx-import-preview-tbody');
+    const pptxSecCountEl = document.getElementById('pptx-import-sec-count');
+    const pptxQCountEl = document.getElementById('pptx-import-q-count');
+    const pptxScoreCountEl = document.getElementById('pptx-import-score-count');
+    const pptxStatusBadgeEl = document.getElementById('pptx-import-status-badge');
+    const pptxWarningsEl = document.getElementById('pptx-import-warnings');
+    const btnConfirmPptxImport = document.getElementById('btn-confirm-pptx-import');
+
+    let loadedPptxDeck = null;
+    let parsedPptxResult = null;
+
+    function updatePptxModeVisibility() {
+      const isNew = !pptxModeSel || pptxModeSel.value === 'new';
+      if (pptxTitleWrap) pptxTitleWrap.style.display = isNew ? 'block' : 'none';
+      if (pptxTagWrap) pptxTagWrap.style.display = isNew ? 'block' : 'none';
+    }
+
+    function openPptxImportModal() {
+      if (!modalPptxImport) return;
+      if (pptxErrorBox) {
+        pptxErrorBox.textContent = '';
+        pptxErrorBox.classList.remove('is-visible');
+      }
+      updatePptxModeVisibility();
+      modalPptxImport.classList.add('is-open', 'is-visible');
+    }
+
+    function closePptxImportModal() {
+      if (modalPptxImport) modalPptxImport.classList.remove('is-open', 'is-visible');
+    }
+
+    function renderPptxDetectedChips(deck, startSlide, endSlide) {
+      if (!pptxSlideChipsEl || !deck) return;
+      const roleLabelMap = {
+        question: 'Đề bài',
+        answer: 'Đáp án',
+        summary: 'Bảng điểm'
+      };
+      const rangeClsMap = {
+        question: 'is-question',
+        answer: 'is-answer',
+        summary: 'is-summary'
+      };
+      const allCls = deck.rangeClassified || [];
+      const chips = [];
+      allCls.forEach(function (c) {
+        if (c.slideNumber < startSlide || c.slideNumber > endSlide) return;
+        if (c.role === 'lesson') return;
+        const roleTxt = roleLabelMap[c.role] || c.role;
+        const cls = rangeClsMap[c.role] || '';
+        chips.push(
+          '<span class="pptx-slide-chip ' + cls + '" title="' + escapeHtml(c.headerSummary || '') + '">' +
+            'Slide ' + c.slideNumber + ' • ' + escapeHtml(roleTxt) +
+          '</span>'
+        );
+      });
+      pptxSlideChipsEl.innerHTML = chips.length > 0
+        ? chips.join('')
+        : '<span class="pptx-slide-chip">Đang chọn Slide ' + startSlide + '–' + endSlide + '</span>';
+    }
+
+    function renderPptxPreview(result) {
+      parsedPptxResult = result || null;
+      if (!pptxPreviewEl || !pptxPreviewTbody) return;
+
+      if (!result || !result.sections || result.sections.length === 0) {
+        pptxPreviewEl.style.display = 'none';
+        pptxPreviewTbody.innerHTML = '';
+        if (pptxWarningsEl) {
+          pptxWarningsEl.style.display = 'none';
+          pptxWarningsEl.innerHTML = '';
+        }
+        if (btnConfirmPptxImport) btnConfirmPptxImport.disabled = true;
+        return;
+      }
+
+      pptxPreviewEl.style.display = 'block';
+      if (pptxSecCountEl) pptxSecCountEl.textContent = result.sections.length + ' phần';
+      if (pptxQCountEl) pptxQCountEl.textContent = result.totalItems + ' câu hỏi';
+      if (pptxScoreCountEl) pptxScoreCountEl.textContent = result.totalScore + ' điểm';
+      if (pptxStatusBadgeEl) {
+        pptxStatusBadgeEl.textContent = result.thresholds
+          ? ('Tốt từ ' + result.thresholds.very_good + 'đ • Khá từ ' + result.thresholds.good + 'đ')
+          : 'Sẵn sàng nhập';
+      }
+
+      pptxPreviewTbody.innerHTML = result.sections.map(function (sec, idx) {
+        const badgeMeta = SECTION_BADGE_MAP[sec.type] || { label: sec.type, cls: 'status-mint' };
+        const count = sec.type === 'matching'
+          ? (((sec.data && sec.data.left) || []).length)
+          : (((sec.data && sec.data.items) || []).length);
+        let extraSummary = summarizeImportedSection(sec);
+        if (sec.type === 'translation' && sec.data && sec.data.items && sec.data.items[0]) {
+          extraSummary += sec.data.items[0].mode === 'manual' ? ' (Chấm tay + gợi ý)' : ' (Tự động chấm)';
+        } else if (sec.type === 'multiple_choice' && sec.data && sec.data.items && sec.data.items[0]) {
+          extraSummary += ' (' + ((sec.data.items[0].options || []).length) + ' lựa chọn)';
+        }
+        return (
+          '<tr>' +
+            '<td class="tabular-nums" style="font-weight:700;">' + (idx + 1) + '</td>' +
+            '<td><span class="status-badge ' + badgeMeta.cls + '">' + escapeHtml(badgeMeta.label) + '</span></td>' +
+            '<td style="font-weight:600;color:var(--ink);">' + escapeHtml(sec.title || '') + '</td>' +
+            '<td class="tabular-nums">' + count + ' câu</td>' +
+            '<td style="font-size:0.8125rem;color:var(--color-muted-foreground);">' + escapeHtml(extraSummary) + '</td>' +
+          '</tr>'
+        );
+      }).join('');
+
+      if (pptxWarningsEl) {
+        if (result.warnings && result.warnings.length > 0) {
+          pptxWarningsEl.style.display = 'block';
+          pptxWarningsEl.innerHTML = result.warnings.map(function (w) {
+            return '<div>• ' + escapeHtml(w) + '</div>';
+          }).join('');
+        } else {
+          pptxWarningsEl.style.display = 'none';
+          pptxWarningsEl.innerHTML = '';
+        }
+      }
+
+      if (btnConfirmPptxImport) btnConfirmPptxImport.disabled = false;
+    }
+
+    function rebuildPptxFromLoadedDeck(overrideStart, overrideEnd) {
+      if (!loadedPptxDeck || !window.StudySnapPptx) return;
+      const slides = loadedPptxDeck.slides || [];
+      const total = slides.length;
+      const startSlide = Math.max(1, Math.min(total, Number(overrideStart || (pptxStartInp && pptxStartInp.value) || loadedPptxDeck.defaultStart) || 1));
+      const endSlide = Math.max(startSlide, Math.min(total, Number(overrideEnd || (pptxEndInp && pptxEndInp.value) || loadedPptxDeck.defaultEnd) || total));
+
+      if (pptxStartInp) pptxStartInp.value = String(startSlide);
+      if (pptxEndInp) pptxEndInp.value = String(endSlide);
+
+      const selectedSlides = slides.filter(function (sl) {
+        return sl.slideNumber >= startSlide && sl.slideNumber <= endSlide;
+      });
+      const translationMode = (pptxTransModeSel && pptxTransModeSel.value) === 'exact' ? 'exact' : 'manual';
+      const built = window.StudySnapPptx.buildSectionsFromSlides(selectedSlides, {
+        translationMode: translationMode
+      });
+
+      renderPptxDetectedChips(loadedPptxDeck, startSlide, endSlide);
+
+      if (!built.sections || built.sections.length === 0) {
+        renderPptxPreview(null);
+        if (pptxErrorBox) {
+          pptxErrorBox.textContent = 'Không tìm thấy phần bài luyện tập nào trong khoảng Slide ' + startSlide + '–' + endSlide + '. Hãy thử mở rộng khoảng slide.';
+          pptxErrorBox.classList.add('is-visible');
+        }
+        return;
+      }
+
+      if (pptxErrorBox) {
+        pptxErrorBox.textContent = '';
+        pptxErrorBox.classList.remove('is-visible');
+      }
+      renderPptxPreview({
+        sections: built.sections,
+        totalItems: built.totalItems,
+        totalScore: built.totalScore,
+        thresholds: built.thresholds,
+        warnings: built.warnings
+      });
+    }
+
+    async function handlePptxFileSelected(file) {
+      if (!file) return;
+      if (!window.StudySnapPptx) {
+        if (pptxErrorBox) {
+          pptxErrorBox.textContent = 'Chưa nạp được module đọc file PowerPoint (pptx_import.js). Vui lòng tải lại trang.';
+          pptxErrorBox.classList.add('is-visible');
+        }
+        return;
+      }
+      const lowerName = String(file.name || '').toLowerCase();
+      if (!lowerName.endsWith('.pptx')) {
+        if (pptxErrorBox) {
+          pptxErrorBox.textContent = 'Định dạng chưa hỗ trợ: chỉ hỗ trợ file .pptx. Nếu bạn đang dùng .ppt cũ, hãy mở bằng PowerPoint và chọn Save As -> PowerPoint Presentation (.pptx).';
+          pptxErrorBox.classList.add('is-visible');
+        }
+        return;
+      }
+
+      if (pptxErrorBox) {
+        pptxErrorBox.textContent = '';
+        pptxErrorBox.classList.remove('is-visible');
+      }
+
+      try {
+        const buffer = await file.arrayBuffer();
+        const translationMode = (pptxTransModeSel && pptxTransModeSel.value) === 'exact' ? 'exact' : 'manual';
+        const res = await window.StudySnapPptx.parsePptxArrayBuffer(buffer, {
+          fileName: file.name,
+          translationMode: translationMode
+        });
+
+        loadedPptxDeck = {
+          fileName: file.name,
+          slides: res.slides,
+          meta: res.meta,
+          defaultStart: res.startSlide,
+          defaultEnd: res.endSlide,
+          rangeClassified: res.slides.map(window.StudySnapPptx.classifySlide)
+        };
+
+        if (pptxRangeConfigEl) pptxRangeConfigEl.style.display = 'block';
+        if (pptxFileSummaryLabel) {
+          pptxFileSummaryLabel.textContent =
+            file.name + ' (' + res.totalSlides + ' slide — tự nhận diện bài tập: Slide ' + res.startSlide + '–' + res.endSlide + ')';
+        }
+        if (pptxStartInp) {
+          pptxStartInp.max = String(res.totalSlides);
+          pptxStartInp.value = String(res.startSlide);
+        }
+        if (pptxEndInp) {
+          pptxEndInp.max = String(res.totalSlides);
+          pptxEndInp.value = String(res.endSlide);
+        }
+        if (pptxTitleInp && res.meta && res.meta.suggestedTitle) {
+          pptxTitleInp.value = res.meta.suggestedTitle;
+        }
+        if (pptxTagInp && res.meta && res.meta.lessonTag) {
+          pptxTagInp.value = res.meta.lessonTag;
+        }
+
+        renderPptxDetectedChips(loadedPptxDeck, res.startSlide, res.endSlide);
+        if (!res.sections || res.sections.length === 0) {
+          renderPptxPreview(null);
+          if (pptxErrorBox) {
+            pptxErrorBox.textContent = 'Không tìm thấy đoạn "Luyện tập cuối bài" ở các slide đã chọn. Hãy điều chỉnh lại Từ slide / Đến slide rồi bấm "Phân tích lại khoảng slide".';
+            pptxErrorBox.classList.add('is-visible');
+          }
+          return;
+        }
+
+        renderPptxPreview(res);
+        showToast('Đã đọc tệp .pptx và bóc tách ' + res.sections.length + ' phần (' + res.totalItems + ' câu hỏi)!');
+      } catch (err) {
+        loadedPptxDeck = null;
+        renderPptxPreview(null);
+        if (pptxRangeConfigEl) pptxRangeConfigEl.style.display = 'none';
+        if (pptxErrorBox) {
+          pptxErrorBox.textContent = (err && err.message) || 'Không thể đọc tệp .pptx này.';
+          pptxErrorBox.classList.add('is-visible');
+        }
+      }
+    }
+
+    if (btnOpenPptxModal) btnOpenPptxModal.addEventListener('click', openPptxImportModal);
+    if (btnOpenPptxSticky) btnOpenPptxSticky.addEventListener('click', openPptxImportModal);
+    if (btnClosePptxModal) btnClosePptxModal.addEventListener('click', closePptxImportModal);
+    if (btnCancelPptxModal) btnCancelPptxModal.addEventListener('click', closePptxImportModal);
+    if (modalPptxImport) {
+      modalPptxImport.addEventListener('click', function (ev) {
+        if (ev.target === modalPptxImport) closePptxImportModal();
+      });
+    }
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && modalPptxImport && modalPptxImport.classList.contains('is-open')) {
+        closePptxImportModal();
+      }
+    });
+    if (pptxModeSel) {
+      updatePptxModeVisibility();
+      pptxModeSel.addEventListener('change', updatePptxModeVisibility);
+    }
+    if (pptxTransModeSel) {
+      pptxTransModeSel.addEventListener('change', function () {
+        if (loadedPptxDeck) rebuildPptxFromLoadedDeck();
+      });
+    }
+    if (btnPptxReanalyze) {
+      btnPptxReanalyze.addEventListener('click', function () {
+        rebuildPptxFromLoadedDeck();
+      });
+    }
+    if (pptxFileInput) {
+      pptxFileInput.addEventListener('change', function (ev) {
+        const f = ev.target.files && ev.target.files[0];
+        if (f) return handlePptxFileSelected(f);
+      });
+    }
+    if (pptxDropZone) {
+      pptxDropZone.addEventListener('click', function () {
+        if (pptxFileInput) pptxFileInput.click();
+      });
+      pptxDropZone.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          if (pptxFileInput) pptxFileInput.click();
+        }
+      });
+      pptxDropZone.addEventListener('dragover', function (ev) {
+        ev.preventDefault();
+        pptxDropZone.classList.add('is-dragover');
+      });
+      pptxDropZone.addEventListener('dragleave', function () {
+        pptxDropZone.classList.remove('is-dragover');
+      });
+      pptxDropZone.addEventListener('drop', function (ev) {
+        ev.preventDefault();
+        pptxDropZone.classList.remove('is-dragover');
+        const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+        if (f) return handlePptxFileSelected(f);
+      });
+    }
+
+    if (btnConfirmPptxImport) {
+      btnConfirmPptxImport.addEventListener('click', async function () {
+        if (!parsedPptxResult || !parsedPptxResult.sections || parsedPptxResult.sections.length === 0) return;
+
+        const mode = (pptxModeSel && pptxModeSel.value) || 'new';
+        const importedSections = JSON.parse(JSON.stringify(parsedPptxResult.sections));
+        const totalItems = parsedPptxResult.totalItems;
+        const totalScore = parsedPptxResult.totalScore;
+        const savedEx = await applyImportedSectionsToPractice(importedSections, {
+          mode: mode,
+          title: pptxTitleInp ? pptxTitleInp.value : '',
+          tag: pptxTagInp ? pptxTagInp.value : '',
+          thresholds: parsedPptxResult.thresholds || null,
+          defaultTitlePrefix: 'Bài luyện tập từ PPTX #',
+          triggerBtn: btnConfirmPptxImport,
+          loadingTitle: 'Đang nhập bài luyện tập từ PowerPoint...',
+          loadingDesc: 'Hệ thống đang lưu ' + importedSections.length + ' phần (' + totalItems + ' câu • ' + totalScore + ' điểm) vào StudySnap.'
+        });
+        if (!savedEx) return;
+
+        closePptxImportModal();
+        loadedPptxDeck = null;
+        if (pptxFileInput) pptxFileInput.value = '';
+        if (pptxTitleInp) pptxTitleInp.value = '';
+        if (pptxTagInp) pptxTagInp.value = '';
+        if (pptxRangeConfigEl) pptxRangeConfigEl.style.display = 'none';
+        renderPptxPreview(null);
+
+        showToast(
+          'Đã tạo bài "' +
+            savedEx.title +
+            '" (' +
+            importedSections.length +
+            ' phần • ' +
+            totalItems +
+            ' câu • ' +
+            totalScore +
+            ' điểm) từ PowerPoint!'
         );
       });
     }

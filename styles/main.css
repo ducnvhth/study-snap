@@ -6031,9 +6031,93 @@ body.ss-sync-locked .ss-api-status-chip {
   flex: 1 1 320px;
 }
 
+.pptx-range-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--color-border-soft);
+  background: var(--color-surface-soft);
+}
+
+.pptx-range-inputs {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pptx-range-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pptx-range-field label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-muted-foreground);
+}
+
+.pptx-range-field .form-control {
+  width: 96px;
+  padding: 6px 10px;
+  font-weight: 700;
+}
+
+.pptx-slide-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pptx-slide-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid var(--color-border-soft);
+  background: var(--white);
+  color: var(--ink);
+}
+
+.pptx-slide-chip.is-question {
+  background: var(--sky-lt);
+  border-color: var(--sky-md);
+  color: var(--ink);
+}
+
+.pptx-slide-chip.is-answer {
+  background: var(--mint-lt);
+  border-color: var(--mint-md);
+  color: var(--color-success-text);
+}
+
+.pptx-slide-chip.is-summary {
+  background: var(--ylt);
+  border-color: var(--yellow-md);
+  color: var(--color-warning-text);
+}
+
 @media (max-width: 640px) {
   .short-answer-grid.is-compact {
     grid-template-columns: 1fr;
+  }
+
+  .pptx-range-bar {
+    align-items: stretch;
+  }
+
+  .pptx-range-inputs {
+    width: 100%;
   }
 
   .matrix-toolbar-controls,

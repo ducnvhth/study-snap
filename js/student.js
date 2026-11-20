@@ -2510,7 +2510,7 @@
   }
 
   function renderMultipleChoiceBodyHtml(sec) {
-    return renderMcQuestionCardsHtml(sec, false);
+    return renderMcQuestionCardsHtml(sec, true);
   }
 
   // --- SECTION 6: LISTENING COMPREHENSION (NGHE HIỂU HỘI THOẠI / TỪNG CÂU) ---
