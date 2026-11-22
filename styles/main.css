@@ -3609,6 +3609,99 @@ html.is-auth-redirecting .login-shell {
   line-height: 1.45;
 }
 
+.status-resubmit {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-text-contrast);
+  border: 1.5px solid var(--pink-soft);
+}
+
+.attempt-tab-meta.is-resubmit {
+  background: var(--color-primary-light);
+  color: var(--color-primary-text-contrast);
+  border: 1px solid var(--pink-soft);
+}
+
+.bvn-resubmit-banner.is-required {
+  background: var(--color-surface-soft);
+  border: 2px solid var(--color-primary);
+  box-shadow: 0 4px 14px rgba(255, 107, 157, 0.14);
+}
+
+.bvn-resubmit-banner.is-required .bvn-resubmit-banner-title {
+  color: var(--color-primary-text-contrast);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bvn-resubmit-reason-quote {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border: 1.5px solid var(--color-border-strong);
+  background: var(--white);
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.grade-resubmit-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-soft);
+  border: 1.5px solid var(--color-border-soft);
+}
+
+.grade-resubmit-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: var(--ink);
+  cursor: pointer;
+  margin: 0;
+}
+
+.grade-resubmit-checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-primary-text-contrast);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.grade-resubmit-toggle-hint {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary-text-contrast);
+}
+
+.btn-resubmit-action {
+  background: var(--color-surface-soft);
+  color: var(--color-primary-text-contrast);
+  border: 1.5px solid var(--pink-soft);
+  font-weight: 800;
+}
+
+.btn-resubmit-action:hover {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary-text-contrast);
+  color: var(--ink);
+}
+
+.btn-resubmit-action:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* ====================================================================
    EXCEL / CSV IMPORT MODAL & COMPONENTS
    ==================================================================== */

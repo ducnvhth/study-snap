@@ -2965,10 +2965,11 @@ export async function handleApiRequest(request, env, ctx) {
           ? (incomingVoiceUrl ? String(payload.teacher_voice_duration || existing.teacher_voice_duration || '') : String(existing.teacher_voice_duration || payload.teacher_voice_duration || ''))
           : '';
         const nextSubmittedAt = existing.submitted_at || nowStr;
+        const nextStatus = String(payload.status || '').trim() === 'resubmit_required' ? 'resubmit_required' : 'graded';
 
         await db
           .prepare('UPDATE submissions SET submitted_at = ?, status = ?, score = ?, teacher_comment = ?, teacher_voice_url = ?, teacher_voice_duration = ?, graded_at = ? WHERE submission_id = ?')
-          .bind(nextSubmittedAt, 'graded', nextScore, nextComment, nextVoiceUrl, nextVoiceDur, nowStr, existing.submission_id)
+          .bind(nextSubmittedAt, nextStatus, nextScore, nextComment, nextVoiceUrl, nextVoiceDur, nowStr, existing.submission_id)
           .run();
 
         return await mutate({
@@ -2978,7 +2979,7 @@ export async function handleApiRequest(request, env, ctx) {
             student_id: studentId,
             attempt_number: keepAttempt,
             submitted_at: nextSubmittedAt,
-            status: 'graded',
+            status: nextStatus,
             score: nextScore,
             teacher_comment: nextComment,
             teacher_voice_url: nextVoiceUrl,
@@ -2989,7 +2990,9 @@ export async function handleApiRequest(request, env, ctx) {
         });
       } else {
         const newId = makeShortId('SUB');
-        const nextStatus = String(payload.status || 'graded');
+        const nextStatus = String(payload.status || '').trim() === 'resubmit_required'
+          ? 'resubmit_required'
+          : String(payload.status || 'graded');
         const nextScore = payload.score !== undefined ? String(payload.score) : '';
         const nextComment = String(payload.teacher_comment || '');
         const nextVoiceDur = incomingVoiceUrl ? String(payload.teacher_voice_duration || '') : '';

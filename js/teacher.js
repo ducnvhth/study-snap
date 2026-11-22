@@ -19,7 +19,8 @@
     trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>',
     sortNone: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>',
     sortAsc: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg>',
-    sortDesc: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>'
+    sortDesc: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>',
+    refresh: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>'
   };
 
   let state = window.StudySnapStore.loadState();
@@ -524,9 +525,9 @@
     students.forEach(function (st) {
       assignments.forEach(function (asg) {
         const sub = findSubmission(asg.assignment_id, st.student_id);
-        if (sub && (sub.status === 'submitted' || sub.status === 'graded')) {
+        if (sub && (sub.status === 'submitted' || sub.status === 'graded' || sub.status === 'resubmit_required')) {
           submittedOrGraded++;
-          if (sub.status === 'graded' || sub.teacher_comment || sub.teacher_voice_url) {
+          if (sub.status === 'graded' || sub.status === 'resubmit_required' || sub.teacher_comment || sub.teacher_voice_url) {
             gradedWithFeedback++;
           }
         } else {
@@ -710,6 +711,7 @@
     }
     const scoreInp = document.getElementById('teacher-score-input');
     const commentInp = document.getElementById('teacher-comment-input');
+    const resubmitChk = document.getElementById('teacher-require-resubmit-chk');
     if (scoreInp && scoreInp.dataset) {
       scoreInp.dataset.userEdited = '0';
       scoreInp.dataset.loadedSubKey = '';
@@ -717,6 +719,10 @@
     if (commentInp && commentInp.dataset) {
       commentInp.dataset.userEdited = '0';
       commentInp.dataset.loadedSubKey = '';
+    }
+    if (resubmitChk && resubmitChk.dataset) {
+      resubmitChk.dataset.userEdited = '0';
+      resubmitChk.dataset.loadedSubKey = '';
     }
     const timerEl = document.getElementById('teacher-record-timer');
     if (timerEl) timerEl.textContent = '00:00';
@@ -741,6 +747,10 @@
     const sub = attempts.length ? attempts[attempts.length - 1] : null;
     const attNum = sub ? Math.max(attempts.length, Number(sub.attempt_number || 1) || 1) : 0;
     const attTag = attNum > 1 ? (' (Lần ' + attNum + ')') : '';
+    if (sub && sub.status === 'resubmit_required') {
+      const sTxt = sub.score !== undefined && sub.score !== null && String(sub.score).trim() !== '' ? (' ' + String(sub.score).trim() + 'đ') : '';
+      return ' • Cần nộp lại' + attTag + sTxt;
+    }
     if (sub && (sub.status === 'graded' || (sub.score !== undefined && sub.score !== null && String(sub.score).trim() !== ''))) {
       const sTxt = sub.score !== undefined && sub.score !== null && String(sub.score).trim() !== '' ? (' ' + String(sub.score).trim() + 'đ') : '';
       return ' • Đã chữa' + attTag + sTxt;
@@ -759,7 +769,7 @@
     if (ungraded) return ungraded;
     const submitted = list.find(function (a) {
       const sub = findSubmission(a.assignment_id, st.student_id);
-      return sub && (sub.status === 'submitted' || sub.status === 'graded');
+      return sub && (sub.status === 'submitted' || sub.status === 'graded' || sub.status === 'resubmit_required');
     });
     return submitted || list[0];
   }
@@ -1267,7 +1277,7 @@
         const submittedInSess = st
           ? sessItems.filter(function (a) {
               const sub = findSubmission(a.assignment_id, st.student_id);
-              return sub && (sub.status === 'submitted' || sub.status === 'graded');
+              return sub && (sub.status === 'submitted' || sub.status === 'graded' || sub.status === 'resubmit_required');
             }).length
           : 0;
         sessionHint.textContent = curSess + ' (' + sessItems.length + ' bài) • Hạn nộp: ' + asg.due_date +
@@ -1325,10 +1335,14 @@
               const attNo = Math.max(1, Number(att.attempt_number || (idx + 1)) || (idx + 1));
               const isLatest = att.submission_id === latestSub.submission_id;
               const isActive = att.submission_id === sub.submission_id;
-              const metaText = att.status === 'graded'
-                ? (att.score !== '' && att.score !== undefined && att.score !== null ? (att.score + 'đ') : 'Đã chữa')
-                : 'Chờ chữa';
-              const metaCls = att.status === 'graded' ? 'is-graded' : 'is-pending';
+              const metaText = att.status === 'resubmit_required'
+                ? (att.score !== '' && att.score !== undefined && att.score !== null ? (att.score + 'đ · Nộp lại') : 'Cần nộp lại')
+                : (att.status === 'graded'
+                  ? (att.score !== '' && att.score !== undefined && att.score !== null ? (att.score + 'đ') : 'Đã chữa')
+                  : 'Chờ chữa');
+              const metaCls = att.status === 'resubmit_required'
+                ? 'is-resubmit'
+                : (att.status === 'graded' ? 'is-graded' : 'is-pending');
               return (
                 '<button type="button" role="tab" aria-selected="' + (isActive ? 'true' : 'false') + '" ' +
                 'class="attempt-tab-pill' + (isActive ? ' is-active' : '') + '" ' +
@@ -1341,7 +1355,7 @@
           '</div>';
       }
 
-      if (sub && (sub.status === 'submitted' || sub.status === 'graded') && sub.media_url) {
+      if (sub && (sub.status === 'submitted' || sub.status === 'graded' || sub.status === 'resubmit_required') && sub.media_url) {
         const isVideo = typeof window.StudySnapAudio.isVideoSubmission === 'function'
           ? window.StudySnapAudio.isVideoSubmission(sub.media_url, sub.media_type)
           : sub.media_type === 'video';
@@ -1364,9 +1378,13 @@
               lang: 'zh-CN',
               variant: 'student'
             });
-        const attemptHeadingHtml = attempts.length > 1 || sub.submitted_at
+        const resubmitPillHtml = sub.status === 'resubmit_required'
+          ? '<span class="status-badge status-resubmit">' + ICONS.refresh + '<span>Đã yêu cầu nộp lại</span></span>'
+          : '';
+        const attemptHeadingHtml = attempts.length > 1 || sub.submitted_at || resubmitPillHtml
           ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px;font-size:0.8125rem;font-weight:700;color:var(--ink-soft);">' +
               '<span>' + escapeHtml((attempts.length > 1 ? 'Lần ' + activeAttemptNum + (sub === latestSub ? ' (Mới nhất)' : '') + ' • ' : '') + 'Nộp lúc: ' + (sub.submitted_at || 'Vừa nộp')) + '</span>' +
+              resubmitPillHtml +
             '</div>'
           : '';
         studentMediaBox.innerHTML =
@@ -1421,6 +1439,17 @@
         if (commentInput.dataset) {
           commentInput.dataset.loadedSubKey = loadedKey;
           commentInput.dataset.userEdited = '0';
+        }
+      }
+    }
+    const resubmitChk = document.getElementById('teacher-require-resubmit-chk');
+    if (resubmitChk) {
+      const sameResubSub = resubmitChk.dataset && resubmitChk.dataset.loadedSubKey === loadedKey;
+      if (!sameResubSub || resubmitChk.dataset.userEdited !== '1') {
+        resubmitChk.checked = Boolean(sub && sub.status === 'resubmit_required');
+        if (resubmitChk.dataset) {
+          resubmitChk.dataset.loadedSubKey = loadedKey;
+          resubmitChk.dataset.userEdited = '0';
         }
       }
     }
@@ -1675,6 +1704,7 @@
       });
       if (ui.matrixFilter === 'missing') return statuses.indexOf('missing') >= 0;
       if (ui.matrixFilter === 'submitted') return statuses.indexOf('submitted') >= 0;
+      if (ui.matrixFilter === 'resubmit_required') return statuses.indexOf('resubmit_required') >= 0;
       if (ui.matrixFilter === 'graded') return statuses.indexOf('graded') >= 0;
       return true;
     });
@@ -1687,7 +1717,7 @@
       const itemScores = {};
       filteredAssignments.forEach(function (asg) {
         const sub = findSubmission(asg.assignment_id, st.student_id);
-        if (sub && (sub.status === 'submitted' || sub.status === 'graded')) {
+        if (sub && (sub.status === 'submitted' || sub.status === 'graded' || sub.status === 'resubmit_required')) {
           done++;
           const numScore = sub.score !== '' && sub.score !== null && !isNaN(Number(sub.score)) ? Number(sub.score) : null;
           if (numScore !== null) {
@@ -1731,28 +1761,33 @@
         const attNum = sub ? Math.max(attempts.length, Number(sub.attempt_number || 1) || 1) : 0;
         const prevGraded = attempts.length > 1
           ? attempts.slice(0, -1).reverse().find(function (a) {
-              return a.status === 'graded' || (a.score !== '' && a.score !== undefined && a.score !== null);
+              return a.status === 'graded' || a.status === 'resubmit_required' || (a.score !== '' && a.score !== undefined && a.score !== null);
             })
           : null;
         const status = sub ? sub.status : 'missing';
-        if (status === 'submitted' || status === 'graded') {
+        if (status === 'submitted' || status === 'graded' || status === 'resubmit_required') {
           completedCount++;
         }
 
         let badgeHtml = '';
-        if (status === 'graded') {
+        if (status === 'resubmit_required') {
+          badgeHtml = '<span class="status-badge status-resubmit">' + ICONS.refresh +
+            '<span>Cần nộp lại' + (sub.score ? ' • ' + escapeHtml(sub.score) + 'đ' : '') + '</span></span>' +
+            (attNum > 1 ? ' <span class="attempt-count-pill">Lần ' + attNum + '</span>' : '');
+        } else if (status === 'graded') {
           badgeHtml = '<span class="status-badge status-graded">' + ICONS.check +
             '<span>Đã chữa' + (sub.score ? ' • ' + escapeHtml(sub.score) + 'đ' : '') + '</span></span>' +
             (attNum > 1 ? ' <span class="attempt-count-pill">Lần ' + attNum + '</span>' : '');
         } else if (status === 'submitted') {
           const prevIdx = prevGraded ? attempts.indexOf(prevGraded) : -1;
           const prevNo = prevGraded ? Math.max(1, Number(prevGraded.attempt_number || (prevIdx + 1)) || (prevIdx + 1)) : 0;
+          const prevReasonLabel = prevGraded
+            ? (prevGraded.score !== '' && prevGraded.score !== undefined && prevGraded.score !== null
+                ? (escapeHtml(prevGraded.score) + 'đ' + (prevGraded.status === 'resubmit_required' ? ' (nộp lại)' : ''))
+                : (prevGraded.status === 'resubmit_required' ? 'Yêu cầu nộp lại' : 'Đã chữa'))
+            : '';
           const prevHintHtml = prevGraded
-            ? '<p class="attempt-prev-hint">Lần ' + prevNo + ' trước đó: ' +
-              (prevGraded.score !== '' && prevGraded.score !== undefined && prevGraded.score !== null
-                ? (escapeHtml(prevGraded.score) + 'đ')
-                : 'Đã chữa') +
-              '</p>'
+            ? '<p class="attempt-prev-hint">Lần ' + prevNo + ' trước đó: ' + prevReasonLabel + '</p>'
             : '';
           badgeHtml = '<span class="status-badge status-submitted">' + ICONS.clock +
             '<span>' + (attNum > 1 ? ('Lần ' + attNum + ' • Chờ chữa') : 'Đã nộp • Chờ chữa') + '</span></span>' +
@@ -1819,7 +1854,7 @@
         const gradeActionBtn =
           '<button type="button" class="btn btn-outline btn-sm" data-select-grade="' + escapeHtml(asg.assignment_id) + ':' + escapeHtml(st.student_id) + '">' +
             ICONS.edit +
-            '<span>' + (status === 'graded' ? 'Sửa nhận xét' : 'Chữa BVN') + '</span>' +
+            '<span>' + ((status === 'graded' || status === 'resubmit_required') ? 'Sửa nhận xét' : 'Chữa BVN') + '</span>' +
           '</button>';
 
         return '<td>' +
@@ -2531,7 +2566,7 @@
         const sub = attempts.length ? attempts[attempts.length - 1] : null;
         const attNum = sub ? Math.max(attempts.length, Number(sub.attempt_number || 1) || 1) : 0;
         let stText = sub
-          ? (sub.status === 'graded' ? 'Đã chữa' : 'Đã nộp - Chờ chữa')
+          ? (sub.status === 'resubmit_required' ? 'Cần nộp lại' : (sub.status === 'graded' ? 'Đã chữa' : 'Đã nộp - Chờ chữa'))
           : 'Chưa làm';
         if (sub && attNum > 1) {
           stText = 'Lần ' + attNum + ' - ' + stText;
@@ -7694,6 +7729,12 @@
         if (commentInputEl.dataset) commentInputEl.dataset.userEdited = '1';
       });
     }
+    const resubmitChkEl = document.getElementById('teacher-require-resubmit-chk');
+    if (resubmitChkEl) {
+      resubmitChkEl.addEventListener('change', function () {
+        if (resubmitChkEl.dataset) resubmitChkEl.dataset.userEdited = '1';
+      });
+    }
 
     const voicePreviewEl = document.getElementById('teacher-voice-preview');
     if (voicePreviewEl) {
@@ -7760,6 +7801,7 @@
       const st = findStudent(ui.gradingStudentId);
       const scoreInput = document.getElementById('teacher-score-input');
       const commentInput = document.getElementById('teacher-comment-input');
+      const resubmitChk = document.getElementById('teacher-require-resubmit-chk');
       const scoreVal = scoreInput ? scoreInput.value.trim() : '';
       const rawCommentVal = commentInput ? commentInput.value.trim() : '';
 
@@ -7775,6 +7817,7 @@
         : (userEditedThisComment ? '' : existingComment);
       const allowClearComment = Boolean(existingComment && userEditedThisComment && rawCommentVal === '');
       const resolvedScore = scoreVal !== '' ? scoreVal : existingScore;
+      const requireResubmit = Boolean(resubmitChk && resubmitChk.checked);
 
       const existingRealVoiceUrl = isRealTeacherVoiceUrl(sub && sub.teacher_voice_url)
         ? String(sub.teacher_voice_url).trim()
@@ -7799,6 +7842,7 @@
         rawCommentVal: rawCommentVal,
         resolvedComment: resolvedComment,
         allowClearComment: allowClearComment,
+        requireResubmit: requireResubmit,
         existingRealVoiceUrl: existingRealVoiceUrl,
         existingRealVoiceDur: existingRealVoiceDur,
         draftVoice: draftVoice,
@@ -7808,124 +7852,159 @@
       };
     }
 
+    async function submitTeacherFeedback(forceResubmitRequired, triggerBtn) {
+      const snap = getActiveGradingSourceSnapshot();
+      const nowStr = new Date().toLocaleString('vi-VN');
+      let sub = snap.sub;
+      const isResubmitReq = Boolean(forceResubmitRequired || snap.requireResubmit);
+      const targetStatus = isResubmitReq ? 'resubmit_required' : 'graded';
+      const allowClearComment = snap.allowClearComment;
+      const resolvedScore = snap.resolvedScore;
+      const draftVoice = snap.draftVoice;
+      const hasVoiceUpload = snap.hasVoiceUpload;
+      const voiceUrl = snap.voiceUrl;
+      const voiceDur = snap.voiceDur;
+      let resolvedComment = snap.resolvedComment;
+
+      if (isResubmitReq && resolvedComment === '' && !hasVoiceUpload && !snap.existingRealVoiceUrl && resolvedScore === '') {
+        resolvedComment = 'Cô yêu cầu em luyện lại và nộp lại bài tập này nhé.';
+      }
+
+      if (!isResubmitReq && !hasVoiceUpload && !snap.existingRealVoiceUrl && resolvedComment === '' && resolvedScore === '') {
+        showToast('Vui lòng nhập điểm, nhận xét hoặc tự thu âm Voice Feedback trước khi lưu!');
+        return;
+      }
+
+      if (!ui.gradingAssignmentId || !ui.gradingStudentId) {
+        showToast('Vui lòng chọn học sinh và BVN trước khi gửi!');
+        return;
+      }
+
+      const resubmitChk = document.getElementById('teacher-require-resubmit-chk');
+      if (forceResubmitRequired && resubmitChk) {
+        resubmitChk.checked = true;
+      }
+
+      const prevSubSnapshot = sub ? JSON.parse(JSON.stringify(sub)) : null;
+      let createdNewSub = false;
+
+      if (sub) {
+        sub.status = targetStatus;
+        sub.score = resolvedScore;
+        sub.teacher_comment = resolvedComment;
+        sub.teacher_voice_url = voiceUrl;
+        sub.teacher_voice_duration = voiceDur;
+        sub.graded_at = nowStr;
+      } else {
+        createdNewSub = true;
+        sub = {
+          submission_id: 'SUB_' + Date.now(),
+          assignment_id: ui.gradingAssignmentId,
+          student_id: ui.gradingStudentId,
+          attempt_number: 1,
+          submitted_at: nowStr,
+          student_note: '',
+          media_type: 'audio',
+          media_url: '',
+          media_duration: '',
+          status: targetStatus,
+          score: resolvedScore,
+          teacher_comment: resolvedComment,
+          teacher_voice_url: voiceUrl,
+          teacher_voice_duration: voiceDur,
+          graded_at: nowStr
+        };
+        state.submissions.push(sub);
+        ui.gradingSubmissionId = sub.submission_id;
+      }
+
+      window.StudySnapStore.saveState(state);
+
+      let syncRes = null;
+      await runWithLoading(
+        triggerBtn,
+        isResubmitReq
+          ? 'Đang gửi yêu cầu nộp lại...'
+          : (hasVoiceUpload ? 'Đang tải Voice & lưu...' : 'Đang lưu phản hồi...'),
+        async function () {
+          syncRes = await window.StudySnapStore.syncPostToGas(state, {
+            action: 'saveTeacherFeedback',
+            submission_id: createdNewSub ? '' : sub.submission_id,
+            assignment_id: ui.gradingAssignmentId,
+            student_id: ui.gradingStudentId,
+            status: targetStatus,
+            score: sub.score,
+            teacher_comment: sub.teacher_comment,
+            allow_clear_comment: allowClearComment,
+            teacher_voice_duration: voiceDur,
+            teacher_voice_base64: hasVoiceUpload ? draftVoice.dataUrl : '',
+            teacher_voice_mime_type: hasVoiceUpload ? draftVoice.mimeType : ''
+          });
+        },
+        hasVoiceUpload
+          ? {
+              title: 'Đang lưu nhận xét & bản thu Voice Feedback...',
+              desc: 'Hệ thống đang tải tệp âm thanh chữa bài lên máy chủ.'
+            }
+          : null
+      );
+
+      if (syncRes && syncRes.ok === false) {
+        if (createdNewSub) {
+          const idx = state.submissions.indexOf(sub);
+          if (idx !== -1) state.submissions.splice(idx, 1);
+        } else if (prevSubSnapshot) {
+          Object.keys(sub).forEach(function (k) { delete sub[k]; });
+          Object.assign(sub, prevSubSnapshot);
+        }
+        ui.teacherDraftVoice = draftVoice;
+        window.StudySnapStore.saveState(state);
+        showToast(syncRes.error || 'Chưa lưu được lên máy chủ — dữ liệu nhận xét và bản thu vẫn được giữ nguyên!');
+        return;
+      }
+
+      if (syncRes && syncRes.submission) {
+        if (syncRes.submission.submission_id) {
+          sub.submission_id = syncRes.submission.submission_id;
+          ui.gradingSubmissionId = sub.submission_id;
+        }
+        if (syncRes.submission.status) sub.status = syncRes.submission.status;
+        if (syncRes.submission.attempt_number) sub.attempt_number = Math.max(1, Number(syncRes.submission.attempt_number) || 1);
+        if (syncRes.submission.teacher_voice_url) sub.teacher_voice_url = syncRes.submission.teacher_voice_url;
+        if (syncRes.submission.teacher_comment !== undefined) sub.teacher_comment = syncRes.submission.teacher_comment;
+        if (syncRes.submission.graded_at) sub.graded_at = syncRes.submission.graded_at;
+        if (syncRes.submission.score !== undefined) sub.score = syncRes.submission.score;
+        window.StudySnapStore.saveState(state);
+      }
+
+      resetGradingDraftInputs();
+      renderAll();
+      const st = findStudent(ui.gradingStudentId);
+      if (isResubmitReq) {
+        showToast('Đã gửi yêu cầu nộp lại BVN cho ' + (st ? st.full_name : 'học sinh') + '!');
+      } else {
+        showToast(
+          hasVoiceUpload
+            ? 'Đã lưu nhận xét & Voice Feedback tự thu cho ' + (st ? st.full_name : '') + '!'
+            : 'Đã lưu điểm & nhận xét cho ' + (st ? st.full_name : '') + '!'
+        );
+      }
+    }
+
     // Giáo viên lưu chấm bài & phản hồi (chỉ lưu Voice khi giáo viên tự thu, tuyệt đối bảo toàn feedback cũ)
     const teacherGradingForm = document.getElementById('teacher-grading-form');
     if (teacherGradingForm) {
       teacherGradingForm.addEventListener('submit', async function (ev) {
         ev.preventDefault();
         const submitBtn = teacherGradingForm.querySelector('button[type="submit"]');
-        const snap = getActiveGradingSourceSnapshot();
-        const nowStr = new Date().toLocaleString('vi-VN');
-        let sub = snap.sub;
-        const resolvedComment = snap.resolvedComment;
-        const allowClearComment = snap.allowClearComment;
-        const resolvedScore = snap.resolvedScore;
-        const draftVoice = snap.draftVoice;
-        const hasVoiceUpload = snap.hasVoiceUpload;
-        const voiceUrl = snap.voiceUrl;
-        const voiceDur = snap.voiceDur;
+        await submitTeacherFeedback(false, submitBtn);
+      });
+    }
 
-        if (!hasVoiceUpload && !snap.existingRealVoiceUrl && resolvedComment === '' && resolvedScore === '') {
-          showToast('Vui lòng nhập điểm, nhận xét hoặc tự thu âm Voice Feedback trước khi lưu!');
-          return;
-        }
-
-        const prevSubSnapshot = sub ? JSON.parse(JSON.stringify(sub)) : null;
-        let createdNewSub = false;
-
-        if (sub) {
-          sub.status = 'graded';
-          sub.score = resolvedScore;
-          sub.teacher_comment = resolvedComment;
-          sub.teacher_voice_url = voiceUrl;
-          sub.teacher_voice_duration = voiceDur;
-          sub.graded_at = nowStr;
-        } else {
-          createdNewSub = true;
-          sub = {
-            submission_id: 'SUB_' + Date.now(),
-            assignment_id: ui.gradingAssignmentId,
-            student_id: ui.gradingStudentId,
-            attempt_number: 1,
-            submitted_at: nowStr,
-            student_note: '',
-            media_type: 'audio',
-            media_url: '',
-            media_duration: '',
-            status: 'graded',
-            score: resolvedScore,
-            teacher_comment: resolvedComment,
-            teacher_voice_url: voiceUrl,
-            teacher_voice_duration: voiceDur,
-            graded_at: nowStr
-          };
-          state.submissions.push(sub);
-          ui.gradingSubmissionId = sub.submission_id;
-        }
-
-        window.StudySnapStore.saveState(state);
-
-        let syncRes = null;
-        await runWithLoading(
-          submitBtn,
-          hasVoiceUpload ? 'Đang tải Voice & lưu...' : 'Đang lưu phản hồi...',
-          async function () {
-            syncRes = await window.StudySnapStore.syncPostToGas(state, {
-              action: 'saveTeacherFeedback',
-              submission_id: createdNewSub ? '' : sub.submission_id,
-              assignment_id: ui.gradingAssignmentId,
-              student_id: ui.gradingStudentId,
-              score: sub.score,
-              teacher_comment: sub.teacher_comment,
-              allow_clear_comment: allowClearComment,
-              teacher_voice_duration: voiceDur,
-              teacher_voice_base64: hasVoiceUpload ? draftVoice.dataUrl : '',
-              teacher_voice_mime_type: hasVoiceUpload ? draftVoice.mimeType : ''
-            });
-          },
-          hasVoiceUpload
-            ? {
-                title: 'Đang lưu nhận xét & bản thu Voice Feedback...',
-                desc: 'Hệ thống đang tải tệp âm thanh chữa bài lên máy chủ.'
-              }
-            : null
-        );
-
-        if (syncRes && syncRes.ok === false) {
-          if (createdNewSub) {
-            const idx = state.submissions.indexOf(sub);
-            if (idx !== -1) state.submissions.splice(idx, 1);
-          } else if (prevSubSnapshot) {
-            Object.keys(sub).forEach(function (k) { delete sub[k]; });
-            Object.assign(sub, prevSubSnapshot);
-          }
-          ui.teacherDraftVoice = draftVoice;
-          window.StudySnapStore.saveState(state);
-          showToast(syncRes.error || 'Chưa lưu được lên máy chủ — dữ liệu nhận xét và bản thu vẫn được giữ nguyên!');
-          return;
-        }
-
-        if (syncRes && syncRes.submission) {
-          if (syncRes.submission.submission_id) {
-            sub.submission_id = syncRes.submission.submission_id;
-            ui.gradingSubmissionId = sub.submission_id;
-          }
-          if (syncRes.submission.attempt_number) sub.attempt_number = Math.max(1, Number(syncRes.submission.attempt_number) || 1);
-          if (syncRes.submission.teacher_voice_url) sub.teacher_voice_url = syncRes.submission.teacher_voice_url;
-          if (syncRes.submission.teacher_comment !== undefined) sub.teacher_comment = syncRes.submission.teacher_comment;
-          if (syncRes.submission.graded_at) sub.graded_at = syncRes.submission.graded_at;
-          if (syncRes.submission.score !== undefined) sub.score = syncRes.submission.score;
-          window.StudySnapStore.saveState(state);
-        }
-
-        resetGradingDraftInputs();
-        renderAll();
-        const st = findStudent(ui.gradingStudentId);
-        showToast(
-          hasVoiceUpload
-            ? 'Đã lưu nhận xét & Voice Feedback tự thu cho ' + (st ? st.full_name : '') + '!'
-            : 'Đã lưu điểm & nhận xét cho ' + (st ? st.full_name : '') + '!'
-        );
+    const btnRequestResubmit = document.getElementById('btn-teacher-request-resubmit');
+    if (btnRequestResubmit) {
+      btnRequestResubmit.addEventListener('click', async function () {
+        await submitTeacherFeedback(true, btnRequestResubmit);
       });
     }
 
@@ -8036,7 +8115,9 @@
           const hasVoice = Boolean(cSub && isRealTeacherVoiceUrl(cSub.teacher_voice_url));
           const preChecked = cStatus === 'submitted' ? ' checked' : '';
           let statusBadge = '<span class="status-badge status-missing">Chưa nộp BVN</span>';
-          if (cStatus === 'graded') {
+          if (cStatus === 'resubmit_required') {
+            statusBadge = '<span class="status-badge status-resubmit">Cần nộp lại' + (cSub.score ? ' • ' + escapeHtml(cSub.score) + 'đ' : '') + '</span>';
+          } else if (cStatus === 'graded') {
             statusBadge = '<span class="status-badge status-graded">Đã chữa' + (cSub.score ? ' • ' + escapeHtml(cSub.score) + 'đ' : '') + '</span>';
           } else if (cStatus === 'submitted') {
             statusBadge = '<span class="status-badge status-submitted">Đã nộp • Chờ chữa</span>';

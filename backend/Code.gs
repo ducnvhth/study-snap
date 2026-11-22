@@ -1555,6 +1555,7 @@ function handleSaveTeacherFeedback_(ss, payload) {
     const hasIncomingComment = payload.teacher_comment !== undefined && (String(payload.teacher_comment) !== '' || !existing[10] || payload.allow_clear_comment === true);
     const nextComment = hasIncomingComment ? payload.teacher_comment : existing[10];
     const nextSubmittedAt = existing[3] || nowStr;
+    const nextStatus = String(payload.status || '').trim() === 'resubmit_required' ? 'resubmit_required' : 'graded';
     const updatedRow = [
       existing[0],
       assignmentId,
@@ -1564,7 +1565,7 @@ function handleSaveTeacherFeedback_(ss, payload) {
       existing[5],
       existing[6],
       existing[7],
-      'graded',
+      nextStatus,
       nextScore,
       nextComment,
       nextVoiceUrl,
@@ -1580,7 +1581,7 @@ function handleSaveTeacherFeedback_(ss, payload) {
       student_id: studentId,
       attempt_number: keepAttempt,
       submitted_at: nextSubmittedAt,
-      status: 'graded',
+      status: nextStatus,
       score: updatedRow[9],
       teacher_comment: updatedRow[10],
       teacher_voice_url: updatedRow[11],
@@ -1590,6 +1591,9 @@ function handleSaveTeacherFeedback_(ss, payload) {
   } else {
     const newId = 'SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase();
     const newVoiceDur = teacherVoiceUrl ? (payload.teacher_voice_duration || '') : '';
+    const nextStatus = String(payload.status || '').trim() === 'resubmit_required'
+      ? 'resubmit_required'
+      : (payload.status || 'graded');
     const newRow = [
       newId,
       assignmentId,
@@ -1599,7 +1603,7 @@ function handleSaveTeacherFeedback_(ss, payload) {
       'audio',
       '',
       '',
-      payload.status || 'graded',
+      nextStatus,
       payload.score || '',
       payload.teacher_comment || '',
       teacherVoiceUrl,
