@@ -3478,6 +3478,138 @@ html.is-auth-redirecting .login-shell {
 }
 
 /* ====================================================================
+   MULTI-ATTEMPT BVN RESUBMISSION & HISTORY PILLS
+   ==================================================================== */
+.attempt-tabs-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.attempt-tabs-label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+  margin-right: 2px;
+}
+
+.attempt-tab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--border);
+  background: var(--color-surface);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+
+.attempt-tab-pill:hover {
+  border-color: var(--ink);
+  background: var(--color-surface-subtle);
+}
+
+.attempt-tab-pill:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 2px;
+}
+
+.attempt-tab-pill.is-active {
+  background: var(--pink-lt);
+  border-color: var(--ink);
+  color: var(--ink);
+  box-shadow: 0 2px 0 rgba(45, 27, 78, 0.16);
+}
+
+.attempt-tab-meta {
+  font-size: 0.75rem;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.attempt-tab-meta.is-graded {
+  background: var(--mint-lt);
+  color: var(--color-success-text);
+  border: 1px solid var(--color-success-border);
+}
+
+.attempt-tab-meta.is-pending {
+  background: var(--ylt);
+  color: var(--color-warning-text);
+  border: 1px solid var(--color-warning-border);
+}
+
+.attempt-count-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--pink-lt);
+  color: var(--ink);
+  border: 1px solid var(--pink-soft);
+  font-size: 0.72rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.attempt-prev-hint {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.bvn-resubmit-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: var(--radius-xl);
+  background: var(--mint-lt);
+  border: 1.5px solid var(--color-success-border);
+}
+
+.bvn-resubmit-banner.is-preparing {
+  background: var(--ylt);
+  border-color: var(--color-warning-border);
+}
+
+.bvn-resubmit-banner-title {
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: var(--ink);
+  margin: 0 0 2px;
+}
+
+.bvn-resubmit-banner-desc {
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  margin: 0;
+  line-height: 1.45;
+}
+
+/* ====================================================================
    EXCEL / CSV IMPORT MODAL & COMPONENTS
    ==================================================================== */
 .modal-dialog-lg {

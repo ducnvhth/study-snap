@@ -62,6 +62,7 @@
     studentAccountsClassFilter: 'all',
     gradingStudentId: state.students[0] ? state.students[0].student_id : 'HS01',
     gradingAssignmentId: state.assignments[0] ? state.assignments[0].assignment_id : 'BVN01_1',
+    gradingSubmissionId: null,
     matrixFilter: 'all',
     matrixSort: 'default',
     teacherDraftVoice: null,
@@ -206,10 +207,41 @@
     return await wrapped();
   }
 
-  function findSubmission(assignmentId, studentId) {
-    return state.submissions.find(function (s) {
+  function getSubmissionAttempts(assignmentId, studentId) {
+    const list = (state.submissions || []).filter(function (s) {
       return String(s.assignment_id) === String(assignmentId) && String(s.student_id) === String(studentId);
     });
+    if (list.length <= 1) return list;
+    return list
+      .map(function (sub, idx) {
+        return { sub: sub, idx: idx };
+      })
+      .sort(function (a, b) {
+        const attA = Math.max(1, Number(a.sub.attempt_number || 1) || 1);
+        const attB = Math.max(1, Number(b.sub.attempt_number || 1) || 1);
+        if (attA !== attB) return attA - attB;
+        return a.idx - b.idx;
+      })
+      .map(function (item) {
+        return item.sub;
+      });
+  }
+
+  function findSubmission(assignmentId, studentId) {
+    const attempts = getSubmissionAttempts(assignmentId, studentId);
+    return attempts.length ? attempts[attempts.length - 1] : null;
+  }
+
+  function findSubmissionById(assignmentId, studentId, submissionId) {
+    const attempts = getSubmissionAttempts(assignmentId, studentId);
+    if (!attempts.length) return null;
+    if (submissionId) {
+      const exact = attempts.find(function (s) {
+        return String(s.submission_id) === String(submissionId);
+      });
+      if (exact) return exact;
+    }
+    return attempts[attempts.length - 1];
   }
 
   function findStudent(studentId) {
@@ -671,8 +703,11 @@
     return true;
   }
 
-  function resetGradingDraftInputs() {
+  function resetGradingDraftInputs(preserveSubmissionSelection) {
     ui.teacherDraftVoice = null;
+    if (!preserveSubmissionSelection) {
+      ui.gradingSubmissionId = null;
+    }
     const scoreInp = document.getElementById('teacher-score-input');
     const commentInp = document.getElementById('teacher-comment-input');
     if (scoreInp && scoreInp.dataset) {
@@ -702,12 +737,15 @@
 
   function getStudentAsgStatusSuffix(asg, st) {
     if (!asg || !st) return '';
-    const sub = findSubmission(asg.assignment_id, st.student_id);
+    const attempts = getSubmissionAttempts(asg.assignment_id, st.student_id);
+    const sub = attempts.length ? attempts[attempts.length - 1] : null;
+    const attNum = sub ? Math.max(attempts.length, Number(sub.attempt_number || 1) || 1) : 0;
+    const attTag = attNum > 1 ? (' (Lần ' + attNum + ')') : '';
     if (sub && (sub.status === 'graded' || (sub.score !== undefined && sub.score !== null && String(sub.score).trim() !== ''))) {
       const sTxt = sub.score !== undefined && sub.score !== null && String(sub.score).trim() !== '' ? (' ' + String(sub.score).trim() + 'đ') : '';
-      return ' • Đã chữa' + sTxt;
+      return ' • Đã chữa' + attTag + sTxt;
     }
-    if (sub && sub.status === 'submitted') return ' • Chờ chấm';
+    if (sub && sub.status === 'submitted') return ' • Chờ chấm' + attTag;
     return ' • Chưa nộp';
   }
 
@@ -1259,18 +1297,57 @@
     ui.gradingAssignmentId = asg.assignment_id;
     ui.gradingStudentId = st.student_id;
 
-    const sub = findSubmission(asg.assignment_id, st.student_id);
+    const attempts = getSubmissionAttempts(asg.assignment_id, st.student_id);
+    const latestSub = attempts.length ? attempts[attempts.length - 1] : null;
+    const sub = findSubmissionById(asg.assignment_id, st.student_id, ui.gradingSubmissionId);
+    ui.gradingSubmissionId = sub ? sub.submission_id : null;
+
+    const activeIdx = sub ? attempts.findIndex(function (a) { return a.submission_id === sub.submission_id; }) : -1;
+    const activeAttemptNum = sub ? Math.max(1, Number(sub.attempt_number || (activeIdx >= 0 ? activeIdx + 1 : 1)) || 1) : 1;
 
     if (targetBadge) {
-      targetBadge.textContent = st.full_name + ' (' + (st.class_name || 'Lớp') + ') • ' + asg.lesson_tag;
+      targetBadge.textContent =
+        st.full_name +
+        ' (' + (st.class_name || 'Lớp') + ') • ' +
+        asg.lesson_tag +
+        (attempts.length > 1 ? (' • Lần ' + activeAttemptNum + '/' + attempts.length) : '');
     }
 
     if (studentMediaBox) {
+      let attemptTabsHtml = '';
+      if (attempts.length > 1 && latestSub && sub) {
+        const descAttempts = attempts.slice().reverse();
+        attemptTabsHtml =
+          '<div class="attempt-tabs-row" role="tablist" aria-label="Các lần nộp BVN của học sinh">' +
+            '<span class="attempt-tabs-label">Các lần nộp:</span>' +
+            descAttempts.map(function (att) {
+              const idx = attempts.indexOf(att);
+              const attNo = Math.max(1, Number(att.attempt_number || (idx + 1)) || (idx + 1));
+              const isLatest = att.submission_id === latestSub.submission_id;
+              const isActive = att.submission_id === sub.submission_id;
+              const metaText = att.status === 'graded'
+                ? (att.score !== '' && att.score !== undefined && att.score !== null ? (att.score + 'đ') : 'Đã chữa')
+                : 'Chờ chữa';
+              const metaCls = att.status === 'graded' ? 'is-graded' : 'is-pending';
+              return (
+                '<button type="button" role="tab" aria-selected="' + (isActive ? 'true' : 'false') + '" ' +
+                'class="attempt-tab-pill' + (isActive ? ' is-active' : '') + '" ' +
+                'data-grade-attempt-id="' + escapeHtml(att.submission_id) + '">' +
+                  '<span>Lần ' + attNo + (isLatest ? ' (Mới nhất)' : '') + '</span>' +
+                  '<span class="attempt-tab-meta ' + metaCls + '">' + escapeHtml(metaText) + '</span>' +
+                '</button>'
+              );
+            }).join('') +
+          '</div>';
+      }
+
       if (sub && (sub.status === 'submitted' || sub.status === 'graded') && sub.media_url) {
         const isVideo = typeof window.StudySnapAudio.isVideoSubmission === 'function'
           ? window.StudySnapAudio.isVideoSubmission(sub.media_url, sub.media_type)
           : sub.media_type === 'video';
-        const typeText = isVideo ? 'Video BVN học sinh nộp' : 'Ghi âm BVN học sinh nộp';
+        const typeText = isVideo
+          ? ('Video BVN Lần ' + activeAttemptNum)
+          : ('Ghi âm BVN Lần ' + activeAttemptNum);
         const mediaPlayerHtml = isVideo && typeof window.StudySnapAudio.renderVideoPlayer === 'function'
           ? window.StudySnapAudio.renderVideoPlayer({
               id: 'grading-student-' + sub.submission_id,
@@ -1287,8 +1364,15 @@
               lang: 'zh-CN',
               variant: 'student'
             });
+        const attemptHeadingHtml = attempts.length > 1 || sub.submitted_at
+          ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px;font-size:0.8125rem;font-weight:700;color:var(--ink-soft);">' +
+              '<span>' + escapeHtml((attempts.length > 1 ? 'Lần ' + activeAttemptNum + (sub === latestSub ? ' (Mới nhất)' : '') + ' • ' : '') + 'Nộp lúc: ' + (sub.submitted_at || 'Vừa nộp')) + '</span>' +
+            '</div>'
+          : '';
         studentMediaBox.innerHTML =
+          attemptTabsHtml +
           '<div class="assignment-brief-box">' +
+            attemptHeadingHtml +
             '<p class="assignment-brief-desc" style="margin-bottom:6px;">Lời nhắn của học sinh: "' + escapeHtml(sub.student_note || 'Em nộp BVN ạ.') + '"</p>' +
             mediaPlayerHtml +
           '</div>';
@@ -1297,6 +1381,7 @@
         }
       } else {
         studentMediaBox.innerHTML =
+          attemptTabsHtml +
           '<div class="assignment-brief-box">' +
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">' +
               '<span class="status-badge status-missing">' + ICONS.alert + '<span>Học sinh chưa nộp file BVN (ghi âm/video)</span></span>' +
@@ -1304,9 +1389,19 @@
             '</div>' +
           '</div>';
       }
+
+      studentMediaBox.querySelectorAll('[data-grade-attempt-id]').forEach(function (tabBtn) {
+        tabBtn.addEventListener('click', function () {
+          const pickedId = tabBtn.getAttribute('data-grade-attempt-id');
+          if (!pickedId || pickedId === ui.gradingSubmissionId) return;
+          ui.gradingSubmissionId = pickedId;
+          resetGradingDraftInputs(true);
+          renderGradingPanel();
+        });
+      });
     }
 
-    const loadedKey = asg.assignment_id + ':' + st.student_id;
+    const loadedKey = asg.assignment_id + ':' + st.student_id + ':' + (sub ? sub.submission_id : 'none');
     const hasExistingRealVoice = Boolean(sub && isRealTeacherVoiceUrl(sub.teacher_voice_url));
 
     if (scoreInput && document.activeElement !== scoreInput) {
@@ -1631,7 +1726,14 @@
       let completedCount = 0;
 
       const assignmentCells = filteredAssignments.map(function (asg) {
-        const sub = findSubmission(asg.assignment_id, st.student_id);
+        const attempts = getSubmissionAttempts(asg.assignment_id, st.student_id);
+        const sub = attempts.length ? attempts[attempts.length - 1] : null;
+        const attNum = sub ? Math.max(attempts.length, Number(sub.attempt_number || 1) || 1) : 0;
+        const prevGraded = attempts.length > 1
+          ? attempts.slice(0, -1).reverse().find(function (a) {
+              return a.status === 'graded' || (a.score !== '' && a.score !== undefined && a.score !== null);
+            })
+          : null;
         const status = sub ? sub.status : 'missing';
         if (status === 'submitted' || status === 'graded') {
           completedCount++;
@@ -1640,10 +1742,21 @@
         let badgeHtml = '';
         if (status === 'graded') {
           badgeHtml = '<span class="status-badge status-graded">' + ICONS.check +
-            '<span>Đã chữa' + (sub.score ? ' • ' + escapeHtml(sub.score) + 'đ' : '') + '</span></span>';
+            '<span>Đã chữa' + (sub.score ? ' • ' + escapeHtml(sub.score) + 'đ' : '') + '</span></span>' +
+            (attNum > 1 ? ' <span class="attempt-count-pill">Lần ' + attNum + '</span>' : '');
         } else if (status === 'submitted') {
+          const prevIdx = prevGraded ? attempts.indexOf(prevGraded) : -1;
+          const prevNo = prevGraded ? Math.max(1, Number(prevGraded.attempt_number || (prevIdx + 1)) || (prevIdx + 1)) : 0;
+          const prevHintHtml = prevGraded
+            ? '<p class="attempt-prev-hint">Lần ' + prevNo + ' trước đó: ' +
+              (prevGraded.score !== '' && prevGraded.score !== undefined && prevGraded.score !== null
+                ? (escapeHtml(prevGraded.score) + 'đ')
+                : 'Đã chữa') +
+              '</p>'
+            : '';
           badgeHtml = '<span class="status-badge status-submitted">' + ICONS.clock +
-            '<span>Đã nộp • Chờ chữa</span></span>';
+            '<span>' + (attNum > 1 ? ('Lần ' + attNum + ' • Chờ chữa') : 'Đã nộp • Chờ chữa') + '</span></span>' +
+            prevHintHtml;
         } else {
           badgeHtml = '<span class="status-badge status-missing">' + ICONS.alert +
             '<span>Chưa nộp BVN</span></span>';
@@ -2414,10 +2527,15 @@
     exportStudents.forEach(function (st) {
       const row = [st.student_id, st.full_name, st.username || st.student_id.toLowerCase()];
       exportAsgs.forEach(function (asg) {
-        const sub = findSubmission(asg.assignment_id, st.student_id);
-        const stText = sub
+        const attempts = getSubmissionAttempts(asg.assignment_id, st.student_id);
+        const sub = attempts.length ? attempts[attempts.length - 1] : null;
+        const attNum = sub ? Math.max(attempts.length, Number(sub.attempt_number || 1) || 1) : 0;
+        let stText = sub
           ? (sub.status === 'graded' ? 'Đã chữa' : 'Đã nộp - Chờ chữa')
           : 'Chưa làm';
+        if (sub && attNum > 1) {
+          stText = 'Lần ' + attNum + ' - ' + stText;
+        }
         row.push(stText);
         row.push(sub && sub.score ? String(sub.score) : '');
         row.push(sub && sub.teacher_comment ? String(sub.teacher_comment) : '');
@@ -7644,9 +7762,9 @@
       const commentInput = document.getElementById('teacher-comment-input');
       const scoreVal = scoreInput ? scoreInput.value.trim() : '';
       const rawCommentVal = commentInput ? commentInput.value.trim() : '';
-      const targetKey = ui.gradingAssignmentId + ':' + ui.gradingStudentId;
 
-      const sub = findSubmission(ui.gradingAssignmentId, ui.gradingStudentId);
+      const sub = findSubmissionById(ui.gradingAssignmentId, ui.gradingStudentId, ui.gradingSubmissionId);
+      const targetKey = ui.gradingAssignmentId + ':' + ui.gradingStudentId + ':' + (sub ? sub.submission_id : 'none');
       const existingComment = (sub && sub.teacher_comment) ? String(sub.teacher_comment) : '';
       const existingScore = (sub && sub.score !== undefined && sub.score !== null) ? String(sub.score) : '';
       const userEditedThisComment = Boolean(
@@ -7728,6 +7846,7 @@
             submission_id: 'SUB_' + Date.now(),
             assignment_id: ui.gradingAssignmentId,
             student_id: ui.gradingStudentId,
+            attempt_number: 1,
             submitted_at: nowStr,
             student_note: '',
             media_type: 'audio',
@@ -7741,6 +7860,7 @@
             graded_at: nowStr
           };
           state.submissions.push(sub);
+          ui.gradingSubmissionId = sub.submission_id;
         }
 
         window.StudySnapStore.saveState(state);
@@ -7752,6 +7872,7 @@
           async function () {
             syncRes = await window.StudySnapStore.syncPostToGas(state, {
               action: 'saveTeacherFeedback',
+              submission_id: createdNewSub ? '' : sub.submission_id,
               assignment_id: ui.gradingAssignmentId,
               student_id: ui.gradingStudentId,
               score: sub.score,
@@ -7785,9 +7906,14 @@
         }
 
         if (syncRes && syncRes.submission) {
-          if (syncRes.submission.submission_id) sub.submission_id = syncRes.submission.submission_id;
+          if (syncRes.submission.submission_id) {
+            sub.submission_id = syncRes.submission.submission_id;
+            ui.gradingSubmissionId = sub.submission_id;
+          }
+          if (syncRes.submission.attempt_number) sub.attempt_number = Math.max(1, Number(syncRes.submission.attempt_number) || 1);
           if (syncRes.submission.teacher_voice_url) sub.teacher_voice_url = syncRes.submission.teacher_voice_url;
           if (syncRes.submission.teacher_comment !== undefined) sub.teacher_comment = syncRes.submission.teacher_comment;
+          if (syncRes.submission.graded_at) sub.graded_at = syncRes.submission.graded_at;
           if (syncRes.submission.score !== undefined) sub.score = syncRes.submission.score;
           window.StudySnapStore.saveState(state);
         }
@@ -8021,6 +8147,7 @@
               action: 'copyTeacherFeedback',
               assignment_id: snap.asg.assignment_id,
               source_student_id: snap.st.student_id,
+              source_submission_id: srcSub ? srcSub.submission_id : '',
               include_source: sourceHasUnsavedEdits,
               target_student_ids: checkedIds,
               teacher_comment: copyComment ? snap.resolvedComment : '',
@@ -8056,11 +8183,11 @@
 
         if (srvSubs) {
           srvSubs.forEach(function (srvSub) {
-            const existing = findSubmission(snap.asg.assignment_id, srvSub.student_id);
+            const existing = findSubmissionById(snap.asg.assignment_id, srvSub.student_id, srvSub.submission_id);
             if (existing) {
               Object.assign(existing, srvSub);
             } else {
-              state.submissions.push(srvSub);
+              state.submissions.push(Object.assign({ attempt_number: 1 }, srvSub));
             }
           });
         } else {
@@ -8070,7 +8197,9 @@
           }
           localApplyIds.forEach(function (stuId) {
             const isSource = stuId === snap.st.student_id;
-            const existing = findSubmission(snap.asg.assignment_id, stuId);
+            const existing = isSource && srcSub
+              ? srcSub
+              : findSubmission(snap.asg.assignment_id, stuId);
             if (existing) {
               existing.status = 'graded';
               existing.graded_at = nowStr;
@@ -8100,6 +8229,7 @@
                 submission_id: 'SUB_' + Date.now() + '_' + stuId,
                 assignment_id: snap.asg.assignment_id,
                 student_id: stuId,
+                attempt_number: 1,
                 submitted_at: '',
                 student_note: '',
                 media_type: 'audio',

@@ -65,6 +65,8 @@
     activeTab: 'practice',
     selectedHomeworkSession: 'all',
     selectedAssignmentId: state.assignments[0] ? state.assignments[0].assignment_id : 'BVN01_1',
+    selectedAttemptSubId: null,
+    resubmitExpandedAsgId: null,
     pendingMedia: null,
     welcomeQuoteCategory: null,
     welcomeQuoteText: null,
@@ -244,12 +246,41 @@
     }, 3400);
   }
 
+  function getSubmissionAttempts(assignmentId, studentId) {
+    const list = (state.submissions || []).filter(function (sub) {
+      return String(sub.assignment_id) === String(assignmentId) && String(sub.student_id) === String(studentId);
+    });
+    if (list.length <= 1) return list;
+    return list
+      .map(function (sub, idx) {
+        return { sub: sub, idx: idx };
+      })
+      .sort(function (a, b) {
+        const attA = Math.max(1, Number(a.sub.attempt_number || 1) || 1);
+        const attB = Math.max(1, Number(b.sub.attempt_number || 1) || 1);
+        if (attA !== attB) return attA - attB;
+        return a.idx - b.idx;
+      })
+      .map(function (item) {
+        return item.sub;
+      });
+  }
+
   function findSubmission(assignmentId, studentId) {
-    return (
-      (state.submissions || []).find(function (sub) {
-        return sub.assignment_id === assignmentId && sub.student_id === studentId;
-      }) || null
-    );
+    const attempts = getSubmissionAttempts(assignmentId, studentId);
+    return attempts.length ? attempts[attempts.length - 1] : null;
+  }
+
+  function findSubmissionById(assignmentId, studentId, submissionId) {
+    const attempts = getSubmissionAttempts(assignmentId, studentId);
+    if (!attempts.length) return null;
+    if (submissionId) {
+      const exact = attempts.find(function (sub) {
+        return String(sub.submission_id) === String(submissionId);
+      });
+      if (exact) return exact;
+    }
+    return attempts[attempts.length - 1];
   }
 
   function switchTab(tabName) {
@@ -560,7 +591,11 @@
             : studentAssignments.filter(function (a) { return (a.session_tag || 'Buổi 1').trim() === s; });
           if (inSession.length > 0) {
             ui.selectedAssignmentId = inSession[0].assignment_id;
+            ui.selectedAttemptSubId = null;
+            ui.resubmitExpandedAsgId = null;
             ui.pendingMedia = null;
+            const noteAreaEl = document.getElementById('student-note-textarea');
+            if (noteAreaEl) noteAreaEl.value = '';
             renderPendingMediaPreview();
           }
           renderHomeworkSection();
@@ -585,7 +620,10 @@
       if (filteredAssignments.length > 0) {
         subtaskChipsRow.style.display = 'flex';
         subtaskChipsRow.innerHTML = filteredAssignments.map(function (asg) {
-          const sub = findSubmission(asg.assignment_id, student.student_id);
+          const attempts = getSubmissionAttempts(asg.assignment_id, student.student_id);
+          const sub = attempts.length ? attempts[attempts.length - 1] : null;
+          const attNum = sub ? Math.max(attempts.length, Number(sub.attempt_number || 1) || 1) : 0;
+          const attPrefix = attNum > 1 ? ('L' + attNum + ' • ') : '';
           const isSelected = asg.assignment_id === ui.selectedAssignmentId;
           let badgeBg = 'var(--soft)';
           let badgeFg = 'var(--muted)';
@@ -595,17 +633,17 @@
             badgeBg = 'var(--mint-lt)';
             badgeFg = 'var(--color-success-text)';
             badgeBorder = 'var(--color-success-border)';
-            statusText = '✓ ' + sub.score + 'đ';
+            statusText = attPrefix + (sub.score !== '' && sub.score !== undefined && sub.score !== null ? (sub.score + 'đ') : 'Đã chấm');
           } else if (sub) {
             badgeBg = 'var(--ylt)';
             badgeFg = 'var(--color-warning-text)';
             badgeBorder = 'var(--color-warning-border)';
-            statusText = 'Đã nộp';
+            statusText = attNum > 1 ? ('Lần ' + attNum + ' • Chờ chữa') : 'Đã nộp';
           }
           return (
             '<button type="button" class="sub-asg-chip' + (isSelected ? ' is-active' : '') + '" data-subtask-id="' + escapeHtml(asg.assignment_id) + '">' +
             '<span>' + escapeHtml(asg.lesson_tag || asg.title) + '</span>' +
-            '<span style="font-size:0.75rem;padding:2px 8px;border-radius:var(--radius-full);background:' + badgeBg + ';color:' + badgeFg + ';border:1px solid ' + badgeBorder + ';font-weight:700;">' +
+            '<span class="tabular-nums" style="font-size:0.75rem;padding:2px 8px;border-radius:var(--radius-full);background:' + badgeBg + ';color:' + badgeFg + ';border:1px solid ' + badgeBorder + ';font-weight:700;">' +
             escapeHtml(statusText) +
             '</span>' +
             '</button>'
@@ -615,7 +653,11 @@
         subtaskChipsRow.querySelectorAll('[data-subtask-id]').forEach(function (chip) {
           chip.addEventListener('click', function () {
             ui.selectedAssignmentId = chip.getAttribute('data-subtask-id');
+            ui.selectedAttemptSubId = null;
+            ui.resubmitExpandedAsgId = null;
             ui.pendingMedia = null;
+            const noteAreaEl = document.getElementById('student-note-textarea');
+            if (noteAreaEl) noteAreaEl.value = '';
             renderPendingMediaPreview();
             renderHomeworkSection();
           });
@@ -639,12 +681,15 @@
       selectEl.innerHTML = filteredAssignments.length > 0
         ? filteredAssignments
             .map(function (asg) {
-              const sub = findSubmission(asg.assignment_id, student.student_id);
+              const attempts = getSubmissionAttempts(asg.assignment_id, student.student_id);
+              const sub = attempts.length ? attempts[attempts.length - 1] : null;
+              const attNum = sub ? Math.max(attempts.length, Number(sub.attempt_number || 1) || 1) : 0;
+              const attPrefix = attNum > 1 ? ('Lần ' + attNum + ' • ') : '';
               let statusLabel = 'Chưa nộp';
               if (sub && sub.status === 'graded') {
-                statusLabel = 'Đã chấm: ' + sub.score + (asg.require_media === 'practice' ? 'đ' : '/10');
+                statusLabel = attPrefix + 'Đã chấm: ' + sub.score + (asg.require_media === 'practice' ? 'đ' : '/10');
               } else if (sub) {
-                statusLabel = 'Đã nộp • Chờ phản hồi GV';
+                statusLabel = attPrefix + 'Đã nộp • Chờ phản hồi GV';
               }
               const selected = asg.assignment_id === ui.selectedAssignmentId ? ' selected' : '';
               return (
@@ -668,9 +713,17 @@
 
     const briefTitle = document.getElementById('student-brief-title');
     const briefDesc = document.getElementById('student-brief-desc');
+    const resubmitSlot = document.getElementById('student-bvn-resubmit-slot');
     const recorderZone = document.getElementById('student-recorder-zone');
+    const noteArea = document.getElementById('student-note-textarea');
+    const noteFormGroup = noteArea ? noteArea.closest('.form-group') : null;
     const submitBtn = document.querySelector('#student-submit-hw-form button[type="submit"]');
     let practiceCallout = document.getElementById('practice-asg-callout');
+
+    const currentAttempts = currentAsg ? getSubmissionAttempts(currentAsg.assignment_id, student.student_id) : [];
+    const currentLatestSub = currentAttempts.length ? currentAttempts[currentAttempts.length - 1] : null;
+    const currentLatestAtt = currentLatestSub ? Math.max(currentAttempts.length, Number(currentLatestSub.attempt_number || 1) || 1) : 0;
+    const nextAttemptNum = currentLatestSub ? currentLatestAtt + 1 : 1;
 
     if (currentAsg) {
       if (briefTitle) {
@@ -681,7 +734,9 @@
       }
 
       if (currentAsg.require_media === 'practice') {
+        if (resubmitSlot) resubmitSlot.innerHTML = '';
         if (recorderZone) recorderZone.style.display = 'none';
+        if (noteFormGroup) noteFormGroup.style.display = 'none';
         if (submitBtn) submitBtn.style.display = 'none';
         if (!practiceCallout && recorderZone && recorderZone.parentNode) {
           practiceCallout = document.createElement('div');
@@ -713,9 +768,87 @@
           }
         }
       } else {
-        if (recorderZone) recorderZone.style.display = 'block';
-        if (submitBtn) submitBtn.style.display = 'block';
         if (practiceCallout) practiceCallout.style.display = 'none';
+        const isResubmitReady = Boolean(
+          ui.pendingMedia ||
+          (currentLatestSub && ui.resubmitExpandedAsgId === currentAsg.assignment_id)
+        );
+
+        if (currentLatestSub && !isResubmitReady) {
+          if (recorderZone) recorderZone.style.display = 'none';
+          if (noteFormGroup) noteFormGroup.style.display = 'none';
+          if (submitBtn) submitBtn.style.display = 'none';
+          if (resubmitSlot) {
+            resubmitSlot.innerHTML =
+              '<div class="bvn-resubmit-banner">' +
+                '<div>' +
+                  '<div class="bvn-resubmit-banner-title">Em đã nộp BVN (Lần ' + currentLatestAtt + ')</div>' +
+                  '<p class="bvn-resubmit-banner-desc">Bài làm và nhận xét từng lần đều được lưu riêng bên phải. Nếu cần sửa bài, bấm nộp thêm Lần ' + nextAttemptNum + '.</p>' +
+                '</div>' +
+                '<button type="button" class="btn btn-primary btn-sm" id="btn-student-resubmit-hw">' +
+                  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>' +
+                  '<span>Nộp lại BVN (Lần ' + nextAttemptNum + ')</span>' +
+                '</button>' +
+              '</div>';
+          }
+        } else {
+          if (recorderZone) recorderZone.style.display = 'block';
+          if (noteFormGroup) noteFormGroup.style.display = 'block';
+          if (submitBtn) {
+            submitBtn.style.display = 'block';
+            const spanTxt = submitBtn.querySelector('span');
+            if (spanTxt) {
+              spanTxt.textContent = currentLatestSub
+                ? ('Gửi BVN Lần ' + nextAttemptNum)
+                : 'Nộp BVN Ngay';
+            }
+          }
+          if (resubmitSlot) {
+            if (currentLatestSub) {
+              resubmitSlot.innerHTML =
+                '<div class="bvn-resubmit-banner is-preparing">' +
+                  '<div>' +
+                    '<div class="bvn-resubmit-banner-title">Đang chuẩn bị bài nộp Lần ' + nextAttemptNum + '</div>' +
+                    '<p class="bvn-resubmit-banner-desc">Thu âm hoặc chọn file Audio/Video mới bên dưới. Bài Lần ' + currentLatestAtt + ' vẫn được giữ nguyên vẹn.</p>' +
+                  '</div>' +
+                  '<button type="button" class="btn btn-outline btn-sm" id="btn-cancel-student-resubmit">Hủy nộp lại</button>' +
+                '</div>';
+            } else {
+              resubmitSlot.innerHTML = '';
+            }
+          }
+        }
+
+        if (resubmitSlot) {
+          const btnStartResubmit = resubmitSlot.querySelector('#btn-student-resubmit-hw');
+          if (btnStartResubmit) {
+            btnStartResubmit.addEventListener('click', function () {
+              ui.resubmitExpandedAsgId = currentAsg.assignment_id;
+              ui.pendingMedia = null;
+              if (noteArea) noteArea.value = '';
+              const statusText = document.getElementById('student-rec-status-text');
+              if (statusText) {
+                statusText.textContent = 'Sẵn sàng thu âm hoặc tải file mới cho Lần ' + nextAttemptNum;
+              }
+              const fileInputEl = document.getElementById('student-file-upload');
+              if (fileInputEl) fileInputEl.value = '';
+              renderPendingMediaPreview();
+              renderHomeworkSection();
+            });
+          }
+          const btnCancelResubmit = resubmitSlot.querySelector('#btn-cancel-student-resubmit');
+          if (btnCancelResubmit) {
+            btnCancelResubmit.addEventListener('click', function () {
+              ui.resubmitExpandedAsgId = null;
+              ui.pendingMedia = null;
+              if (noteArea) noteArea.value = '';
+              const fileInputEl = document.getElementById('student-file-upload');
+              if (fileInputEl) fileInputEl.value = '';
+              renderPendingMediaPreview();
+              renderHomeworkSection();
+            });
+          }
+        }
       }
     } else {
       if (briefTitle) {
@@ -724,22 +857,22 @@
       if (briefDesc) {
         briefDesc.textContent = 'Khi giáo viên giao bài tập về nhà (BVN) mới cho lớp, hướng dẫn chi tiết và khung nộp bài sẽ hiển thị tại đây.';
       }
+      if (resubmitSlot) resubmitSlot.innerHTML = '';
       if (recorderZone) recorderZone.style.display = 'none';
+      if (noteFormGroup) noteFormGroup.style.display = 'none';
       if (submitBtn) submitBtn.style.display = 'none';
       if (practiceCallout) practiceCallout.style.display = 'none';
     }
 
-    const currentSub = currentAsg ? findSubmission(currentAsg.assignment_id, student.student_id) : null;
-    const noteArea = document.getElementById('student-note-textarea');
-    if (noteArea && document.activeElement !== noteArea) {
-      noteArea.value = currentSub && currentSub.student_note ? currentSub.student_note : '';
-    }
+    const activeAttemptSub = currentAsg
+      ? findSubmissionById(currentAsg.assignment_id, student.student_id, ui.selectedAttemptSubId)
+      : null;
 
-    renderFeedbackDetailPanel(currentAsg, currentSub);
+    renderFeedbackDetailPanel(currentAsg, activeAttemptSub, currentAttempts);
     renderPersonalHomeworkMatrix(student);
   }
 
-  function renderFeedbackDetailPanel(assignment, submission) {
+  function renderFeedbackDetailPanel(assignment, submission, attemptsList) {
     const statusBadge = document.getElementById('student-feedback-status-badge');
     const bodyEl = document.getElementById('student-feedback-panel-body');
     if (!bodyEl) return;
@@ -756,7 +889,16 @@
       return;
     }
 
+    const student = getActiveStudent();
+    const attempts = Array.isArray(attemptsList)
+      ? attemptsList
+      : getSubmissionAttempts(assignment.assignment_id, student.student_id);
+    if (attempts.length > 0 && (!submission || !attempts.some(function (a) { return a.submission_id === submission.submission_id; }))) {
+      submission = findSubmissionById(assignment.assignment_id, student.student_id, ui.selectedAttemptSubId);
+    }
+
     if (!submission) {
+      ui.selectedAttemptSubId = null;
       if (statusBadge) {
         statusBadge.className = 'status-badge status-missing';
         statusBadge.textContent = 'Chưa nộp BVN';
@@ -771,22 +913,56 @@
       return;
     }
 
+    ui.selectedAttemptSubId = submission.submission_id;
+    const latestSub = attempts.length ? attempts[attempts.length - 1] : submission;
+    const activeIdx = attempts.findIndex(function (a) { return a.submission_id === submission.submission_id; });
+    const activeAttemptNum = Math.max(1, Number(submission.attempt_number || (activeIdx >= 0 ? activeIdx + 1 : 1)) || 1);
+    const isLatestAttempt = submission.submission_id === latestSub.submission_id;
+    const attemptPrefix = attempts.length > 1 ? ('Lần ' + activeAttemptNum + ' • ') : '';
+
     if (statusBadge) {
       if (submission.status === 'graded') {
         statusBadge.className = 'status-badge status-graded';
         statusBadge.textContent = (submission.score !== '' && submission.score !== undefined && submission.score !== null)
-          ? ('Đã chấm • ' + submission.score + '/10 điểm')
-          : 'Đã chấm • Có phản hồi GV';
+          ? (attemptPrefix + 'Đã chấm • ' + submission.score + '/10 điểm')
+          : (attemptPrefix + 'Đã chấm • Có phản hồi GV');
       } else {
         statusBadge.className = 'status-badge status-submitted';
-        statusBadge.textContent = 'Đã nộp BVN • Chờ giáo viên phản hồi';
+        statusBadge.textContent = attemptPrefix + 'Đã nộp BVN • Chờ giáo viên phản hồi';
       }
+    }
+
+    let attemptTabsHtml = '';
+    if (attempts.length > 1) {
+      const descAttempts = attempts.slice().reverse();
+      attemptTabsHtml =
+        '<div class="attempt-tabs-row" role="tablist" aria-label="Các lần đã nộp BVN">' +
+        '<span class="attempt-tabs-label">Lịch sử nộp bài:</span>' +
+        descAttempts.map(function (att) {
+          const idx = attempts.indexOf(att);
+          const attNo = Math.max(1, Number(att.attempt_number || (idx + 1)) || (idx + 1));
+          const isLatest = att.submission_id === latestSub.submission_id;
+          const isActive = att.submission_id === submission.submission_id;
+          const metaText = att.status === 'graded'
+            ? (att.score !== '' && att.score !== undefined && att.score !== null ? (att.score + 'đ') : 'Đã chữa')
+            : 'Chờ chữa';
+          const metaCls = att.status === 'graded' ? 'is-graded' : 'is-pending';
+          return (
+            '<button type="button" role="tab" aria-selected="' + (isActive ? 'true' : 'false') + '" ' +
+            'class="attempt-tab-pill' + (isActive ? ' is-active' : '') + '" ' +
+            'data-student-attempt-id="' + escapeHtml(att.submission_id) + '">' +
+            '<span>Lần ' + attNo + (isLatest ? ' (Mới nhất)' : '') + '</span>' +
+            '<span class="attempt-tab-meta ' + metaCls + '">' + escapeHtml(metaText) + '</span>' +
+            '</button>'
+          );
+        }).join('') +
+        '</div>';
     }
 
     const mediaLabel =
       submission.media_type === 'video'
-        ? 'Video BVN em đã nộp'
-        : 'Ghi âm BVN em đã nộp';
+        ? ('Video BVN Lần ' + activeAttemptNum + ' em đã nộp')
+        : ('Ghi âm BVN Lần ' + activeAttemptNum + ' em đã nộp');
 
     const hasRealTeacherVoice = isRealTeacherVoiceUrl(submission.teacher_voice_url);
     let teacherReviewHtml = '';
@@ -814,9 +990,11 @@
 
       teacherReviewHtml =
         '<div class="voice-feedback-box">' +
-        '<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px;">' +
-        '<strong style="font-size: 0.9375rem; color: var(--color-foreground);">Phản hồi chi tiết từ Giáo viên</strong>' +
-        (submission.score !== '' && submission.score !== null
+        '<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;">' +
+        '<strong style="font-size: 0.9375rem; color: var(--color-foreground);">Phản hồi chi tiết từ Giáo viên' +
+        (attempts.length > 1 ? ' (Lần ' + activeAttemptNum + ')' : '') +
+        '</strong>' +
+        (submission.score !== '' && submission.score !== null && submission.score !== undefined
           ? '<span class="status-badge status-graded">Điểm: ' + escapeHtml(submission.score) + '/10</span>'
           : '') +
         '</div>' +
@@ -828,11 +1006,15 @@
     } else {
       teacherReviewHtml =
         '<div class="voice-feedback-box">' +
-        '<div style="font-weight: 700; font-size: 0.9375rem; color: var(--color-foreground); margin-bottom: 4px;">Đang chờ Giáo viên chấm &amp; phản hồi</div>' +
+        '<div style="font-weight: 700; font-size: 0.9375rem; color: var(--color-foreground); margin-bottom: 4px;">Đang chờ Giáo viên chấm &amp; phản hồi' +
+        (attempts.length > 1 ? ' (Lần ' + activeAttemptNum + ')' : '') +
+        '</div>' +
         '<p style="font-size: 0.875rem; color: var(--color-muted-foreground); margin: 0;">' +
-        'BVN của em đã được hệ thống lưu lúc ' +
+        'BVN Lần ' + activeAttemptNum + ' đã được lưu lúc ' +
         escapeHtml(submission.submitted_at) +
-        '. Em vẫn có thể thu âm lại hoặc bổ sung ghi chú nếu muốn cập nhật bài nộp.' +
+        (attempts.length > 1
+          ? '. Em có thể bấm sang các tab Lần trước ở trên để xem lại bài và nhận xét cũ.'
+          : '. Nếu cần sửa nhiều lỗi, em có thể bấm "Nộp lại BVN" ở cột bên trái để gửi thêm Lần 2.') +
         '</p>' +
         '</div>';
     }
@@ -857,11 +1039,14 @@
           variant: 'student'
         });
 
+    const boxTitle = attempts.length > 1
+      ? ('Bài nộp Lần ' + activeAttemptNum + (isLatestAttempt ? ' (Mới nhất)' : '') + ' • ' + (submission.submitted_at || 'Vừa nộp'))
+      : ('BVN đã nộp của em • ' + (submission.submitted_at || 'Vừa nộp'));
+
     bodyEl.innerHTML =
+      attemptTabsHtml +
       '<div class="assignment-brief-box">' +
-      '<div class="assignment-brief-title">BVN đã nộp của em • ' +
-      escapeHtml(submission.submitted_at || 'Vừa nộp') +
-      '</div>' +
+      '<div class="assignment-brief-title">' + escapeHtml(boxTitle) + '</div>' +
       '<p class="assignment-brief-desc">Ghi chú của em: "' +
       escapeHtml(submission.student_note || 'Em gửi bài tập về nhà (BVN) ạ.') +
       '"</p>' +
@@ -870,6 +1055,17 @@
       '</div>' +
       '</div>' +
       teacherReviewHtml;
+
+    bodyEl.querySelectorAll('[data-student-attempt-id]').forEach(function (tabBtn) {
+      tabBtn.addEventListener('click', function () {
+        const pickedId = tabBtn.getAttribute('data-student-attempt-id');
+        if (!pickedId) return;
+        ui.selectedAttemptSubId = pickedId;
+        const chosenSub = findSubmissionById(assignment.assignment_id, student.student_id, pickedId);
+        renderFeedbackDetailPanel(assignment, chosenSub, attempts);
+      });
+    });
+
     if (isVideo && typeof window.StudySnapAudio.hydrateVideoPlayers === 'function') {
       window.StudySnapAudio.hydrateVideoPlayers(bodyEl);
     }
@@ -923,7 +1119,17 @@
     let completed = 0;
     tbody.innerHTML = sortedAssignments
       .map(function (asg) {
-        const sub = findSubmission(asg.assignment_id, student.student_id);
+        const attempts = getSubmissionAttempts(asg.assignment_id, student.student_id);
+        const sub = attempts.length ? attempts[attempts.length - 1] : null;
+        const attNum = sub ? Math.max(attempts.length, Number(sub.attempt_number || 1) || 1) : 0;
+        const prevGraded = attempts.length > 1
+          ? attempts.slice(0, -1).reverse().find(function (a) {
+              return a.status === 'graded' || (a.score !== '' && a.score !== undefined && a.score !== null);
+            })
+          : null;
+        const attBadgeHtml = attNum > 1
+          ? '<span class="attempt-count-pill">Lần ' + attNum + '</span> '
+          : '';
         let statusHtml = '<span class="status-badge status-missing">Chưa nộp BVN</span>';
         let scoreHtml = '<span class="mono-text tabular-nums" style="color: var(--color-muted-foreground);">—</span>';
         let feedbackHtml =
@@ -936,7 +1142,7 @@
           completed++;
           if (sub.status === 'graded') {
             const hasRealVoice = isRealTeacherVoiceUrl(sub.teacher_voice_url);
-            statusHtml = '<span class="status-badge status-graded">Đã chữa &amp; Có phản hồi GV</span>';
+            statusHtml = attBadgeHtml + '<span class="status-badge status-graded">Đã chữa &amp; Có phản hồi GV</span>';
             scoreHtml = (sub.score !== '' && sub.score !== undefined && sub.score !== null)
               ? ('<strong class="mono-text tabular-nums">' + escapeHtml(sub.score) + (asg.require_media === 'practice' ? 'đ' : ' / 10') + '</strong>')
               : '<span class="mono-text tabular-nums" style="color: var(--color-muted-foreground);">—</span>';
@@ -959,15 +1165,24 @@
                   })
                 : '') +
               '</div>';
-            btnText = 'Xem phản hồi';
+            btnText = asg.require_media === 'practice' ? 'Xem phản hồi' : 'Xem / Nộp lại';
           } else {
-            statusHtml = '<span class="status-badge status-submitted">Đã nộp BVN • Chờ phản hồi</span>';
+            const prevIdx = prevGraded ? attempts.indexOf(prevGraded) : -1;
+            const prevNo = prevGraded ? Math.max(1, Number(prevGraded.attempt_number || (prevIdx + 1)) || (prevIdx + 1)) : 0;
+            const prevHintHtml = prevGraded
+              ? '<p class="attempt-prev-hint">Trước đó Lần ' + prevNo + ': ' +
+                (prevGraded.score !== '' && prevGraded.score !== undefined && prevGraded.score !== null
+                  ? (escapeHtml(prevGraded.score) + '/10đ')
+                  : 'Đã chữa') +
+                '</p>'
+              : '';
+            statusHtml = attBadgeHtml + '<span class="status-badge status-submitted">Đã nộp BVN • Chờ phản hồi</span>';
             scoreHtml = '<span class="mono-text tabular-nums">Chờ chấm</span>';
             feedbackHtml =
-              '<p class="matrix-teacher-note">Đã nộp lúc ' +
+              '<p class="matrix-teacher-note">Đã nộp Lần ' + attNum + ' lúc ' +
               escapeHtml(sub.submitted_at) +
-              '. Đang chờ giáo viên chấm và ghi âm phản hồi.</p>';
-            btnText = 'Cập nhật BVN';
+              '. Đang chờ giáo viên chấm và ghi âm phản hồi.</p>' + prevHintHtml;
+            btnText = 'Xem / Nộp lại';
           }
         }
 
@@ -1021,6 +1236,12 @@
           ui.selectedHomeworkSession = targetAsg.session_tag;
         }
         ui.selectedAssignmentId = asgId;
+        ui.selectedAttemptSubId = null;
+        ui.resubmitExpandedAsgId = null;
+        ui.pendingMedia = null;
+        const noteAreaEl = document.getElementById('student-note-textarea');
+        if (noteAreaEl) noteAreaEl.value = '';
+        renderPendingMediaPreview();
         renderHomeworkSection();
         window.scrollTo({ top: 0, behavior: 'smooth' });
       });
@@ -1075,7 +1296,11 @@
     if (selectEl) {
       selectEl.addEventListener('change', function () {
         ui.selectedAssignmentId = selectEl.value;
+        ui.selectedAttemptSubId = null;
+        ui.resubmitExpandedAsgId = null;
         ui.pendingMedia = null;
+        const noteAreaEl = document.getElementById('student-note-textarea');
+        if (noteAreaEl) noteAreaEl.value = '';
         const statusText = document.getElementById('student-rec-status-text');
         if (statusText) statusText.textContent = 'Sẵn sàng thu âm hoặc chọn file';
         renderPendingMediaPreview();
@@ -1171,9 +1396,26 @@
         const student = getActiveStudent();
         const noteArea = document.getElementById('student-note-textarea');
         const noteText = noteArea ? noteArea.value.trim() : '';
-        const existingSub = findSubmission(ui.selectedAssignmentId, student.student_id);
+        const attempts = getSubmissionAttempts(ui.selectedAssignmentId, student.student_id);
+        const existingSub = attempts.length ? attempts[attempts.length - 1] : null;
+        const nextAttemptNum = existingSub
+          ? Math.max(attempts.length + 1, Math.max(1, Number(existingSub.attempt_number || 1) || 1) + 1)
+          : 1;
         const submitBtn = formEl.querySelector('button[type="submit"]');
         const loading = window.StudySnapLoading;
+
+        if (existingSub && (!ui.pendingMedia || !ui.pendingMedia.media_url)) {
+          ui.resubmitExpandedAsgId = ui.selectedAssignmentId;
+          renderHomeworkSection();
+          showToast(
+            'Em đã nộp Lần ' +
+            Math.max(1, Number(existingSub.attempt_number || attempts.length) || 1) +
+            ' rồi. Hãy thu âm hoặc chọn file Audio/Video mới để nộp Lần ' +
+            nextAttemptNum +
+            ' nhé!'
+          );
+          return;
+        }
 
         const now = new Date();
         const timestamp =
@@ -1186,9 +1428,9 @@
           String(now.getMinutes()).padStart(2, '0');
 
         const mediaData = ui.pendingMedia || {
-          media_type: existingSub ? existingSub.media_type : 'audio',
-          media_url: existingSub ? existingSub.media_url : 'demo:student-' + student.student_id + '-' + Date.now(),
-          media_duration: existingSub ? existingSub.media_duration : '01:15'
+          media_type: 'audio',
+          media_url: 'demo:student-' + student.student_id + '-' + Date.now(),
+          media_duration: '01:15'
         };
 
         const hasBinaryMedia = Boolean(
@@ -1204,20 +1446,21 @@
         }
 
         const submissionRecord = {
-          submission_id: existingSub ? existingSub.submission_id : 'SUB_' + Date.now(),
+          submission_id: 'SUB_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6).toUpperCase(),
           assignment_id: ui.selectedAssignmentId,
           student_id: student.student_id,
+          attempt_number: nextAttemptNum,
           submitted_at: timestamp,
           student_note: noteText || (mediaData.media_type === 'video' ? 'Em nộp video BVN ạ.' : 'Em nộp bản thu âm BVN ạ.'),
           media_type: mediaData.media_type,
           media_url: mediaData.media_url,
           media_duration: mediaData.media_duration,
-          status: existingSub && existingSub.status === 'graded' ? 'graded' : 'submitted',
-          score: existingSub ? existingSub.score : '',
-          teacher_comment: existingSub ? existingSub.teacher_comment : '',
-          teacher_voice_url: existingSub ? existingSub.teacher_voice_url : '',
-          teacher_voice_duration: existingSub ? existingSub.teacher_voice_duration : '',
-          graded_at: existingSub ? existingSub.graded_at : ''
+          status: 'submitted',
+          score: '',
+          teacher_comment: '',
+          teacher_voice_url: '',
+          teacher_voice_duration: '',
+          graded_at: ''
         };
 
         const runSubmit = async function () {
@@ -1253,16 +1496,22 @@
             if (remoteRes.submission.submission_id) {
               submissionRecord.submission_id = remoteRes.submission.submission_id;
             }
+            if (remoteRes.submission.attempt_number) {
+              submissionRecord.attempt_number = Math.max(1, Number(remoteRes.submission.attempt_number) || nextAttemptNum);
+            }
             if (remoteRes.submission.media_url) {
               submissionRecord.media_url = remoteRes.submission.media_url;
             }
             if (remoteRes.submission.status) {
               submissionRecord.status = remoteRes.submission.status;
             }
+            if (remoteRes.submission.submitted_at) {
+              submissionRecord.submitted_at = remoteRes.submission.submitted_at;
+            }
           }
 
-          const existingIndex = state.submissions.findIndex(function (s) {
-            return s.assignment_id === ui.selectedAssignmentId && s.student_id === student.student_id;
+          const existingIndex = (state.submissions || []).findIndex(function (s) {
+            return s.submission_id === submissionRecord.submission_id;
           });
 
           if (existingIndex >= 0) {
@@ -1273,17 +1522,21 @@
 
           window.StudySnapStore.saveState(state);
           ui.pendingMedia = null;
+          ui.resubmitExpandedAsgId = null;
+          ui.selectedAttemptSubId = submissionRecord.submission_id;
+          if (noteArea) noteArea.value = '';
+          if (fileInput) fileInput.value = '';
           renderPendingMediaPreview();
           if (recStatusText) {
-            recStatusText.textContent = 'Đã nộp BVN thành công lúc ' + timestamp;
+            recStatusText.textContent = 'Đã nộp BVN Lần ' + submissionRecord.attempt_number + ' lúc ' + (submissionRecord.submitted_at || timestamp);
           }
 
           renderStudentHeaderAndStats();
           renderHomeworkSection();
           showToast(
             remoteRes === null && window.StudySnapStore.getGasUrl()
-              ? 'Đã lưu BVN trên thiết bị (mất kết nối máy chủ).'
-              : 'Đã nộp BVN thành công cho tài khoản ' + student.full_name + '!'
+              ? 'Đã lưu BVN Lần ' + submissionRecord.attempt_number + ' trên thiết bị (mất kết nối máy chủ).'
+              : 'Đã nộp BVN Lần ' + submissionRecord.attempt_number + ' thành công!'
           );
         };
 

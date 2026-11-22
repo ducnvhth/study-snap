@@ -876,15 +876,18 @@ const SUBMISSIONS_HEADERS = [
   'teacher_voice_url',
   'teacher_voice_duration',
   'graded_at',
-  'practice_count'
+  'practice_count',
+  'attempt_number'
 ];
 
 function ensureSheetHeaders_(sheet, requiredHeaders) {
   if (!sheet || !Array.isArray(requiredHeaders) || requiredHeaders.length === 0) return [];
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, requiredHeaders.length).setValues([requiredHeaders]);
-    sheet.getRange(1, 1, 1, requiredHeaders.length).setFontWeight('bold').setBackground('#CCFBF1');
-    sheet.setFrozenRows(1);
+    try {
+      sheet.getRange(1, 1, 1, requiredHeaders.length).setFontWeight('bold').setBackground('#CCFBF1');
+    } catch (e) {}
+    if (typeof sheet.setFrozenRows === 'function') sheet.setFrozenRows(1);
     return requiredHeaders.slice();
   }
   const lastCol = Math.max(sheet.getLastColumn(), 1);
@@ -894,12 +897,14 @@ function ensureSheetHeaders_(sheet, requiredHeaders) {
   const missing = requiredHeaders.filter(function (h) {
     return currentHeaders.indexOf(h) === -1;
   });
+  const finalHeaders = currentHeaders.concat(missing);
   if (missing.length > 0) {
-    const startCol = currentHeaders.length + 1;
-    sheet.getRange(1, startCol, 1, missing.length).setValues([missing]);
-    sheet.getRange(1, startCol, 1, missing.length).setFontWeight('bold').setBackground('#CCFBF1');
+    sheet.getRange(1, 1, 1, finalHeaders.length).setValues([finalHeaders]);
+    try {
+      sheet.getRange(1, 1, 1, finalHeaders.length).setFontWeight('bold').setBackground('#CCFBF1');
+    } catch (e) {}
   }
-  return currentHeaders.concat(missing);
+  return finalHeaders;
 }
 
 function ensureSheetsExist_(ss) {
@@ -1331,114 +1336,174 @@ function handleSubmitHomework_(ss, payload) {
 
   ensureSheetHeaders_(sheet, SUBMISSIONS_HEADERS);
   const values = sheet.getDataRange().getValues();
-  let foundRowIndex = -1;
-  for (let i = 1; i < values.length; i++) {
-    if (String(values[i][1]) === String(assignmentId) && String(values[i][2]) === String(studentId)) {
-      foundRowIndex = i + 1;
-      break;
+  const incomingType = String(payload.media_type || 'audio').trim() || 'audio';
+  const isVocabTrack = incomingType === 'vocab' || incomingType === 'vocab_log';
+
+  if (isVocabTrack) {
+    let foundRowIndex = -1;
+    for (let i = 1; i < values.length; i++) {
+      if (String(values[i][1]) === String(assignmentId) && String(values[i][2]) === String(studentId)) {
+        foundRowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (foundRowIndex > 0) {
+      const existing = values[foundRowIndex - 1];
+      const nextStatus = String(payload.status || 'graded');
+      const hasIncomingScore =
+        payload.score !== undefined && payload.score !== null && String(payload.score) !== '';
+      const nextScore = hasIncomingScore ? String(payload.score) : existing[9];
+      const nextNote =
+        payload.student_note !== undefined && payload.student_note !== null
+          ? String(payload.student_note)
+          : existing[4];
+      const rawPriorCount = Number(existing[14] || 0) || 0;
+      const effectivePrior = rawPriorCount === 0 && (existing[3] || existing[8] === 'graded')
+        ? 1
+        : rawPriorCount;
+      const incrementPractice = payload.increment_practice !== false && payload.increment_practice !== 0;
+      const explicitPracticeCount =
+        payload.practice_count !== undefined && payload.practice_count !== null && payload.practice_count !== ''
+          ? Math.max(0, Number(payload.practice_count) || 0)
+          : null;
+      const nextPracticeCount = incrementPractice
+        ? Math.max(effectivePrior + 1, explicitPracticeCount || 0)
+        : (explicitPracticeCount !== null ? explicitPracticeCount : effectivePrior);
+      const keepAttempt = Math.max(1, Number(existing[15] || 1) || 1);
+      const updatedRow = [
+        existing[0],
+        assignmentId,
+        studentId,
+        nowStr,
+        nextNote,
+        incomingType,
+        mediaUrl || existing[6],
+        payload.media_duration || existing[7] || '01:00',
+        nextStatus,
+        nextScore,
+        existing[10],
+        existing[11],
+        existing[12],
+        existing[13],
+        nextPracticeCount,
+        keepAttempt
+      ];
+      sheet.getRange(foundRowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
+      return {
+        submission_id: existing[0],
+        assignment_id: assignmentId,
+        student_id: studentId,
+        attempt_number: keepAttempt,
+        media_type: incomingType,
+        media_url: updatedRow[6],
+        status: updatedRow[8],
+        score: updatedRow[9],
+        student_note: updatedRow[4],
+        media_duration: updatedRow[7],
+        submitted_at: nowStr,
+        practice_count: nextPracticeCount
+      };
+    } else {
+      const newId = 'SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase();
+      const nextStatus = String(payload.status || 'graded');
+      const nextScore =
+        payload.score !== undefined && payload.score !== null ? String(payload.score) : '';
+      const nextNote = String(payload.student_note || '');
+      const nextDur = String(payload.media_duration || '01:00');
+      const incrementPractice = payload.increment_practice !== false && payload.increment_practice !== 0;
+      const nextPracticeCount = Math.max(incrementPractice ? 1 : 0, Number(payload.practice_count || 0) || 0);
+      const newRow = [
+        newId,
+        assignmentId,
+        studentId,
+        nowStr,
+        nextNote,
+        incomingType,
+        mediaUrl,
+        nextDur,
+        nextStatus,
+        nextScore,
+        '',
+        '',
+        '',
+        '',
+        nextPracticeCount,
+        1
+      ];
+      sheet.appendRow(newRow);
+      return {
+        submission_id: newId,
+        assignment_id: assignmentId,
+        student_id: studentId,
+        attempt_number: 1,
+        media_type: incomingType,
+        media_url: mediaUrl,
+        status: nextStatus,
+        score: nextScore,
+        student_note: nextNote,
+        media_duration: nextDur,
+        submitted_at: nowStr,
+        practice_count: nextPracticeCount
+      };
     }
   }
 
-  if (foundRowIndex > 0) {
-    const existing = values[foundRowIndex - 1];
-    const nextType = payload.media_type || existing[5] || 'audio';
-    const isVocabTrack = nextType === 'vocab' || nextType === 'vocab_log';
-    const nextStatus = isVocabTrack
-      ? String(payload.status || 'graded')
-      : (existing[8] === 'graded' ? 'graded' : 'submitted');
-    const hasIncomingScore =
-      payload.score !== undefined && payload.score !== null && (!isVocabTrack || String(payload.score) !== '');
-    const nextScore = hasIncomingScore ? String(payload.score) : existing[9];
-    const nextNote =
-      payload.student_note !== undefined && payload.student_note !== null
-        ? String(payload.student_note)
-        : existing[4];
-    const rawPriorCount = Number(existing[14] || 0) || 0;
-    const effectivePrior = isVocabTrack && rawPriorCount === 0 && (existing[3] || existing[8] === 'graded')
-      ? 1
-      : rawPriorCount;
-    const incrementPractice = isVocabTrack
-      ? (payload.increment_practice !== false && payload.increment_practice !== 0)
-      : false;
-    const explicitPracticeCount =
-      payload.practice_count !== undefined && payload.practice_count !== null && payload.practice_count !== ''
-        ? Math.max(0, Number(payload.practice_count) || 0)
-        : null;
-    const nextPracticeCount = incrementPractice
-      ? Math.max(effectivePrior + 1, explicitPracticeCount || 0)
-      : (explicitPracticeCount !== null ? explicitPracticeCount : effectivePrior);
-    const updatedRow = [
-      existing[0],
-      assignmentId,
-      studentId,
-      nowStr,
-      nextNote,
-      nextType,
-      mediaUrl || existing[6],
-      payload.media_duration || existing[7] || '01:00',
-      nextStatus,
-      nextScore,
-      existing[10],
-      existing[11],
-      existing[12],
-      existing[13],
-      nextPracticeCount
-    ];
-    sheet.getRange(foundRowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
-    return {
-      submission_id: existing[0],
-      media_url: updatedRow[6],
-      status: updatedRow[8],
-      score: updatedRow[9],
-      student_note: updatedRow[4],
-      media_duration: updatedRow[7],
-      submitted_at: nowStr,
-      practice_count: nextPracticeCount
-    };
-  } else {
-    const newId = 'SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase();
-    const nextType = String(payload.media_type || 'audio');
-    const isVocabTrack = nextType === 'vocab' || nextType === 'vocab_log';
-    const nextStatus = isVocabTrack ? String(payload.status || 'graded') : 'submitted';
-    const nextScore =
-      payload.score !== undefined && payload.score !== null ? String(payload.score) : '';
-    const nextNote = String(payload.student_note || '');
-    const nextDur = String(payload.media_duration || '01:00');
-    const incrementPractice = isVocabTrack
-      ? (payload.increment_practice !== false && payload.increment_practice !== 0)
-      : false;
-    const nextPracticeCount = isVocabTrack
-      ? Math.max(incrementPractice ? 1 : 0, Number(payload.practice_count || 0) || 0)
-      : 0;
-    const newRow = [
-      newId,
-      assignmentId,
-      studentId,
-      nowStr,
-      nextNote,
-      nextType,
-      mediaUrl,
-      nextDur,
-      nextStatus,
-      nextScore,
-      '',
-      '',
-      '',
-      '',
-      nextPracticeCount
-    ];
-    sheet.appendRow(newRow);
-    return {
-      submission_id: newId,
-      media_url: mediaUrl,
-      status: nextStatus,
-      score: nextScore,
-      student_note: nextNote,
-      media_duration: nextDur,
-      submitted_at: nowStr,
-      practice_count: nextPracticeCount
-    };
+  // Bài tập về nhà (audio/video): nộp lại tạo dòng mới (Lần 2, Lần 3...), không ghi đè lần cũ
+  let existingCount = 0;
+  let maxAttempt = 0;
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][1]) === String(assignmentId) && String(values[i][2]) === String(studentId)) {
+      const rowType = String(values[i][5] || '').trim();
+      if (rowType === 'vocab' || rowType === 'vocab_log') continue;
+      existingCount++;
+      maxAttempt = Math.max(maxAttempt, Math.max(1, Number(values[i][15] || 1) || 1));
+    }
   }
+  if (existingCount > 0 && !String(mediaUrl || '').trim()) {
+    throw new Error('Vui lòng thu âm hoặc tải lên file Audio/Video mới để nộp lại lần tiếp theo.');
+  }
+
+  const nextAttempt = existingCount > 0 ? Math.max(maxAttempt + 1, existingCount + 1) : 1;
+  const newId = 'SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase();
+  const nextStatus = 'submitted';
+  const nextScore =
+    existingCount === 0 && payload.score !== undefined && payload.score !== null ? String(payload.score) : '';
+  const nextNote = String(payload.student_note || '');
+  const nextDur = String(payload.media_duration || '01:00');
+  const newRow = [
+    newId,
+    assignmentId,
+    studentId,
+    nowStr,
+    nextNote,
+    incomingType,
+    mediaUrl,
+    nextDur,
+    nextStatus,
+    nextScore,
+    '',
+    '',
+    '',
+    '',
+    0,
+    nextAttempt
+  ];
+  sheet.appendRow(newRow);
+  return {
+    submission_id: newId,
+    assignment_id: assignmentId,
+    student_id: studentId,
+    attempt_number: nextAttempt,
+    media_type: incomingType,
+    media_url: mediaUrl,
+    status: nextStatus,
+    score: nextScore,
+    student_note: nextNote,
+    media_duration: nextDur,
+    submitted_at: nowStr,
+    practice_count: 0
+  };
 }
 
 function handleSaveTeacherFeedback_(ss, payload) {
@@ -1459,16 +1524,26 @@ function handleSaveTeacherFeedback_(ss, payload) {
 
   ensureSheetHeaders_(sheet, SUBMISSIONS_HEADERS);
   const values = sheet.getDataRange().getValues();
+  const targetSubId = String(payload.submission_id || '').trim();
   let foundRowIndex = -1;
+  let bestAttempt = -1;
   for (let i = 1; i < values.length; i++) {
     if (String(values[i][1]) === String(assignmentId) && String(values[i][2]) === String(studentId)) {
-      foundRowIndex = i + 1;
-      break;
+      if (targetSubId && String(values[i][0] || '').trim() === targetSubId) {
+        foundRowIndex = i + 1;
+        break;
+      }
+      const att = Math.max(1, Number(values[i][15] || 1) || 1);
+      if (att >= bestAttempt) {
+        bestAttempt = att;
+        foundRowIndex = i + 1;
+      }
     }
   }
 
   if (foundRowIndex > 0) {
     const existing = values[foundRowIndex - 1];
+    const keepAttempt = Math.max(1, Number(existing[15] || 1) || 1);
     const existingVoiceRaw = String(existing[11] || '').trim();
     const existingRealVoice = existingVoiceRaw.indexOf('demo:') === 0 ? '' : existingVoiceRaw;
     const nextVoiceUrl = teacherVoiceUrl || existingRealVoice || '';
@@ -1479,11 +1554,12 @@ function handleSaveTeacherFeedback_(ss, payload) {
     const nextScore = hasIncomingScore ? payload.score : existing[9];
     const hasIncomingComment = payload.teacher_comment !== undefined && (String(payload.teacher_comment) !== '' || !existing[10] || payload.allow_clear_comment === true);
     const nextComment = hasIncomingComment ? payload.teacher_comment : existing[10];
+    const nextSubmittedAt = existing[3] || nowStr;
     const updatedRow = [
       existing[0],
       assignmentId,
       studentId,
-      existing[3] || nowStr,
+      nextSubmittedAt,
       existing[4],
       existing[5],
       existing[6],
@@ -1494,16 +1570,22 @@ function handleSaveTeacherFeedback_(ss, payload) {
       nextVoiceUrl,
       nextVoiceDur,
       nowStr,
-      Number(existing[14] || 0) || 0
+      Number(existing[14] || 0) || 0,
+      keepAttempt
     ];
     sheet.getRange(foundRowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
     return {
       submission_id: existing[0],
+      assignment_id: assignmentId,
+      student_id: studentId,
+      attempt_number: keepAttempt,
+      submitted_at: nextSubmittedAt,
       status: 'graded',
       score: updatedRow[9],
       teacher_comment: updatedRow[10],
       teacher_voice_url: updatedRow[11],
-      teacher_voice_duration: updatedRow[12]
+      teacher_voice_duration: updatedRow[12],
+      graded_at: nowStr
     };
   } else {
     const newId = 'SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase();
@@ -1514,7 +1596,7 @@ function handleSaveTeacherFeedback_(ss, payload) {
       studentId,
       '',
       '',
-      '',
+      'audio',
       '',
       '',
       payload.status || 'graded',
@@ -1523,16 +1605,22 @@ function handleSaveTeacherFeedback_(ss, payload) {
       teacherVoiceUrl,
       newVoiceDur,
       nowStr,
-      0
+      0,
+      1
     ];
     sheet.appendRow(newRow);
     return {
       submission_id: newId,
+      assignment_id: assignmentId,
+      student_id: studentId,
+      attempt_number: 1,
+      submitted_at: '',
       status: newRow[8],
       score: newRow[9],
       teacher_comment: newRow[10],
       teacher_voice_url: teacherVoiceUrl,
-      teacher_voice_duration: newVoiceDur
+      teacher_voice_duration: newVoiceDur,
+      graded_at: nowStr
     };
   }
 }
@@ -1581,10 +1669,23 @@ function handleCopyTeacherFeedback_(ss, payload) {
 
   ensureSheetHeaders_(sheet, SUBMISSIONS_HEADERS);
   const values = sheet.getDataRange().getValues();
+  const sourceSubId = String(payload.source_submission_id || '').trim();
   const rowIndexByStudent = {};
+  const bestAttemptByStudent = {};
   for (let i = 1; i < values.length; i++) {
     if (String(values[i][1] || '').trim() === assignmentId) {
-      rowIndexByStudent[String(values[i][2] || '').trim()] = i + 1;
+      const sId = String(values[i][2] || '').trim();
+      if (!sId) continue;
+      if (sourceSubId && sId === sourceStudentId && String(values[i][0] || '').trim() === sourceSubId) {
+        rowIndexByStudent[sId] = i + 1;
+        bestAttemptByStudent[sId] = 999999;
+        continue;
+      }
+      const att = Math.max(1, Number(values[i][15] || 1) || 1);
+      if (bestAttemptByStudent[sId] === undefined || att >= bestAttemptByStudent[sId]) {
+        bestAttemptByStudent[sId] = att;
+        rowIndexByStudent[sId] = i + 1;
+      }
     }
   }
 
@@ -1593,6 +1694,7 @@ function handleCopyTeacherFeedback_(ss, payload) {
     const rowIdx = rowIndexByStudent[stuId];
     if (rowIdx > 0) {
       const existing = values[rowIdx - 1];
+      const keepAttempt = Math.max(1, Number(existing[15] || 1) || 1);
       const existingVoiceRaw = String(existing[11] || '').trim();
       const existingRealVoice = existingVoiceRaw.indexOf('demo:') === 0 ? '' : existingVoiceRaw;
       const nextScore = copyScore && incomingScore !== '' ? incomingScore : existing[9];
@@ -1623,13 +1725,15 @@ function handleCopyTeacherFeedback_(ss, payload) {
         nextVoiceUrl,
         nextVoiceDur,
         nowStr,
-        Number(existing[14] || 0) || 0
+        Number(existing[14] || 0) || 0,
+        keepAttempt
       ];
       sheet.getRange(rowIdx, 1, 1, updatedRow.length).setValues([updatedRow]);
       updatedSubmissions.push({
         submission_id: existing[0],
         assignment_id: assignmentId,
         student_id: stuId,
+        attempt_number: keepAttempt,
         status: 'graded',
         score: nextScore,
         teacher_comment: nextComment,
@@ -1658,13 +1762,15 @@ function handleCopyTeacherFeedback_(ss, payload) {
         nextVoiceUrl,
         nextVoiceDur,
         nowStr,
-        0
+        0,
+        1
       ];
       sheet.appendRow(newRow);
       updatedSubmissions.push({
         submission_id: newId,
         assignment_id: assignmentId,
         student_id: stuId,
+        attempt_number: 1,
         submitted_at: '',
         student_note: '',
         media_type: 'audio',

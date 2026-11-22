@@ -1744,18 +1744,23 @@ window.StudySnapStore = (function () {
     const action = payload && payload.action ? String(payload.action) : '';
 
     if (action === 'submitHomework' && json.submission) {
-      const targetAsgId = String(payload.assignment_id || '').trim();
-      const targetStuId = String(payload.student_id || '').trim();
+      const targetAsgId = String(payload.assignment_id || json.submission.assignment_id || '').trim();
+      const targetStuId = String(payload.student_id || json.submission.student_id || '').trim();
+      const mediaTypeVal = String(payload.media_type || json.submission.media_type || '').trim();
+      const isVocabTrack = mediaTypeVal === 'vocab' || mediaTypeVal === 'vocab_log';
       if (!Array.isArray(stateObj.submissions)) stateObj.submissions = [];
       const subList = stateObj.submissions;
       const found = subList.find(function (s) {
-        return (
-          (json.submission.submission_id && s.submission_id === json.submission.submission_id) ||
-          (s.assignment_id === targetAsgId && s.student_id === targetStuId)
-        );
+        if (json.submission.submission_id && s.submission_id === json.submission.submission_id) {
+          return true;
+        }
+        return isVocabTrack && s.assignment_id === targetAsgId && s.student_id === targetStuId;
       });
       if (found) {
         if (json.submission.submission_id) found.submission_id = json.submission.submission_id;
+        if (json.submission.attempt_number) {
+          found.attempt_number = Math.max(1, Number(json.submission.attempt_number) || 1);
+        }
         if (json.submission.media_url !== undefined && json.submission.media_url !== '') {
           found.media_url = json.submission.media_url;
         }
@@ -1767,6 +1772,7 @@ window.StudySnapStore = (function () {
         if (json.submission.media_duration) found.media_duration = String(json.submission.media_duration);
         else if (payload.media_duration) found.media_duration = String(payload.media_duration);
         if (payload.media_type) found.media_type = String(payload.media_type);
+        else if (json.submission.media_type) found.media_type = String(json.submission.media_type);
         if (json.submission.submitted_at) found.submitted_at = String(json.submission.submitted_at);
         if (json.submission.practice_count !== undefined && json.submission.practice_count !== null) {
           found.practice_count = Math.max(0, Number(json.submission.practice_count) || 0);
@@ -1778,50 +1784,99 @@ window.StudySnapStore = (function () {
           submission_id: json.submission.submission_id || ('SUB_' + Date.now()),
           assignment_id: targetAsgId,
           student_id: targetStuId,
+          attempt_number: Math.max(1, Number(json.submission.attempt_number || payload.attempt_number || 1) || 1),
           submitted_at: json.submission.submitted_at || new Date().toLocaleString('vi-VN'),
           student_note: String(
             json.submission.student_note !== undefined ? json.submission.student_note : (payload.student_note || '')
           ),
-          media_type: String(payload.media_type || 'audio'),
+          media_type: String(payload.media_type || json.submission.media_type || 'audio'),
           media_url: json.submission.media_url || String(payload.media_url || ''),
           media_duration: String(json.submission.media_duration || payload.media_duration || '01:00'),
           status: json.submission.status || (payload.status || 'submitted'),
           score: json.submission.score !== undefined ? String(json.submission.score) : (payload.score !== undefined ? String(payload.score) : ''),
+          teacher_comment: json.submission.teacher_comment !== undefined ? String(json.submission.teacher_comment) : '',
+          teacher_voice_url: json.submission.teacher_voice_url !== undefined ? String(json.submission.teacher_voice_url) : '',
+          teacher_voice_duration: json.submission.teacher_voice_duration !== undefined ? String(json.submission.teacher_voice_duration) : '',
+          graded_at: json.submission.graded_at ? String(json.submission.graded_at) : '',
           practice_count: json.submission.practice_count !== undefined && json.submission.practice_count !== null
             ? Math.max(0, Number(json.submission.practice_count) || 0)
             : Math.max(0, Number(payload.practice_count || 0) || 0)
         });
       }
     } else if (action === 'saveTeacherFeedback' && json.submission) {
-      const targetAsgId = String(payload.assignment_id || '').trim();
-      const targetStuId = String(payload.student_id || '').trim();
-      const subList = Array.isArray(stateObj.submissions) ? stateObj.submissions : [];
-      const found = subList.find(function (s) {
-        return (
-          (json.submission.submission_id && s.submission_id === json.submission.submission_id) ||
-          (s.assignment_id === targetAsgId && s.student_id === targetStuId)
-        );
-      });
+      const targetAsgId = String(payload.assignment_id || json.submission.assignment_id || '').trim();
+      const targetStuId = String(payload.student_id || json.submission.student_id || '').trim();
+      const targetSubId = String(json.submission.submission_id || payload.submission_id || '').trim();
+      if (!Array.isArray(stateObj.submissions)) stateObj.submissions = [];
+      const subList = stateObj.submissions;
+      let found = targetSubId
+        ? subList.find(function (s) { return s.submission_id === targetSubId; })
+        : null;
+      if (!found && targetAsgId && targetStuId) {
+        const matching = subList.filter(function (s) {
+          return s.assignment_id === targetAsgId && s.student_id === targetStuId;
+        });
+        if (matching.length) {
+          matching.sort(function (a, b) {
+            return (Number(a.attempt_number || 1) || 1) - (Number(b.attempt_number || 1) || 1);
+          });
+          found = matching[matching.length - 1];
+        }
+      }
       if (found) {
         if (json.submission.submission_id) found.submission_id = json.submission.submission_id;
+        if (json.submission.attempt_number) {
+          found.attempt_number = Math.max(1, Number(json.submission.attempt_number) || 1);
+        }
+        if (json.submission.submitted_at) found.submitted_at = json.submission.submitted_at;
         if (json.submission.status) found.status = json.submission.status;
         if (json.submission.score !== undefined) found.score = json.submission.score;
         if (json.submission.teacher_comment !== undefined) found.teacher_comment = json.submission.teacher_comment;
         if (json.submission.teacher_voice_url !== undefined) found.teacher_voice_url = json.submission.teacher_voice_url;
         if (json.submission.teacher_voice_duration !== undefined) found.teacher_voice_duration = json.submission.teacher_voice_duration;
+        if (json.submission.graded_at) found.graded_at = json.submission.graded_at;
+      } else if (targetAsgId && targetStuId) {
+        subList.push({
+          submission_id: targetSubId || ('SUB_' + Date.now()),
+          assignment_id: targetAsgId,
+          student_id: targetStuId,
+          attempt_number: Math.max(1, Number(json.submission.attempt_number || 1) || 1),
+          submitted_at: json.submission.submitted_at || '',
+          student_note: '',
+          media_type: 'audio',
+          media_url: '',
+          media_duration: '',
+          status: json.submission.status || 'graded',
+          score: json.submission.score !== undefined ? json.submission.score : '',
+          teacher_comment: json.submission.teacher_comment !== undefined ? json.submission.teacher_comment : '',
+          teacher_voice_url: json.submission.teacher_voice_url !== undefined ? json.submission.teacher_voice_url : '',
+          teacher_voice_duration: json.submission.teacher_voice_duration !== undefined ? json.submission.teacher_voice_duration : '',
+          graded_at: json.submission.graded_at || ''
+        });
       }
     } else if (action === 'copyTeacherFeedback' && json.copiedFeedback && Array.isArray(json.copiedFeedback.submissions)) {
       const subList = Array.isArray(stateObj.submissions) ? stateObj.submissions : (stateObj.submissions = []);
       json.copiedFeedback.submissions.forEach(function (srvSub) {
         if (!srvSub) return;
-        const found = subList.find(function (s) {
-          return (
-            (srvSub.submission_id && s.submission_id === srvSub.submission_id) ||
-            (s.assignment_id === srvSub.assignment_id && s.student_id === srvSub.student_id)
-          );
-        });
+        let found = srvSub.submission_id
+          ? subList.find(function (s) { return s.submission_id === srvSub.submission_id; })
+          : null;
+        if (!found) {
+          const matching = subList.filter(function (s) {
+            return s.assignment_id === srvSub.assignment_id && s.student_id === srvSub.student_id;
+          });
+          if (matching.length) {
+            matching.sort(function (a, b) {
+              return (Number(a.attempt_number || 1) || 1) - (Number(b.attempt_number || 1) || 1);
+            });
+            found = matching[matching.length - 1];
+          }
+        }
         if (found) {
           if (srvSub.submission_id) found.submission_id = srvSub.submission_id;
+          if (srvSub.attempt_number) {
+            found.attempt_number = Math.max(1, Number(srvSub.attempt_number) || 1);
+          }
           if (srvSub.status) found.status = srvSub.status;
           if (srvSub.score !== undefined) found.score = srvSub.score;
           if (srvSub.teacher_comment !== undefined) found.teacher_comment = srvSub.teacher_comment;
@@ -1829,7 +1884,7 @@ window.StudySnapStore = (function () {
           if (srvSub.teacher_voice_duration !== undefined) found.teacher_voice_duration = srvSub.teacher_voice_duration;
           if (srvSub.graded_at) found.graded_at = srvSub.graded_at;
         } else {
-          subList.push(srvSub);
+          subList.push(Object.assign({ attempt_number: 1 }, srvSub));
         }
       });
     } else if (action === 'savePracticeExercise' && json.practiceExercise) {
@@ -2012,7 +2067,8 @@ window.StudySnapStore = (function () {
           teacher_voice_url: s.teacher_voice_url || '',
           teacher_voice_duration: s.teacher_voice_duration || '',
           graded_at: formatCleanDate(s.graded_at),
-          practice_count: Math.max(0, Number(s.practice_count || 0) || 0)
+          practice_count: Math.max(0, Number(s.practice_count || 0) || 0),
+          attempt_number: Math.max(1, Number(s.attempt_number || 1) || 1)
         };
       });
     }
@@ -2510,9 +2566,9 @@ window.StudySnapStore = (function () {
       cacheUploadedDriveMedia(up.media_url, payloadCopy.media_base64, payloadCopy.media_filename);
       payloadCopy.media_url = up.media_url;
       payloadCopy.media_base64 = '';
-      if (stateObj && Array.isArray(stateObj.submissions)) {
+      if (stateObj && Array.isArray(stateObj.submissions) && payloadCopy.submission_id) {
         const localSub = stateObj.submissions.find(function (s) {
-          return s.assignment_id === payloadCopy.assignment_id && s.student_id === payloadCopy.student_id;
+          return s.submission_id === payloadCopy.submission_id;
         });
         if (localSub) {
           localSub.media_url = up.media_url;
@@ -2540,9 +2596,20 @@ window.StudySnapStore = (function () {
       payloadCopy.teacher_voice_url = upVoice.media_url;
       payloadCopy.teacher_voice_base64 = '';
       if (stateObj && Array.isArray(stateObj.submissions) && actionName === 'saveTeacherFeedback') {
-        const localSub = stateObj.submissions.find(function (s) {
-          return s.assignment_id === payloadCopy.assignment_id && s.student_id === payloadCopy.student_id;
-        });
+        let localSub = payloadCopy.submission_id
+          ? stateObj.submissions.find(function (s) { return s.submission_id === payloadCopy.submission_id; })
+          : null;
+        if (!localSub) {
+          const matching = stateObj.submissions.filter(function (s) {
+            return s.assignment_id === payloadCopy.assignment_id && s.student_id === payloadCopy.student_id;
+          });
+          if (matching.length) {
+            matching.sort(function (a, b) {
+              return (Number(a.attempt_number || 1) || 1) - (Number(b.attempt_number || 1) || 1);
+            });
+            localSub = matching[matching.length - 1];
+          }
+        }
         if (localSub) {
           localSub.teacher_voice_url = upVoice.media_url;
           saveState(stateObj);

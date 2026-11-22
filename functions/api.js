@@ -12,7 +12,7 @@ const SCHEMA_TABLE_STATEMENTS = [
   "CREATE TABLE IF NOT EXISTS classes (class_id TEXT PRIMARY KEY, class_name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT '')",
   "CREATE TABLE IF NOT EXISTS students (student_id TEXT PRIMARY KEY, full_name TEXT NOT NULL, class_name TEXT NOT NULL DEFAULT '', avatar_initials TEXT NOT NULL DEFAULT '', username TEXT NOT NULL, password TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT '')",
   "CREATE TABLE IF NOT EXISTS assignments (assignment_id TEXT PRIMARY KEY, title TEXT NOT NULL, lesson_tag TEXT NOT NULL DEFAULT '', due_date TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', require_media TEXT NOT NULL DEFAULT 'audio_or_video', session_tag TEXT NOT NULL DEFAULT 'Buổi 1', class_name TEXT NOT NULL DEFAULT 'all', exercise_id TEXT NOT NULL DEFAULT '', lesson_id TEXT NOT NULL DEFAULT '')",
-  "CREATE TABLE IF NOT EXISTS submissions (submission_id TEXT PRIMARY KEY, assignment_id TEXT NOT NULL, student_id TEXT NOT NULL, submitted_at TEXT NOT NULL DEFAULT '', student_note TEXT NOT NULL DEFAULT '', media_type TEXT NOT NULL DEFAULT 'audio', media_url TEXT NOT NULL DEFAULT '', media_duration TEXT NOT NULL DEFAULT '01:00', status TEXT NOT NULL DEFAULT 'submitted', score TEXT NOT NULL DEFAULT '', teacher_comment TEXT NOT NULL DEFAULT '', teacher_voice_url TEXT NOT NULL DEFAULT '', teacher_voice_duration TEXT NOT NULL DEFAULT '', graded_at TEXT NOT NULL DEFAULT '', practice_count INTEGER NOT NULL DEFAULT 0)",
+  "CREATE TABLE IF NOT EXISTS submissions (submission_id TEXT PRIMARY KEY, assignment_id TEXT NOT NULL, student_id TEXT NOT NULL, submitted_at TEXT NOT NULL DEFAULT '', student_note TEXT NOT NULL DEFAULT '', media_type TEXT NOT NULL DEFAULT 'audio', media_url TEXT NOT NULL DEFAULT '', media_duration TEXT NOT NULL DEFAULT '01:00', status TEXT NOT NULL DEFAULT 'submitted', score TEXT NOT NULL DEFAULT '', teacher_comment TEXT NOT NULL DEFAULT '', teacher_voice_url TEXT NOT NULL DEFAULT '', teacher_voice_duration TEXT NOT NULL DEFAULT '', graded_at TEXT NOT NULL DEFAULT '', practice_count INTEGER NOT NULL DEFAULT 0, attempt_number INTEGER NOT NULL DEFAULT 1)",
   "CREATE TABLE IF NOT EXISTS exit_tickets (record_id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL, student_id TEXT NOT NULL, student_name TEXT NOT NULL DEFAULT '', score REAL NOT NULL DEFAULT 0, total REAL NOT NULL DEFAULT 0, submitted_at TEXT NOT NULL DEFAULT '', answers_json TEXT NOT NULL DEFAULT '[]')",
   "CREATE TABLE IF NOT EXISTS vocabulary (vocab_id TEXT PRIMARY KEY, lesson_id TEXT NOT NULL, lesson_title TEXT NOT NULL DEFAULT '', word TEXT NOT NULL, ipa TEXT NOT NULL DEFAULT '', part_of_speech TEXT NOT NULL DEFAULT '', meaning_vi TEXT NOT NULL DEFAULT '', example_en TEXT NOT NULL DEFAULT '', example_vi TEXT NOT NULL DEFAULT '')",
   "CREATE TABLE IF NOT EXISTS practice_exercises (exercise_id TEXT PRIMARY KEY, title TEXT NOT NULL, lesson_tag TEXT NOT NULL DEFAULT '', total_score REAL NOT NULL DEFAULT 35, thresholds_json TEXT NOT NULL DEFAULT '{\"very_good\":31,\"good\":25}', sections_json TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL DEFAULT '')",
@@ -663,6 +663,11 @@ async function ensureSchema(db) {
     // Column practice_count already exists on existing D1 table
   }
   try {
+    await db.prepare('ALTER TABLE submissions ADD COLUMN attempt_number INTEGER NOT NULL DEFAULT 1').run();
+  } catch (e) {
+    // Column attempt_number already exists on existing D1 table
+  }
+  try {
     await db.prepare("ALTER TABLE auth_sessions ADD COLUMN prev_refresh_hash TEXT NOT NULL DEFAULT ''").run();
   } catch (e) {
     // Column prev_refresh_hash already exists
@@ -756,7 +761,7 @@ async function getBootstrapData(db, metaOverride, session) {
     db.prepare('SELECT class_id, class_name, created_at FROM classes ORDER BY rowid ASC'),
     db.prepare('SELECT student_id, full_name, class_name, avatar_initials, username, created_at FROM students ORDER BY rowid ASC'),
     db.prepare('SELECT assignment_id, title, lesson_tag, due_date, description, require_media, session_tag, class_name, exercise_id, lesson_id FROM assignments ORDER BY rowid ASC'),
-    db.prepare('SELECT submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count FROM submissions ORDER BY rowid ASC'),
+    db.prepare('SELECT submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count, COALESCE(attempt_number, 1) AS attempt_number FROM submissions ORDER BY COALESCE(attempt_number, 1) ASC, rowid ASC'),
     db.prepare('SELECT record_id, ticket_id, student_id, student_name, score, total, submitted_at, answers_json FROM exit_tickets ORDER BY rowid ASC'),
     db.prepare('SELECT vocab_id, lesson_id, lesson_title, word, ipa, part_of_speech, meaning_vi, example_en, example_vi FROM vocabulary ORDER BY rowid ASC'),
     db.prepare('SELECT exercise_id, title, lesson_tag, total_score, thresholds_json, sections_json, created_at FROM practice_exercises ORDER BY rowid ASC'),
@@ -1067,7 +1072,7 @@ async function handleImportFromBootstrapData(db, payload, session, env) {
   submissions.forEach(function (s, idx) {
     statements.push(
       db
-        .prepare('INSERT OR REPLACE INTO submissions (submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .prepare('INSERT OR REPLACE INTO submissions (submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count, attempt_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(
           String(s.submission_id || ('SUB_' + (idx + 1))),
           String(s.assignment_id || ''),
@@ -1083,7 +1088,8 @@ async function handleImportFromBootstrapData(db, payload, session, env) {
           String(s.teacher_voice_url || ''),
           String(s.teacher_voice_duration || ''),
           String(s.graded_at || ''),
-          Math.max(0, Number(s.practice_count || 0) || 0)
+          Math.max(0, Number(s.practice_count || 0) || 0),
+          Math.max(1, Number(s.attempt_number || 1) || 1)
         )
     );
   });
@@ -2759,104 +2765,156 @@ export async function handleApiRequest(request, env, ctx) {
         }, 400));
       }
 
-      const existing = await db
-        .prepare('SELECT * FROM submissions WHERE assignment_id = ? AND student_id = ? LIMIT 1')
-        .bind(assignmentId, studentId)
-        .first();
+      const incomingType = String(payload.media_type || 'audio').trim() || 'audio';
+      const isVocabTrack = incomingType === 'vocab' || incomingType === 'vocab_log';
 
-      if (existing) {
-        const nextMediaUrl = incomingUrl || existing.media_url || '';
-        const replacedUrls =
-          incomingUrl && existing.media_url && incomingUrl !== existing.media_url
-            ? collectDriveUrls([existing.media_url])
-            : [];
-        const nextNote = payload.student_note !== undefined ? String(payload.student_note) : (existing.student_note || '');
-        const nextType = payload.media_type || existing.media_type || 'audio';
-        const nextDur = payload.media_duration || existing.media_duration || '01:00';
-        const isVocabTrack = nextType === 'vocab' || nextType === 'vocab_log';
-        const nextStatus = isVocabTrack
-          ? String(payload.status || 'graded')
-          : (existing.status === 'graded' ? 'graded' : 'submitted');
-        const allowClientScore = isVocabTrack || isTeacher;
-        const hasIncomingScore =
-          allowClientScore &&
-          payload.score !== undefined &&
-          payload.score !== null &&
-          (!isVocabTrack || String(payload.score) !== '');
-        const nextScore = hasIncomingScore ? String(payload.score) : (existing.score || '');
-        const rawPriorCount = Number(existing.practice_count || 0) || 0;
-        const effectivePrior = isVocabTrack && rawPriorCount === 0 && (existing.submitted_at || existing.status === 'graded')
-          ? 1
-          : rawPriorCount;
-        const incrementPractice = isVocabTrack
-          ? (payload.increment_practice !== false && payload.increment_practice !== 0)
-          : false;
-        const explicitPracticeCount =
-          payload.practice_count !== undefined && payload.practice_count !== null && payload.practice_count !== ''
-            ? Math.max(0, Number(payload.practice_count) || 0)
-            : null;
-        const nextPracticeCount = incrementPractice
-          ? Math.max(effectivePrior + 1, explicitPracticeCount || 0)
-          : (explicitPracticeCount !== null ? explicitPracticeCount : effectivePrior);
+      if (isVocabTrack) {
+        const existing = await db
+          .prepare('SELECT * FROM submissions WHERE assignment_id = ? AND student_id = ? ORDER BY rowid DESC LIMIT 1')
+          .bind(assignmentId, studentId)
+          .first();
 
-        await db
-          .prepare('UPDATE submissions SET submitted_at = ?, student_note = ?, media_type = ?, media_url = ?, media_duration = ?, status = ?, score = ?, practice_count = ? WHERE submission_id = ?')
-          .bind(nowStr, nextNote, nextType, nextMediaUrl, nextDur, nextStatus, nextScore, nextPracticeCount, existing.submission_id)
-          .run();
+        if (existing) {
+          const nextMediaUrl = incomingUrl || existing.media_url || '';
+          const nextNote = payload.student_note !== undefined ? String(payload.student_note) : (existing.student_note || '');
+          const nextType = incomingType;
+          const nextDur = payload.media_duration || existing.media_duration || '01:00';
+          const nextStatus = String(payload.status || 'graded');
+          const hasIncomingScore =
+            payload.score !== undefined &&
+            payload.score !== null &&
+            String(payload.score) !== '';
+          const nextScore = hasIncomingScore ? String(payload.score) : (existing.score || '');
+          const rawPriorCount = Number(existing.practice_count || 0) || 0;
+          const effectivePrior = rawPriorCount === 0 && (existing.submitted_at || existing.status === 'graded')
+            ? 1
+            : rawPriorCount;
+          const incrementPractice = payload.increment_practice !== false && payload.increment_practice !== 0;
+          const explicitPracticeCount =
+            payload.practice_count !== undefined && payload.practice_count !== null && payload.practice_count !== ''
+              ? Math.max(0, Number(payload.practice_count) || 0)
+              : null;
+          const nextPracticeCount = incrementPractice
+            ? Math.max(effectivePrior + 1, explicitPracticeCount || 0)
+            : (explicitPracticeCount !== null ? explicitPracticeCount : effectivePrior);
+          const keepAttempt = Math.max(1, Number(existing.attempt_number || 1) || 1);
 
-        return await mutate({
-          submission: {
-            submission_id: existing.submission_id,
-            media_url: nextMediaUrl,
-            status: nextStatus,
-            score: nextScore,
-            student_note: nextNote,
-            media_duration: nextDur,
-            submitted_at: nowStr,
-            practice_count: nextPracticeCount
-          },
-          deletedMediaUrls: await filterUnreferencedDriveUrls(db, replacedUrls)
-        });
-      } else {
-        const newId = makeShortId('SUB');
-        const nextNote = String(payload.student_note || '');
-        const nextType = String(payload.media_type || 'audio');
-        const nextDur = String(payload.media_duration || '01:00');
-        const isVocabTrack = nextType === 'vocab' || nextType === 'vocab_log';
-        const nextStatus = isVocabTrack ? String(payload.status || 'graded') : 'submitted';
-        const allowClientScore = isVocabTrack || isTeacher;
-        const nextScore =
-          allowClientScore && payload.score !== undefined && payload.score !== null
-            ? String(payload.score)
-            : '';
-        const incrementPractice = isVocabTrack
-          ? (payload.increment_practice !== false && payload.increment_practice !== 0)
-          : false;
-        const nextPracticeCount = isVocabTrack
-          ? Math.max(incrementPractice ? 1 : 0, Number(payload.practice_count || 0) || 0)
-          : 0;
-        await db
-          .prepare('INSERT INTO submissions (submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .bind(newId, assignmentId, studentId, nowStr, nextNote, nextType, incomingUrl, nextDur, nextStatus, nextScore, '', '', '', '', nextPracticeCount)
-          .run();
-        return await mutate({
-          submission: {
-            submission_id: newId,
-            media_url: incomingUrl,
-            status: nextStatus,
-            score: nextScore,
-            student_note: nextNote,
-            media_duration: nextDur,
-            submitted_at: nowStr,
-            practice_count: nextPracticeCount
-          }
-        });
+          await db
+            .prepare('UPDATE submissions SET submitted_at = ?, student_note = ?, media_type = ?, media_url = ?, media_duration = ?, status = ?, score = ?, practice_count = ?, attempt_number = ? WHERE submission_id = ?')
+            .bind(nowStr, nextNote, nextType, nextMediaUrl, nextDur, nextStatus, nextScore, nextPracticeCount, keepAttempt, existing.submission_id)
+            .run();
+
+          return await mutate({
+            submission: {
+              submission_id: existing.submission_id,
+              assignment_id: assignmentId,
+              student_id: studentId,
+              attempt_number: keepAttempt,
+              media_type: nextType,
+              media_url: nextMediaUrl,
+              status: nextStatus,
+              score: nextScore,
+              student_note: nextNote,
+              media_duration: nextDur,
+              submitted_at: nowStr,
+              practice_count: nextPracticeCount
+            },
+            deletedMediaUrls: []
+          });
+        } else {
+          const newId = makeShortId('SUB');
+          const nextNote = String(payload.student_note || '');
+          const nextDur = String(payload.media_duration || '01:00');
+          const nextStatus = String(payload.status || 'graded');
+          const nextScore =
+            payload.score !== undefined && payload.score !== null
+              ? String(payload.score)
+              : '';
+          const incrementPractice = payload.increment_practice !== false && payload.increment_practice !== 0;
+          const nextPracticeCount = Math.max(incrementPractice ? 1 : 0, Number(payload.practice_count || 0) || 0);
+          await db
+            .prepare('INSERT INTO submissions (submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count, attempt_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            .bind(newId, assignmentId, studentId, nowStr, nextNote, incomingType, incomingUrl, nextDur, nextStatus, nextScore, '', '', '', '', nextPracticeCount, 1)
+            .run();
+          return await mutate({
+            submission: {
+              submission_id: newId,
+              assignment_id: assignmentId,
+              student_id: studentId,
+              attempt_number: 1,
+              media_type: incomingType,
+              media_url: incomingUrl,
+              status: nextStatus,
+              score: nextScore,
+              student_note: nextNote,
+              media_duration: nextDur,
+              submitted_at: nowStr,
+              practice_count: nextPracticeCount
+            }
+          });
+        }
       }
+
+      // Bài tập về nhà (audio/video): giữ nguyên mọi lần nộp cũ, nộp lại tạo row mới (Lần 2, Lần 3...)
+      const existingAllRes = await db
+        .prepare('SELECT * FROM submissions WHERE assignment_id = ? AND student_id = ? ORDER BY COALESCE(attempt_number, 1) DESC, rowid DESC')
+        .bind(assignmentId, studentId)
+        .all();
+      const existingRows = (existingAllRes && Array.isArray(existingAllRes.results) ? existingAllRes.results : [])
+        .filter(function (r) {
+          const mt = String(r.media_type || '').trim();
+          return mt !== 'vocab' && mt !== 'vocab_log';
+        });
+
+      const isResubmitAttempt = existingRows.length > 0;
+      if (isResubmitAttempt && !incomingUrl) {
+        return respond(jsonResponse({
+          ok: false,
+          error: 'Vui lòng thu âm hoặc tải lên file Audio/Video mới để nộp lại lần tiếp theo.'
+        }, 400));
+      }
+
+      const maxAttempt = existingRows.reduce(function (mx, r) {
+        return Math.max(mx, Math.max(1, Number(r.attempt_number || 1) || 1));
+      }, 0);
+      const nextAttempt = isResubmitAttempt ? Math.max(maxAttempt + 1, existingRows.length + 1) : 1;
+      const newId = makeShortId('SUB');
+      const nextNote = String(payload.student_note || '');
+      const nextDur = String(payload.media_duration || '01:00');
+      const nextStatus = 'submitted';
+      const nextScore =
+        isTeacher && payload.score !== undefined && payload.score !== null
+          ? String(payload.score)
+          : '';
+
+      await db
+        .prepare('INSERT INTO submissions (submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count, attempt_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(newId, assignmentId, studentId, nowStr, nextNote, incomingType, incomingUrl, nextDur, nextStatus, nextScore, '', '', '', '', 0, nextAttempt)
+        .run();
+
+      return await mutate({
+        submission: {
+          submission_id: newId,
+          assignment_id: assignmentId,
+          student_id: studentId,
+          attempt_number: nextAttempt,
+          media_type: incomingType,
+          media_url: incomingUrl,
+          status: nextStatus,
+          score: nextScore,
+          student_note: nextNote,
+          media_duration: nextDur,
+          submitted_at: nowStr,
+          practice_count: 0
+        },
+        deletedMediaUrls: []
+      });
     }
 
     if (action === 'saveTeacherFeedback') {
       const assignmentId = String(payload.assignment_id || '').trim();
       const studentId = String(payload.student_id || '').trim();
+      const requestedSubId = String(payload.submission_id || '').trim();
       const nowStr = formatViDateTime();
       const rawVoiceUrl = String(payload.teacher_voice_url || '').trim();
       const incomingVoiceUrl = rawVoiceUrl.indexOf('demo:') === 0 ? '' : rawVoiceUrl;
@@ -2868,12 +2926,22 @@ export async function handleApiRequest(request, env, ctx) {
         }, 400));
       }
 
-      const existing = await db
-        .prepare('SELECT * FROM submissions WHERE assignment_id = ? AND student_id = ? LIMIT 1')
-        .bind(assignmentId, studentId)
-        .first();
+      let existing = null;
+      if (requestedSubId) {
+        existing = await db
+          .prepare('SELECT * FROM submissions WHERE submission_id = ? AND assignment_id = ? AND student_id = ? LIMIT 1')
+          .bind(requestedSubId, assignmentId, studentId)
+          .first();
+      }
+      if (!existing) {
+        existing = await db
+          .prepare('SELECT * FROM submissions WHERE assignment_id = ? AND student_id = ? ORDER BY COALESCE(attempt_number, 1) DESC, rowid DESC LIMIT 1')
+          .bind(assignmentId, studentId)
+          .first();
+      }
 
       if (existing) {
+        const keepAttempt = Math.max(1, Number(existing.attempt_number || 1) || 1);
         const existingRealVoice =
           existing.teacher_voice_url && String(existing.teacher_voice_url).trim().indexOf('demo:') !== 0
             ? String(existing.teacher_voice_url).trim()
@@ -2906,11 +2974,16 @@ export async function handleApiRequest(request, env, ctx) {
         return await mutate({
           submission: {
             submission_id: existing.submission_id,
+            assignment_id: assignmentId,
+            student_id: studentId,
+            attempt_number: keepAttempt,
+            submitted_at: nextSubmittedAt,
             status: 'graded',
             score: nextScore,
             teacher_comment: nextComment,
             teacher_voice_url: nextVoiceUrl,
-            teacher_voice_duration: nextVoiceDur
+            teacher_voice_duration: nextVoiceDur,
+            graded_at: nowStr
           },
           deletedMediaUrls: await filterUnreferencedDriveUrls(db, replacedUrls)
         });
@@ -2921,17 +2994,22 @@ export async function handleApiRequest(request, env, ctx) {
         const nextComment = String(payload.teacher_comment || '');
         const nextVoiceDur = incomingVoiceUrl ? String(payload.teacher_voice_duration || '') : '';
         await db
-          .prepare('INSERT INTO submissions (submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .bind(newId, assignmentId, studentId, '', '', '', '', '', nextStatus, nextScore, nextComment, incomingVoiceUrl, nextVoiceDur, nowStr, 0)
+          .prepare('INSERT INTO submissions (submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count, attempt_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(newId, assignmentId, studentId, '', '', 'audio', '', '', nextStatus, nextScore, nextComment, incomingVoiceUrl, nextVoiceDur, nowStr, 0, 1)
           .run();
         return await mutate({
           submission: {
             submission_id: newId,
+            assignment_id: assignmentId,
+            student_id: studentId,
+            attempt_number: 1,
+            submitted_at: '',
             status: nextStatus,
             score: nextScore,
             teacher_comment: nextComment,
             teacher_voice_url: incomingVoiceUrl,
-            teacher_voice_duration: nextVoiceDur
+            teacher_voice_duration: nextVoiceDur,
+            graded_at: nowStr
           }
         });
       }
@@ -2971,13 +3049,22 @@ export async function handleApiRequest(request, env, ctx) {
       const incomingVoiceDur = copyVoice ? String(payload.teacher_voice_duration || '') : '';
       const nowStr = formatViDateTime();
 
+      const sourceSubId = String(payload.source_submission_id || '').trim();
       const existingRowsRes = await db
-        .prepare('SELECT * FROM submissions WHERE assignment_id = ?')
+        .prepare('SELECT * FROM submissions WHERE assignment_id = ? ORDER BY COALESCE(attempt_number, 1) DESC, rowid DESC')
         .bind(assignmentId)
         .all();
       const existingByStu = {};
       (existingRowsRes && existingRowsRes.results ? existingRowsRes.results : []).forEach(function (r) {
-        existingByStu[String(r.student_id || '').trim()] = r;
+        const stuKey = String(r.student_id || '').trim();
+        if (!stuKey) return;
+        if (sourceSubId && stuKey === sourceStudentId && String(r.submission_id || '').trim() === sourceSubId) {
+          existingByStu[stuKey] = r;
+          return;
+        }
+        if (!existingByStu[stuKey]) {
+          existingByStu[stuKey] = r;
+        }
       });
 
       const stmts = [];
@@ -2987,6 +3074,7 @@ export async function handleApiRequest(request, env, ctx) {
       targetSet.forEach(function (stuId) {
         const existing = existingByStu[stuId];
         if (existing) {
+          const keepAttempt = Math.max(1, Number(existing.attempt_number || 1) || 1);
           const existingVoiceRaw = String(existing.teacher_voice_url || '').trim();
           const existingRealVoice = existingVoiceRaw.indexOf('demo:') === 0 ? '' : existingVoiceRaw;
           const nextScore = copyScore && incomingScore !== '' ? incomingScore : String(existing.score || '');
@@ -3018,6 +3106,7 @@ export async function handleApiRequest(request, env, ctx) {
             submission_id: existing.submission_id,
             assignment_id: assignmentId,
             student_id: stuId,
+            attempt_number: keepAttempt,
             status: 'graded',
             score: nextScore,
             teacher_comment: nextComment,
@@ -3034,13 +3123,14 @@ export async function handleApiRequest(request, env, ctx) {
 
           stmts.push(
             db
-              .prepare('INSERT INTO submissions (submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-              .bind(newId, assignmentId, stuId, '', '', 'audio', '', '', 'graded', nextScore, nextComment, nextVoiceUrl, nextVoiceDur, nowStr, 0)
+              .prepare('INSERT INTO submissions (submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count, attempt_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+              .bind(newId, assignmentId, stuId, '', '', 'audio', '', '', 'graded', nextScore, nextComment, nextVoiceUrl, nextVoiceDur, nowStr, 0, 1)
           );
           updatedSubmissions.push({
             submission_id: newId,
             assignment_id: assignmentId,
             student_id: stuId,
+            attempt_number: 1,
             submitted_at: '',
             student_note: '',
             media_type: 'audio',
