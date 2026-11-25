@@ -307,8 +307,6 @@
   }
 
   function getDefaultVocabLessonKey() {
-    const lessons = getLessons();
-    if (lessons.length > 0) return lessons[0].lesson_id;
     return 'hsk-1';
   }
 
@@ -327,53 +325,9 @@
     (state.practiceExercises || []).forEach(function (ex) {
       if (ex && ex.lesson_tag) pushTag(ex.lesson_tag);
     });
-    getLessons().forEach(function (ls) {
-      if (ls && ls.tag) pushTag(ls.tag);
-    });
     dl.innerHTML = tags.map(function (t) {
       return '<option value="' + escapeHtml(t) + '"></option>';
     }).join('');
-  }
-
-  async function syncPracticeLessonChangeToVocab(prevTag, prevTitle, updatedEx) {
-    if (!updatedEx) return;
-    const stripFn = window.StudySnapStore && window.StudySnapStore.stripPracticeTitlePrefix
-      ? window.StudySnapStore.stripPracticeTitlePrefix
-      : function (s) { return String(s || '').trim(); };
-    const prevBase = String(prevTag || '').trim() || stripFn(prevTitle) || '';
-    const nextBase = String(updatedEx.lesson_tag || '').trim() || stripFn(updatedEx.title) || updatedEx.exercise_id;
-    if (!prevBase || !nextBase) return;
-
-    const prevLid = slugifyLessonId(prevBase);
-    const nextLid = slugifyLessonId(nextBase);
-    if (!prevLid || !nextLid || prevLid === nextLid) return;
-
-    const stillUsedByOther = (state.practiceExercises || []).some(function (other) {
-      if (!other || other.exercise_id === updatedEx.exercise_id) return false;
-      const otherBase = String(other.lesson_tag || '').trim() || stripFn(other.title) || other.exercise_id;
-      return slugifyLessonId(otherBase) === prevLid;
-    });
-    if (stillUsedByOther) return;
-
-    const nextLesson = getLessons().find(function (l) { return l.lesson_id === nextLid; });
-    const nextTitle = (nextLesson && nextLesson.title) || String(updatedEx.lesson_tag || nextLid).trim();
-    const nextTag = String(updatedEx.lesson_tag || (nextLesson && nextLesson.tag) || nextTitle).trim();
-
-    // Keep any existing vocabulary and active vocab assignments untouched on prevLid so
-    // renaming a Tab 1 exercise never triggers extra network requests or disconnects
-    // assigned vocab tasks from their words; getSyncedLessons() preserves prevLid whenever
-    // words, vocab assignments, or another practice exercise still reference it.
-    const syncedIds = new Set(getLessons().map(function (l) { return l.id; }));
-    if (syncedIds.has(nextLid) && !syncedIds.has(prevLid)) {
-      if (ui.selectedLesson === prevLid) ui.selectedLesson = nextLid;
-      if (ui.vocabFilter === prevLid) ui.vocabFilter = nextLid;
-      if (window.StudySnapVocabSuite && typeof window.StudySnapVocabSuite.getState === 'function') {
-        const snap = window.StudySnapVocabSuite.getState();
-        if (snap && snap.sourceKey === prevLid && typeof window.StudySnapVocabSuite.selectSource === 'function') {
-          window.StudySnapVocabSuite.selectSource(nextLid);
-        }
-      }
-    }
   }
 
   function resolveOrCreateCustomLesson(rawTitle) {
@@ -2058,24 +2012,7 @@
   function getVocabSourceOptions() {
     const lessons = getLessons();
     const vocabList = Array.isArray(state.vocabulary) ? state.vocabulary : [];
-    const options = lessons.map(function (ls) {
-      const cnt = vocabList.filter(function (v) { return String(v.lesson_id || '') === ls.lesson_id; }).length;
-      return {
-        key: ls.lesson_id,
-        label: ls.title + ' (' + cnt + ' từ)',
-        shortTag: ls.tag || extractShortLessonTag(ls.lesson_id, ls.title),
-        title: ls.title,
-        count: cnt
-      };
-    });
-    const totalLessonWords = vocabList.length;
-    options.push({
-      key: 'all-lessons',
-      label: 'Tổng hợp theo bài (' + totalLessonWords + ' từ)',
-      shortTag: 'Tổng hợp',
-      title: 'Tổng hợp từ vựng tất cả các bài',
-      count: totalLessonWords
-    });
+    const options = [];
     const hskBanks = (typeof window !== 'undefined' && window.StudySnapHskBanks) ? window.StudySnapHskBanks : {};
     [
       { key: 'hsk-1', label: 'Từ vựng HSK 1 (3.0)', shortTag: 'HSK 1', title: 'Từ vựng HSK 1 (Giáo trình 3.0)' },
@@ -2092,6 +2029,16 @@
           count: bankList.length
         });
       }
+    });
+    lessons.forEach(function (ls) {
+      const cnt = vocabList.filter(function (v) { return String(v.lesson_id || '') === ls.lesson_id; }).length;
+      options.push({
+        key: ls.lesson_id,
+        label: ls.title + ' (' + cnt + ' từ)',
+        shortTag: ls.tag || extractShortLessonTag(ls.lesson_id, ls.title),
+        title: ls.title,
+        count: cnt
+      });
     });
     return options;
   }
@@ -2491,7 +2438,7 @@
         const box = document.getElementById('teacher-manual-vocab-box');
         const sel = document.getElementById('new-vocab-lesson');
         const wrap = document.getElementById('new-vocab-custom-lesson-wrap');
-        if (sel && sourceKey && sourceKey !== 'all-lessons' && !isBuiltInVocabBankKey(sourceKey)) {
+        if (sel && sourceKey && !isBuiltInVocabBankKey(sourceKey)) {
           const hasOpt = Array.from(sel.options || []).some(function (o) { return o.value === sourceKey; });
           if (hasOpt) sel.value = sourceKey;
         }
@@ -2529,7 +2476,7 @@
       const firstLessonId = lessons[0] ? lessons[0].lesson_id : '__new__';
       const prevVal = newVocabLessonSelect.value && newVocabLessonSelect.value !== '__new__' && lessons.some(function (l) { return l.lesson_id === newVocabLessonSelect.value; })
         ? newVocabLessonSelect.value
-        : ((ui.selectedLesson && ui.selectedLesson !== 'all-lessons' && !isBuiltInVocabBankKey(ui.selectedLesson) && lessons.some(function (l) { return l.lesson_id === ui.selectedLesson; }))
+        : ((ui.selectedLesson && !isBuiltInVocabBankKey(ui.selectedLesson) && lessons.some(function (l) { return l.lesson_id === ui.selectedLesson; }))
           ? ui.selectedLesson
           : firstLessonId);
       populateLessonDropdown(newVocabLessonSelect, prevVal);
@@ -6688,7 +6635,6 @@
     async function persistPracticeMetaUpdate(ex, nextTitle, nextTag, triggerBtns, loadingLabel) {
       if (!ex) return null;
       const active = getActivePracticeExercise();
-      const prevMeta = ex.__lastSyncedMeta || { tag: ex.lesson_tag || '', title: ex.title || '' };
       if (active && active.exercise_id === ex.exercise_id) {
         collectExerciseFromDom();
       }
@@ -6709,8 +6655,6 @@
           const saveRes = await window.StudySnapStore.savePracticeExercise(state, ex);
           if (!saveRes || saveRes.ok !== false) {
             clearPracticeExerciseDirty(ex.exercise_id);
-            await syncPracticeLessonChangeToVocab(prevMeta.tag, prevMeta.title, ex);
-            ex.__lastSyncedMeta = { tag: ex.lesson_tag || '', title: ex.title || '' };
           }
           return saveRes;
         },
@@ -6825,9 +6769,6 @@
     function syncMetaInputsToActiveEx() {
       const ex = getActivePracticeExercise();
       if (!ex) return;
-      if (!ex.__lastSyncedMeta) {
-        ex.__lastSyncedMeta = { tag: ex.lesson_tag || '', title: ex.title || '' };
-      }
       if (metaTitleInput && metaTitleInput.value.trim()) {
         ex.title = metaTitleInput.value.trim();
       }
@@ -6953,7 +6894,6 @@
         }
 
         const ex = getActivePracticeExercise() || createFreshPracticeExercise(titleVal, tagVal, false);
-        const prevMeta = ex.__lastSyncedMeta || { tag: ex.lesson_tag || '', title: ex.title || '' };
 
         collectExerciseFromDom();
 
@@ -6975,12 +6915,7 @@
           document.getElementById('btn-save-practice-meta-inline')
         ].filter(Boolean);
         const res = await runWithLoading(saveBtns, 'Đang lưu đề...', async function () {
-          const saveRes = await window.StudySnapStore.savePracticeExercise(state, ex);
-          if (!saveRes || saveRes.ok !== false) {
-            await syncPracticeLessonChangeToVocab(prevMeta.tag, prevMeta.title, ex);
-            ex.__lastSyncedMeta = { tag: ex.lesson_tag || '', title: ex.title || '' };
-          }
-          return saveRes;
+          return await window.StudySnapStore.savePracticeExercise(state, ex);
         });
         if (res && res.ok === false) {
           alert(res.error || 'Không thể lưu bài tập lên máy chủ. Vui lòng thử lại.');
@@ -9490,7 +9425,6 @@
       const hskLesson = snap && snap.hskLessonFilter && snap.hskLessonFilter !== 'all'
         ? ('_Bai_' + String(snap.hskLessonFilter).trim())
         : '';
-      if (key === 'all-lessons') return 'Tong_Hop_Theo_Bai';
       if (key === 'hsk-1') return 'HSK_1_3.0' + hskLesson;
       if (key === 'hsk-2') return 'HSK_2_3.0' + hskLesson;
       if (key === 'hsk-3') return 'HSK_3_3.0' + hskLesson;
@@ -9606,7 +9540,7 @@
           if (importVocabLessonSelect) {
             const lessons = getLessons();
             const firstId = lessons[0] ? lessons[0].lesson_id : '__new__';
-            const preferred = (ui.selectedLesson && ui.selectedLesson !== 'all' && ui.selectedLesson !== 'all-lessons' && !isBuiltInVocabBankKey(ui.selectedLesson) && lessons.some(function (l) { return l.lesson_id === ui.selectedLesson; }))
+            const preferred = (ui.selectedLesson && ui.selectedLesson !== 'all' && !isBuiltInVocabBankKey(ui.selectedLesson) && lessons.some(function (l) { return l.lesson_id === ui.selectedLesson; }))
               ? ui.selectedLesson
               : firstId;
             populateLessonDropdown(importVocabLessonSelect, preferred);

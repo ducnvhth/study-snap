@@ -4302,9 +4302,7 @@
       const masteredLevel = ui.masteredIds.filter(function (id) { return String(id).indexOf(prefix) === 0; }).length;
       return { masteredCount: masteredLevel, total: bank.length };
     }
-    const targetList = lessonKey === 'all-lessons'
-      ? vocabList
-      : vocabList.filter(function (v) { return String(v.lesson_id || '') === lessonKey; });
+    const targetList = vocabList.filter(function (v) { return String(v.lesson_id || '') === lessonKey; });
     const total = targetList.length;
     const masteredCount = targetList.filter(function (v) { return ui.masteredIds.indexOf(v.vocab_id) !== -1; }).length;
     return { masteredCount: masteredCount, total: total };
@@ -4584,7 +4582,7 @@
       btnGoVocabAll.addEventListener('click', function () {
         switchTab('vocabulary');
         if (window.StudySnapVocabSuite && typeof window.StudySnapVocabSuite.selectSource === 'function') {
-          window.StudySnapVocabSuite.selectSource('all-lessons');
+          window.StudySnapVocabSuite.selectSource('hsk-1');
         } else {
           renderVocabularySection();
         }

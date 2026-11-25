@@ -249,52 +249,7 @@ window.STUDYSNAP_INITIAL_DATA = {
     }
   ],
 
-  vocabulary: [
-    {
-      vocab_id: 'V01',
-      lesson_id: 'bai-1',
-      lesson_title: 'Bài 1: Chào hỏi & Làm quen',
-      word: '你好',
-      ipa: 'nǐ hǎo',
-      part_of_speech: 'Lời chào',
-      meaning_vi: 'Xin chào (biến điệu đọc là ní hǎo)',
-      example_en: '你好，我是越南人。(Nǐ hǎo, wǒ shì Yuènán rén.)',
-      example_vi: 'Xin chào, tôi là người Việt Nam.'
-    },
-    {
-      vocab_id: 'V02',
-      lesson_id: 'bai-1',
-      lesson_title: 'Bài 1: Chào hỏi & Làm quen',
-      word: '高兴',
-      ipa: 'gāo xìng',
-      part_of_speech: 'Tính từ',
-      meaning_vi: 'Vui vẻ, phấn khởi',
-      example_en: '认识你我很高兴。(Rènshi nǐ wǒ hěn gāoxìng.)',
-      example_vi: 'Rất vui được làm quen với bạn.'
-    },
-    {
-      vocab_id: 'V03',
-      lesson_id: 'bai-1',
-      lesson_title: 'Bài 1: Chào hỏi & Làm quen',
-      word: '认识',
-      ipa: 'rèn shi',
-      part_of_speech: 'Động từ',
-      meaning_vi: 'Quen biết, làm quen',
-      example_en: '很高兴认识大家。(Hěn gāoxìng rènshi dàjiā.)',
-      example_vi: 'Rất vui được làm quen với mọi người.'
-    },
-    {
-      vocab_id: 'V04',
-      lesson_id: 'bai-1',
-      lesson_title: 'Bài 1: Chào hỏi & Làm quen',
-      word: '留学生',
-      ipa: 'liú xué shēng',
-      part_of_speech: 'Danh từ',
-      meaning_vi: 'Du học sinh',
-      example_en: '她是汉语留学生。(Tā shì Hànyǔ liúxuéshēng.)',
-      example_vi: 'Cô ấy là du học sinh ngành tiếng Trung.'
-    }
-  ],
+  vocabulary: [],
 
   lessons: [],
 
@@ -3474,70 +3429,14 @@ window.StudySnapStore = (function () {
     return raw.length > 20 ? raw.slice(0, 19) + '…' : (raw || 'Bài học');
   }
 
-  function buildSyncedLessonDisplayTitle(tag, topics) {
-    const cleanTag = String(tag || '').trim();
-    const uniqTopics = [];
-    (topics || []).forEach(function (t) {
-      const clean = String(t || '').trim();
-      if (clean && uniqTopics.indexOf(clean) === -1) uniqTopics.push(clean);
-    });
-    if (uniqTopics.length === 0) return cleanTag || 'Bài học';
-    const first = uniqTopics[0];
-    let baseTitle = first;
-    if (cleanTag) {
-      if (first.toLowerCase() === cleanTag.toLowerCase()) {
-        baseTitle = cleanTag;
-      } else if (first.toLowerCase().indexOf(cleanTag.toLowerCase()) !== 0) {
-        baseTitle = cleanTag + ' — ' + first;
-      }
-    }
-    if (uniqTopics.length > 1) {
-      baseTitle += ' (+' + (uniqTopics.length - 1) + ' bài)';
-    }
-    return baseTitle;
-  }
-
   function getSyncedLessons(stateObj) {
     const map = {};
     const st = stateObj || {};
-    const practices = Array.isArray(st.practiceExercises) ? st.practiceExercises : [];
     const vocabList = Array.isArray(st.vocabulary) ? st.vocabulary : [];
     const assignments = Array.isArray(st.assignments) ? st.assignments : [];
     const customLessons = Array.isArray(st.lessons) ? st.lessons : [];
 
-    // 1. Nguồn chính: đồng bộ theo Bài & Thuộc bài của Luyện tập cuối buổi
-    practices.forEach(function (ex) {
-      if (!ex) return;
-      const rawTag = String(ex.lesson_tag || '').trim();
-      const rawTitle = String(ex.title || '').trim();
-      const cleanTopic = stripPracticeTitlePrefix(rawTitle);
-      const keyBase = rawTag || cleanTopic || ex.exercise_id;
-      if (!keyBase) return;
-      const lid = slugifyLessonId(keyBase);
-      if (!lid || lid === 'all' || lid === 'all-lessons' || lid === 'hsk-272' || lid === 'hsk-1' || lid === 'hsk-2' || lid === 'hsk-3') return;
-
-      if (!map[lid]) {
-        map[lid] = {
-          lesson_id: lid,
-          tag: rawTag || extractShortLessonTag(lid, cleanTopic),
-          topics: cleanTopic ? [cleanTopic] : [],
-          title: '',
-          exercise_ids: ex.exercise_id ? [ex.exercise_id] : [],
-          source: 'practice',
-          isCustom: false
-        };
-      } else {
-        if (cleanTopic && map[lid].topics.indexOf(cleanTopic) === -1) {
-          map[lid].topics.push(cleanTopic);
-        }
-        if (ex.exercise_id && map[lid].exercise_ids.indexOf(ex.exercise_id) === -1) {
-          map[lid].exercise_ids.push(ex.exercise_id);
-        }
-      }
-      map[lid].title = buildSyncedLessonDisplayTitle(map[lid].tag, map[lid].topics);
-    });
-
-    // 2. Bài ôn từ đang giao (giữ liên kết hiển thị)
+    // 1. Bài ôn từ đang giao (giữ liên kết hiển thị)
     assignments.forEach(function (asg) {
       if (!asg || String(asg.require_media || '').trim().toLowerCase() !== 'vocab') return;
       const cls = String(asg.class_name || '').trim().toLowerCase();

@@ -7,17 +7,17 @@
  */
 
 const SHEET_NAMES = {
-  TEACHERS: 'Teachers',
-  STUDENTS: 'Students',
-  ASSIGNMENTS: 'Assignments',
-  SUBMISSIONS: 'Submissions',
-  EXIT_TICKETS: 'ExitTickets',
-  VOCABULARY: 'Vocabulary',
-  PRACTICE_EXERCISES: 'PracticeExercises',
-  PRACTICE_SUBMISSIONS: 'PracticeSubmissions'
+  TEACHERS: "Teachers",
+  STUDENTS: "Students",
+  ASSIGNMENTS: "Assignments",
+  SUBMISSIONS: "Submissions",
+  EXIT_TICKETS: "ExitTickets",
+  VOCABULARY: "Vocabulary",
+  PRACTICE_EXERCISES: "PracticeExercises",
+  PRACTICE_SUBMISSIONS: "PracticeSubmissions",
 };
 
-const DRIVE_FOLDER_NAME = 'StudySnap_Media_Uploads';
+const DRIVE_FOLDER_NAME = "StudySnap_Media_Uploads";
 
 /**
  * ============================================================================
@@ -29,11 +29,11 @@ const DRIVE_FOLDER_NAME = 'StudySnap_Media_Uploads';
 function onOpen() {
   try {
     SpreadsheetApp.getUi()
-      .createMenu('StudySnap Quản trị')
-      .addItem('Xóa toàn bộ dữ liệu test (Giữ GV)', 'menuClearTestData_')
-      .addItem('Xóa TRẮNG toàn bộ 100% (Kể cả GV)', 'menuClearAllCompletely_')
+      .createMenu("StudySnap Quản trị")
+      .addItem("Xóa toàn bộ dữ liệu test (Giữ GV)", "menuClearTestData_")
+      .addItem("Xóa TRẮNG toàn bộ 100% (Kể cả GV)", "menuClearAllCompletely_")
       .addSeparator()
-      .addItem('Khởi tạo tài khoản GV mặc định (Setup)', 'menuSetupDatabase_')
+      .addItem("Khởi tạo tài khoản GV mặc định (Setup)", "menuSetupDatabase_")
       .addToUi();
   } catch (e) {
     // Bỏ qua khi gọi ngoài ngữ cảnh UI bảng tính
@@ -51,9 +51,9 @@ function xoaTrangHoanToan() {
 function menuClearTestData_() {
   const ui = SpreadsheetApp.getUi();
   const res = ui.alert(
-    'Xóa toàn bộ dữ liệu test?',
-    'Thao tác này sẽ xóa sạch Học sinh, Danh sách bài giao, Bài nộp ghi âm/video, Từ vựng, Luyện tập cuối buổi, Kết quả và File ghi âm/video trên Drive.\nTài khoản Giáo viên vẫn được giữ lại để đăng nhập.',
-    ui.ButtonSet.YES_NO
+    "Xóa toàn bộ dữ liệu test?",
+    "Thao tác này sẽ xóa sạch Học sinh, Danh sách bài giao, Bài nộp ghi âm/video, Từ vựng, Luyện tập cuối buổi, Kết quả và File ghi âm/video trên Drive.\nTài khoản Giáo viên vẫn được giữ lại để đăng nhập.",
+    ui.ButtonSet.YES_NO,
   );
   if (res !== ui.Button.YES) return;
   const result = clearAllData();
@@ -63,9 +63,9 @@ function menuClearTestData_() {
 function menuClearAllCompletely_() {
   const ui = SpreadsheetApp.getUi();
   const res = ui.alert(
-    'CẢNH BÁO: Xóa TRẮNG 100% dữ liệu?',
-    'Thao tác này sẽ xóa SẠCH toàn bộ tất cả 8 sheet (bao gồm cả danh sách Giáo viên) và toàn bộ file trong StudySnap_Media_Uploads.\nBạn chắc chắn muốn thực hiện?',
-    ui.ButtonSet.YES_NO
+    "CẢNH BÁO: Xóa TRẮNG 100% dữ liệu?",
+    "Thao tác này sẽ xóa SẠCH toàn bộ tất cả 8 sheet (bao gồm cả danh sách Giáo viên) và toàn bộ file trong StudySnap_Media_Uploads.\nBạn chắc chắn muốn thực hiện?",
+    ui.ButtonSet.YES_NO,
   );
   if (res !== ui.Button.YES) return;
   const result = clearAllDataCompletely();
@@ -75,27 +75,34 @@ function menuClearAllCompletely_() {
 function menuSetupDatabase_() {
   const ui = SpreadsheetApp.getUi();
   const res = ui.alert(
-    'Khởi tạo hệ thống với tài khoản Giáo viên mặc định?',
-    'Hệ thống sẽ kiểm tra cấu trúc bảng và chỉ tạo duy nhất 1 tài khoản Giáo viên: Hồ Châu Uyển Nhi (tên đăng nhập: gv_uyennhi).',
-    ui.ButtonSet.YES_NO
+    "Khởi tạo hệ thống với tài khoản Giáo viên mặc định?",
+    "Hệ thống sẽ kiểm tra cấu trúc bảng và chỉ tạo duy nhất 1 tài khoản Giáo viên: Hồ Châu Uyển Nhi (tên đăng nhập: gv_uyennhi).",
+    ui.ButtonSet.YES_NO,
   );
   if (res !== ui.Button.YES) return;
   const result = setupDatabase();
-  ui.alert(result.message || 'Đã khởi tạo tài khoản Giáo viên Hồ Châu Uyển Nhi thành công.');
+  ui.alert(
+    result.message ||
+      "Đã khởi tạo tài khoản Giáo viên Hồ Châu Uyển Nhi thành công.",
+  );
 }
 
-const SCHEMA_CACHE_KEY = 'STUDYSNAP_SCHEMA_OK_V3';
+const SCHEMA_CACHE_KEY = "STUDYSNAP_SCHEMA_OK_V3";
 const SCHEMA_CACHE_TTL_SEC = 21600;
-const BOOTSTRAP_HOT_VER_KEY = 'STUDYSNAP_BS_HOT_VER_V3';
-const BOOTSTRAP_META_KEY = 'STUDYSNAP_BS_META_V3';
-const BOOTSTRAP_CHUNK_PREFIX = 'STUDYSNAP_BS_CHUNK_V3_';
+const BOOTSTRAP_HOT_VER_KEY = "STUDYSNAP_BS_HOT_VER_V3";
+const BOOTSTRAP_META_KEY = "STUDYSNAP_BS_META_V3";
+const BOOTSTRAP_CHUNK_PREFIX = "STUDYSNAP_BS_CHUNK_V3_";
 const BOOTSTRAP_CACHE_TTL_SEC = 180;
 const BOOTSTRAP_CHUNK_SIZE = 85000;
-const DATA_VERSION_PROP_KEY = 'STUDYSNAP_DATA_VERSION';
+const DATA_VERSION_PROP_KEY = "STUDYSNAP_DATA_VERSION";
 
 function getScriptCacheSafe_() {
   try {
-    if (typeof CacheService !== 'undefined' && CacheService && typeof CacheService.getScriptCache === 'function') {
+    if (
+      typeof CacheService !== "undefined" &&
+      CacheService &&
+      typeof CacheService.getScriptCache === "function"
+    ) {
       return CacheService.getScriptCache();
     }
   } catch (err) {}
@@ -104,7 +111,11 @@ function getScriptCacheSafe_() {
 
 function getScriptPropsSafe_() {
   try {
-    if (typeof PropertiesService !== 'undefined' && PropertiesService && typeof PropertiesService.getScriptProperties === 'function') {
+    if (
+      typeof PropertiesService !== "undefined" &&
+      PropertiesService &&
+      typeof PropertiesService.getScriptProperties === "function"
+    ) {
       return PropertiesService.getScriptProperties();
     }
   } catch (err) {}
@@ -113,22 +124,23 @@ function getScriptPropsSafe_() {
 
 function getDataVersion_() {
   const props = getScriptPropsSafe_();
-  if (!props) return '';
+  if (!props) return "";
   try {
-    let ver = String(props.getProperty(DATA_VERSION_PROP_KEY) || '').trim();
+    let ver = String(props.getProperty(DATA_VERSION_PROP_KEY) || "").trim();
     if (!ver) {
-      ver = 'v_' + new Date().getTime() + '_0';
+      ver = "v_" + new Date().getTime() + "_0";
       props.setProperty(DATA_VERSION_PROP_KEY, ver);
     }
     return ver;
   } catch (err) {
-    return '';
+    return "";
   }
 }
 
 function bumpDataVersion_() {
   const props = getScriptPropsSafe_();
-  const nextVer = 'v_' + new Date().getTime() + '_' + Math.floor(Math.random() * 100000);
+  const nextVer =
+    "v_" + new Date().getTime() + "_" + Math.floor(Math.random() * 100000);
   if (props) {
     try {
       props.setProperty(DATA_VERSION_PROP_KEY, nextVer);
@@ -141,7 +153,7 @@ function markSchemaReadyCache_() {
   const cache = getScriptCacheSafe_();
   if (!cache) return;
   try {
-    cache.put(SCHEMA_CACHE_KEY, '1', SCHEMA_CACHE_TTL_SEC);
+    cache.put(SCHEMA_CACHE_KEY, "1", SCHEMA_CACHE_TTL_SEC);
   } catch (err) {}
 }
 
@@ -169,7 +181,7 @@ function invalidateBootstrapCache_() {
     for (let i = 0; i < 12; i++) {
       keysToRemove.push(BOOTSTRAP_CHUNK_PREFIX + i);
     }
-    if (typeof cache.removeAll === 'function') {
+    if (typeof cache.removeAll === "function") {
       cache.removeAll(keysToRemove);
     } else {
       keysToRemove.forEach(function (k) {
@@ -183,7 +195,7 @@ function ensureSheetsExistFast_(ss) {
   const cache = getScriptCacheSafe_();
   if (cache) {
     try {
-      if (cache.get(SCHEMA_CACHE_KEY) === '1') {
+      if (cache.get(SCHEMA_CACHE_KEY) === "1") {
         return true;
       }
     } catch (err) {}
@@ -197,29 +209,35 @@ function readCachedBootstrapPayload_(expectedVersion) {
   const cache = getScriptCacheSafe_();
   if (!cache || !expectedVersion) return null;
   try {
-    const hotVer = String(cache.get(BOOTSTRAP_HOT_VER_KEY) || '');
+    const hotVer = String(cache.get(BOOTSTRAP_HOT_VER_KEY) || "");
     if (hotVer !== expectedVersion) return null;
     const metaRaw = cache.get(BOOTSTRAP_META_KEY);
     if (!metaRaw) return null;
     const meta = JSON.parse(metaRaw);
-    if (!meta || meta.version !== expectedVersion || !meta.chunks || meta.chunks <= 0) {
+    if (
+      !meta ||
+      meta.version !== expectedVersion ||
+      !meta.chunks ||
+      meta.chunks <= 0
+    ) {
       return null;
     }
     const chunkKeys = [];
     for (let i = 0; i < meta.chunks; i++) {
       chunkKeys.push(BOOTSTRAP_CHUNK_PREFIX + i);
     }
-    const map = typeof cache.getAll === 'function' ? cache.getAll(chunkKeys) : null;
-    let joined = '';
+    const map =
+      typeof cache.getAll === "function" ? cache.getAll(chunkKeys) : null;
+    let joined = "";
     for (let i = 0; i < chunkKeys.length; i++) {
       const part = map ? map[chunkKeys[i]] : cache.get(chunkKeys[i]);
-      if (typeof part !== 'string') return null;
+      if (typeof part !== "string") return null;
       joined += part;
     }
     return {
-      spreadsheetName: meta.spreadsheetName || '',
-      spreadsheetUrl: meta.spreadsheetUrl || '',
-      data: JSON.parse(joined)
+      spreadsheetName: meta.spreadsheetName || "",
+      spreadsheetUrl: meta.spreadsheetUrl || "",
+      data: JSON.parse(joined),
     };
   } catch (err) {
     return null;
@@ -244,13 +262,13 @@ function writeCachedBootstrapPayload_(version, ssName, ssUrl, dataObj) {
     batchMap[BOOTSTRAP_META_KEY] = JSON.stringify({
       version: String(version),
       chunks: chunks.length,
-      spreadsheetName: ssName || '',
-      spreadsheetUrl: ssUrl || ''
+      spreadsheetName: ssName || "",
+      spreadsheetUrl: ssUrl || "",
     });
     for (let i = 0; i < chunks.length; i++) {
       batchMap[BOOTSTRAP_CHUNK_PREFIX + i] = chunks[i];
     }
-    if (typeof cache.putAll === 'function') {
+    if (typeof cache.putAll === "function") {
       cache.putAll(batchMap, BOOTSTRAP_CACHE_TTL_SEC);
     } else {
       Object.keys(batchMap).forEach(function (k) {
@@ -262,112 +280,172 @@ function writeCachedBootstrapPayload_(version, ssName, ssUrl, dataObj) {
 
 function doGet(e) {
   try {
-    const action = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'bootstrap';
+    const action =
+      e && e.parameter && e.parameter.action ? e.parameter.action : "bootstrap";
 
-    if (action === 'ping') {
+    if (action === "ping") {
       const ss = SpreadsheetApp.getActiveSpreadsheet();
       return jsonResponse({
         ok: true,
         version: getDataVersion_(),
         spreadsheetName: ss.getName(),
         spreadsheetUrl: ss.getUrl(),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     }
 
-    if (action === 'fetchGoogleForm') {
-      const rawUrl = (e && e.parameter && e.parameter.url) ? String(e.parameter.url).trim() : '';
-      if (!/^https?:\/\/(?:docs\.google\.com\/forms\/|forms\.gle\/)/i.test(rawUrl)) {
-        return jsonResponse({ ok: false, error: 'Đường dẫn Google Form không hợp lệ.' });
+    if (action === "fetchGoogleForm") {
+      const rawUrl =
+        e && e.parameter && e.parameter.url
+          ? String(e.parameter.url).trim()
+          : "";
+      if (
+        !/^https?:\/\/(?:docs\.google\.com\/forms\/|forms\.gle\/)/i.test(rawUrl)
+      ) {
+        return jsonResponse({
+          ok: false,
+          error: "Đường dẫn Google Form không hợp lệ.",
+        });
       }
       try {
-        const res = UrlFetchApp.fetch(rawUrl, { followRedirects: true, muteHttpExceptions: true });
+        const res = UrlFetchApp.fetch(rawUrl, {
+          followRedirects: true,
+          muteHttpExceptions: true,
+        });
         const code = res.getResponseCode();
         const html = res.getContentText();
-        const match = html.match(/FB_PUBLIC_LOAD_DATA_\s*=\s*([\s\S]*?);\s*<\/script>/);
+        const match = html.match(
+          /FB_PUBLIC_LOAD_DATA_\s*=\s*([\s\S]*?);\s*<\/script>/,
+        );
         if (code >= 400 || !match) {
-          return jsonResponse({ ok: false, error: 'Không thể đọc Google Form công khai (HTTP ' + code + ').' });
+          return jsonResponse({
+            ok: false,
+            error: "Không thể đọc Google Form công khai (HTTP " + code + ").",
+          });
         }
         const rawData = JSON.parse(match[1]);
         const formMeta = rawData[1] || [];
         const rawItems = Array.isArray(formMeta[1]) ? formMeta[1] : [];
         const imgUrls = [];
-        const imgMatches = html.match(/<img[^>]+src=["']https:\/\/docs\.google\.com\/forms-images-rt\/[^"']+["']/gi) || [];
+        const imgMatches =
+          html.match(
+            /<img[^>]+src=["']https:\/\/docs\.google\.com\/forms-images-rt\/[^"']+["']/gi,
+          ) || [];
         imgMatches.forEach(function (tag) {
           const m = tag.match(/src=["']([^"']+)["']/i);
-          if (m && m[1]) imgUrls.push(m[1].replace(/&amp;/g, '&'));
+          if (m && m[1]) imgUrls.push(m[1].replace(/&amp;/g, "&"));
         });
         const hdrs = res.getAllHeaders ? res.getAllHeaders() : {};
-        const rawSetCookie = hdrs['Set-Cookie'] || hdrs['set-cookie'] || '';
+        const rawSetCookie = hdrs["Set-Cookie"] || hdrs["set-cookie"] || "";
         const cookieHeader = Array.isArray(rawSetCookie)
-          ? rawSetCookie.map(function (c) { return String(c).split(';')[0]; }).join('; ')
-          : String(rawSetCookie).split(',').map(function (c) { return c.split(';')[0]; }).join('; ');
+          ? rawSetCookie
+              .map(function (c) {
+                return String(c).split(";")[0];
+              })
+              .join("; ")
+          : String(rawSetCookie)
+              .split(",")
+              .map(function (c) {
+                return c.split(";")[0];
+              })
+              .join("; ");
 
         let imgCursor = 0;
         const parsedItems = rawItems.map(function (it) {
           const qBlocks = Array.isArray(it && it[4]) ? it[4] : [];
           const primaryBlock = qBlocks[0] || [];
-          const rawOptions = Array.isArray(primaryBlock[1]) ? primaryBlock[1] : [];
+          const rawOptions = Array.isArray(primaryBlock[1])
+            ? primaryBlock[1]
+            : [];
           const options = rawOptions
-            .map(function (opt) { return opt && opt[0] !== undefined && opt[0] !== null ? String(opt[0]).trim() : ''; })
-            .filter(function (v) { return v !== ''; });
+            .map(function (opt) {
+              return opt && opt[0] !== undefined && opt[0] !== null
+                ? String(opt[0]).trim()
+                : "";
+            })
+            .filter(function (v) {
+              return v !== "";
+            });
           const videoBlock = Array.isArray(it && it[6]) ? it[6] : null;
-          const youtubeId = videoBlock && typeof videoBlock[3] === 'string' ? videoBlock[3] : '';
+          const youtubeId =
+            videoBlock && typeof videoBlock[3] === "string"
+              ? videoBlock[3]
+              : "";
           const imgBlock = Array.isArray(it && it[9]) ? it[9] : null;
-          const imageId = imgBlock && imgBlock[0] && typeof imgBlock[0][0] === 'string' ? imgBlock[0][0] : '';
-          let imageUrl = '';
-          let imageDataUrl = '';
+          const imageId =
+            imgBlock && imgBlock[0] && typeof imgBlock[0][0] === "string"
+              ? imgBlock[0][0]
+              : "";
+          let imageUrl = "";
+          let imageDataUrl = "";
           if (imageId && imgUrls[imgCursor]) {
             imageUrl = imgUrls[imgCursor];
             imgCursor++;
             try {
               const imgRes = UrlFetchApp.fetch(imageUrl, {
                 muteHttpExceptions: true,
-                headers: { Referer: 'https://docs.google.com/', Cookie: cookieHeader }
+                headers: {
+                  Referer: "https://docs.google.com/",
+                  Cookie: cookieHeader,
+                },
               });
               if (imgRes.getResponseCode() === 200) {
                 const blob = imgRes.getBlob();
-                const ct = blob.getContentType() || 'image/jpeg';
-                if (ct.indexOf('image/') === 0) {
-                  imageDataUrl = 'data:' + ct + ';base64,' + Utilities.base64Encode(blob.getBytes());
+                const ct = blob.getContentType() || "image/jpeg";
+                if (ct.indexOf("image/") === 0) {
+                  imageDataUrl =
+                    "data:" +
+                    ct +
+                    ";base64," +
+                    Utilities.base64Encode(blob.getBytes());
                 }
               }
             } catch (imgErr) {}
           }
           return {
-            id: it && it[0] !== undefined ? String(it[0]) : '',
-            title: String((it && it[1]) || ''),
-            desc: String((it && it[2]) || ''),
+            id: it && it[0] !== undefined ? String(it[0]) : "",
+            title: String((it && it[1]) || ""),
+            desc: String((it && it[2]) || ""),
             rawType: Number(it && it[3]),
             options: options,
             youtubeId: youtubeId,
-            youtubeUrl: youtubeId ? ('https://www.youtube.com/watch?v=' + youtubeId) : '',
+            youtubeUrl: youtubeId
+              ? "https://www.youtube.com/watch?v=" + youtubeId
+              : "",
             imageId: imageId,
             imageUrl: imageUrl,
-            imageDataUrl: imageDataUrl
+            imageDataUrl: imageDataUrl,
           };
         });
         return jsonResponse({
           ok: true,
           form: {
             sourceUrl: rawUrl,
-            title: String(formMeta[8] || rawData[3] || '').trim() || 'Bài kiểm tra Google Form',
-            description: String(formMeta[0] || '').trim(),
-            items: parsedItems
-          }
+            title:
+              String(formMeta[8] || rawData[3] || "").trim() ||
+              "Bài kiểm tra Google Form",
+            description: String(formMeta[0] || "").trim(),
+            items: parsedItems,
+          },
         });
       } catch (gfErr) {
-        return jsonResponse({ ok: false, error: 'Lỗi đọc Google Form: ' + gfErr.message });
+        return jsonResponse({
+          ok: false,
+          error: "Lỗi đọc Google Form: " + gfErr.message,
+        });
       }
     }
 
-    if (action === 'getMedia') {
-      const fileId = (e && e.parameter && e.parameter.fileId) ? String(e.parameter.fileId).trim() : '';
+    if (action === "getMedia") {
+      const fileId =
+        e && e.parameter && e.parameter.fileId
+          ? String(e.parameter.fileId).trim()
+          : "";
       if (!fileId) {
-        return jsonResponse({ ok: false, error: 'Thiếu fileId.' });
+        return jsonResponse({ ok: false, error: "Thiếu fileId." });
       }
       const cache = getScriptCacheSafe_();
-      const cacheKey = 'MEDIA_CACHE_' + fileId;
+      const cacheKey = "MEDIA_CACHE_" + fileId;
       if (cache) {
         try {
           const cachedRaw = cache.get(cacheKey);
@@ -377,16 +455,21 @@ function doGet(e) {
         } catch (err) {}
       }
       const file = DriveApp.getFileById(fileId);
-      const fileSize = typeof file.getSize === 'function' ? Number(file.getSize() || 0) : 0;
-      const fileName = typeof file.getName === 'function' ? file.getName() : '';
+      const fileSize =
+        typeof file.getSize === "function" ? Number(file.getSize() || 0) : 0;
+      const fileName = typeof file.getName === "function" ? file.getName() : "";
       if (fileSize > 24 * 1024 * 1024) {
         return jsonResponse({
           ok: false,
           tooLarge: true,
           fileId: fileId,
           fileName: fileName,
-          mimeType: inferMediaMimeType_(fileName, file.getMimeType ? file.getMimeType() : ''),
-          error: 'Tệp video quá lớn cho cầu nối JSON trực tiếp — đang phát qua Google Drive.'
+          mimeType: inferMediaMimeType_(
+            fileName,
+            file.getMimeType ? file.getMimeType() : "",
+          ),
+          error:
+            "Tệp video quá lớn cho cầu nối JSON trực tiếp — đang phát qua Google Drive.",
         });
       }
       const blob = file.getBlob();
@@ -397,7 +480,7 @@ function doGet(e) {
         fileId: fileId,
         fileName: fileName,
         mimeType: mimeType,
-        dataUrl: 'data:' + mimeType + ';base64,' + base64
+        dataUrl: "data:" + mimeType + ";base64," + base64,
       };
       if (cache && resObj.dataUrl.length < 85000) {
         try {
@@ -408,15 +491,16 @@ function doGet(e) {
     }
 
     const curVer = getDataVersion_();
-    const clientVer = (e && e.parameter && e.parameter.v) ? String(e.parameter.v).trim() : '';
+    const clientVer =
+      e && e.parameter && e.parameter.v ? String(e.parameter.v).trim() : "";
     const cache = getScriptCacheSafe_();
     if (clientVer && curVer && clientVer === curVer && cache) {
       try {
-        if (String(cache.get(BOOTSTRAP_HOT_VER_KEY) || '') === curVer) {
+        if (String(cache.get(BOOTSTRAP_HOT_VER_KEY) || "") === curVer) {
           return jsonResponse({
             ok: true,
             unchanged: true,
-            version: curVer
+            version: curVer,
           });
         }
       } catch (err) {}
@@ -430,7 +514,7 @@ function doGet(e) {
         version: curVer,
         spreadsheetName: cachedBootstrap.spreadsheetName,
         spreadsheetUrl: cachedBootstrap.spreadsheetUrl,
-        data: cachedBootstrap.data
+        data: cachedBootstrap.data,
       });
     }
 
@@ -445,12 +529,12 @@ function doGet(e) {
       version: curVer,
       spreadsheetName: ssName,
       spreadsheetUrl: ssUrl,
-      data: bootstrapData
+      data: bootstrapData,
     });
   } catch (err) {
     return jsonResponse({
       ok: false,
-      error: 'Không thể tải dữ liệu lúc này. Vui lòng thử lại sau.'
+      error: "Không thể tải dữ liệu lúc này. Vui lòng thử lại sau.",
     });
   }
 }
@@ -460,9 +544,14 @@ function buildMutationResponse_(ss, payload, preVer, extraFields) {
   const nextVer = bumpDataVersion_();
   markHotVersion_(nextVer);
 
-  const clientVer = payload && payload.clientVersion ? String(payload.clientVersion).trim() : '';
+  const clientVer =
+    payload && payload.clientVersion
+      ? String(payload.clientVersion).trim()
+      : "";
   const wantsDeltaOnly = payload && payload.deltaOnly === true;
-  const hasVersionConflict = Boolean(clientVer && preVer && clientVer !== preVer);
+  const hasVersionConflict = Boolean(
+    clientVer && preVer && clientVer !== preVer,
+  );
   const needsBootstrap =
     (payload && payload.includeBootstrap === true) ||
     !wantsDeltaOnly ||
@@ -472,14 +561,19 @@ function buildMutationResponse_(ss, payload, preVer, extraFields) {
     {
       ok: true,
       version: nextVer,
-      conflictRefreshed: hasVersionConflict
+      conflictRefreshed: hasVersionConflict,
     },
-    extraFields || {}
+    extraFields || {},
   );
 
   if (needsBootstrap) {
     const bootstrapData = getBootstrapData_(ss);
-    writeCachedBootstrapPayload_(nextVer, ss.getName(), ss.getUrl(), bootstrapData);
+    writeCachedBootstrapPayload_(
+      nextVer,
+      ss.getName(),
+      ss.getUrl(),
+      bootstrapData,
+    );
     out.data = bootstrapData;
   }
 
@@ -487,48 +581,56 @@ function buildMutationResponse_(ss, payload, preVer, extraFields) {
 }
 
 function doPost(e) {
-  let rawBody = '{}';
+  let rawBody = "{}";
   let payload = {};
   try {
-    rawBody = (e && e.postData && e.postData.contents) ? e.postData.contents : '{}';
+    rawBody =
+      e && e.postData && e.postData.contents ? e.postData.contents : "{}";
     payload = JSON.parse(rawBody);
   } catch (parseErr) {
-    return jsonResponse({ ok: false, error: 'Dữ liệu gửi lên không hợp lệ.' });
+    return jsonResponse({ ok: false, error: "Dữ liệu gửi lên không hợp lệ." });
   }
 
-  const action = String(payload.action || '');
+  const action = String(payload.action || "");
 
   // Cầu nối Drive nhanh cho kiến trúc lai Cloudflare D1 + Google Drive (không chạm Google Sheets, không chờ LockService)
-  if (action === 'uploadMedia') {
+  if (action === "uploadMedia") {
     try {
-      const dataInput = payload.base64_data || payload.data_url || payload.media_base64 || '';
+      const dataInput =
+        payload.base64_data || payload.data_url || payload.media_base64 || "";
       if (!dataInput) {
-        return jsonResponse({ ok: false, error: 'Thiếu dữ liệu tệp media.' });
+        return jsonResponse({ ok: false, error: "Thiếu dữ liệu tệp media." });
       }
-      const mimeType = String(payload.mime_type || 'audio/webm');
-      const fileName = String(payload.filename || ('StudySnap_' + Date.now()));
+      const mimeType = String(payload.mime_type || "audio/webm");
+      const fileName = String(payload.filename || "StudySnap_" + Date.now());
       const mediaUrl = saveBase64MediaToDrive_(dataInput, mimeType, fileName);
       const idMatch = mediaUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
       return jsonResponse({
         ok: true,
-        fileId: idMatch && idMatch[1] ? idMatch[1] : '',
-        media_url: mediaUrl
+        fileId: idMatch && idMatch[1] ? idMatch[1] : "",
+        media_url: mediaUrl,
       });
     } catch (uploadErr) {
-      const errDetail = uploadErr && uploadErr.message ? String(uploadErr.message) : '';
+      const errDetail =
+        uploadErr && uploadErr.message ? String(uploadErr.message) : "";
       return jsonResponse({
         ok: false,
-        error: 'Không thể lưu tệp lên Google Drive lúc này' + (errDetail ? ': ' + errDetail : '.')
+        error:
+          "Không thể lưu tệp lên Google Drive lúc này" +
+          (errDetail ? ": " + errDetail : "."),
       });
     }
   }
 
-  if (action === 'deleteMediaFiles') {
+  if (action === "deleteMediaFiles") {
     try {
       const trashedCount = handleDeleteMediaFiles_(payload);
       return jsonResponse({ ok: true, trashedCount: trashedCount });
     } catch (delErr) {
-      return jsonResponse({ ok: false, error: 'Không thể dọn tệp Google Drive.' });
+      return jsonResponse({
+        ok: false,
+        error: "Không thể dọn tệp Google Drive.",
+      });
     }
   }
 
@@ -538,27 +640,33 @@ function doPost(e) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     ensureSheetsExistFast_(ss);
 
-    if (action === 'setupDatabase') {
+    if (action === "setupDatabase") {
       const setupRes = setupDatabase();
       const nextVer = getDataVersion_();
       const bootstrapData = getBootstrapData_(ss);
-      writeCachedBootstrapPayload_(nextVer, ss.getName(), ss.getUrl(), bootstrapData);
+      writeCachedBootstrapPayload_(
+        nextVer,
+        ss.getName(),
+        ss.getUrl(),
+        bootstrapData,
+      );
       return jsonResponse({
         ok: true,
         version: nextVer,
         message: setupRes.message,
-        data: bootstrapData
+        data: bootstrapData,
       });
     }
 
-    if (action === 'clearAllData' || action === 'clearAllDataCompletely') {
+    if (action === "clearAllData" || action === "clearAllDataCompletely") {
       return jsonResponse({
         ok: false,
-        error: 'Chức năng quản trị và làm sạch dữ liệu chỉ được thực hiện trực tiếp trong Google Apps Script.'
+        error:
+          "Chức năng quản trị và làm sạch dữ liệu chỉ được thực hiện trực tiếp trong Google Apps Script.",
       });
     }
 
-    if (action === 'login') {
+    if (action === "login") {
       const authResult = handleLogin_(ss, payload);
       if (authResult && authResult.ok) {
         authResult.version = getDataVersion_();
@@ -566,130 +674,164 @@ function doPost(e) {
       return jsonResponse(authResult);
     }
 
-    if (action === 'changePassword') {
+    if (action === "changePassword") {
       const preVerPwd = getDataVersion_();
       const pwdRes = handleChangePassword_(ss, payload);
       if (!pwdRes || !pwdRes.ok) {
-        return jsonResponse(pwdRes || { ok: false, error: 'Không thể đổi mật khẩu.' });
+        return jsonResponse(
+          pwdRes || { ok: false, error: "Không thể đổi mật khẩu." },
+        );
       }
-      return buildMutationResponse_(ss, payload, preVerPwd, { passwordChanged: true });
+      return buildMutationResponse_(ss, payload, preVerPwd, {
+        passwordChanged: true,
+      });
     }
 
     const preVer = getDataVersion_();
 
-    if (action === 'createStudentAccount') {
+    if (action === "createStudentAccount") {
       const student = handleCreateStudentAccount_(ss, payload);
       return buildMutationResponse_(ss, payload, preVer, { student: student });
     }
 
-    if (action === 'resetStudentPassword') {
+    if (action === "resetStudentPassword") {
       const updated = handleResetStudentPassword_(ss, payload);
       return buildMutationResponse_(ss, payload, preVer, { student: updated });
     }
 
-    if (action === 'deleteStudentAccount') {
+    if (action === "deleteStudentAccount") {
       const deletedStudent = handleDeleteStudentAccount_(ss, payload);
-      return buildMutationResponse_(ss, payload, preVer, { deletedStudent: deletedStudent });
+      return buildMutationResponse_(ss, payload, preVer, {
+        deletedStudent: deletedStudent,
+      });
     }
 
-    if (action === 'submitHomework') {
+    if (action === "submitHomework") {
       const result = handleSubmitHomework_(ss, payload);
-      return buildMutationResponse_(ss, payload, preVer, { submission: result });
+      return buildMutationResponse_(ss, payload, preVer, {
+        submission: result,
+      });
     }
 
-    if (action === 'saveTeacherFeedback') {
+    if (action === "saveTeacherFeedback") {
       const result = handleSaveTeacherFeedback_(ss, payload);
-      return buildMutationResponse_(ss, payload, preVer, { submission: result });
+      return buildMutationResponse_(ss, payload, preVer, {
+        submission: result,
+      });
     }
 
-    if (action === 'copyTeacherFeedback') {
+    if (action === "copyTeacherFeedback") {
       const result = handleCopyTeacherFeedback_(ss, payload);
-      return buildMutationResponse_(ss, payload, preVer, { copiedFeedback: result });
+      return buildMutationResponse_(ss, payload, preVer, {
+        copiedFeedback: result,
+      });
     }
 
-    if (action === 'submitExitTicket') {
+    if (action === "submitExitTicket") {
       const result = handleSubmitExitTicket_(ss, payload);
-      return buildMutationResponse_(ss, payload, preVer, { exitResult: result });
+      return buildMutationResponse_(ss, payload, preVer, {
+        exitResult: result,
+      });
     }
 
-    if (action === 'addVocabulary') {
+    if (action === "addVocabulary") {
       const result = handleAddVocabulary_(ss, payload);
       return buildMutationResponse_(ss, payload, preVer, { vocab: result });
     }
 
-    if (action === 'batchAddVocabulary') {
+    if (action === "batchAddVocabulary") {
       const result = handleBatchAddVocabulary_(ss, payload);
-      return buildMutationResponse_(ss, payload, preVer, { importedVocab: result });
+      return buildMutationResponse_(ss, payload, preVer, {
+        importedVocab: result,
+      });
     }
 
-    if (action === 'deleteVocabulary') {
+    if (action === "deleteVocabulary") {
       const result = handleDeleteVocabulary_(ss, payload);
-      return buildMutationResponse_(ss, payload, preVer, { deletedVocab: result });
+      return buildMutationResponse_(ss, payload, preVer, {
+        deletedVocab: result,
+      });
     }
 
-    if (action === 'addAssignment') {
+    if (action === "addAssignment") {
       const result = handleAddAssignment_(ss, payload);
-      return buildMutationResponse_(ss, payload, preVer, { assignment: result });
+      return buildMutationResponse_(ss, payload, preVer, {
+        assignment: result,
+      });
     }
 
-    if (action === 'renameAssignmentSession') {
+    if (action === "renameAssignmentSession") {
       const result = handleRenameAssignmentSession_(ss, payload);
-      return buildMutationResponse_(ss, payload, preVer, { renamedSession: result });
+      return buildMutationResponse_(ss, payload, preVer, {
+        renamedSession: result,
+      });
     }
 
-    if (action === 'assignExercisesToClass') {
-      const targetClass = String(payload.target_class || 'all').trim();
+    if (action === "assignExercisesToClass") {
+      const targetClass = String(payload.target_class || "all").trim();
       const ids = Array.isArray(payload.assignment_ids)
         ? payload.assignment_ids
-        : (payload.assignment_id ? [payload.assignment_id] : []);
+        : payload.assignment_id
+          ? [payload.assignment_id]
+          : [];
       const result = updateAssignmentsClass_(ss, ids, targetClass);
       return buildMutationResponse_(ss, payload, preVer, { updated: result });
     }
 
-    if (action === 'unassignAssignment') {
+    if (action === "unassignAssignment") {
       const ids = Array.isArray(payload.assignment_ids)
         ? payload.assignment_ids
-        : (payload.assignment_id ? [payload.assignment_id] : []);
-      const result = updateAssignmentsClass_(ss, ids, 'unassigned');
+        : payload.assignment_id
+          ? [payload.assignment_id]
+          : [];
+      const result = updateAssignmentsClass_(ss, ids, "unassigned");
       return buildMutationResponse_(ss, payload, preVer, { updated: result });
     }
 
-    if (action === 'deleteAssignment') {
+    if (action === "deleteAssignment") {
       const result = handleDeleteAssignment_(ss, payload);
-      return buildMutationResponse_(ss, payload, preVer, { deletedAssignment: result });
+      return buildMutationResponse_(ss, payload, preVer, {
+        deletedAssignment: result,
+      });
     }
 
-    if (action === 'submitPracticeExercise') {
+    if (action === "submitPracticeExercise") {
       const result = handleSubmitPracticeExercise_(ss, payload);
-      return buildMutationResponse_(ss, payload, preVer, { practiceSubmission: result });
+      return buildMutationResponse_(ss, payload, preVer, {
+        practiceSubmission: result,
+      });
     }
 
-    if (action === 'gradeManualTranslation') {
+    if (action === "gradeManualTranslation") {
       const result = handleGradeManualTranslation_(ss, payload);
-      return buildMutationResponse_(ss, payload, preVer, { practiceSubmission: result });
+      return buildMutationResponse_(ss, payload, preVer, {
+        practiceSubmission: result,
+      });
     }
 
-    if (action === 'savePracticeExercise') {
+    if (action === "savePracticeExercise") {
       const result = handleSavePracticeExercise_(ss, payload);
-      return buildMutationResponse_(ss, payload, preVer, { practiceExercise: result });
+      return buildMutationResponse_(ss, payload, preVer, {
+        practiceExercise: result,
+      });
     }
 
-    if (action === 'deletePracticeExercise') {
+    if (action === "deletePracticeExercise") {
       const deleted = handleDeletePracticeExercise_(ss, payload);
       return buildMutationResponse_(ss, payload, preVer, {
         deleted: deleted,
-        exercise_id: String(payload.exercise_id || '')
+        exercise_id: String(payload.exercise_id || ""),
       });
     }
 
     return jsonResponse({
       ok: false,
-      error: 'Yêu cầu không hợp lệ.'
+      error: "Yêu cầu không hợp lệ.",
     });
   } catch (err) {
     return jsonResponse({
       ok: false,
-      error: 'Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.'
+      error: "Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.",
     });
   } finally {
     lock.releaseLock();
@@ -706,19 +848,31 @@ function setupDatabase() {
   const teachersSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
   if (teachersSheet.getLastRow() <= 1) {
     const defaultTeachers = [
-      ['GV01', 'Hồ Châu Uyển Nhi', 'gv_uyennhi', hashPasswordGs_('123456'), 'Tiếng Trung Giao Tiếp & HSK']
+      [
+        "GV01",
+        "Hồ Châu Uyển Nhi",
+        "gv_uyennhi",
+        hashPasswordGs_("123456"),
+        "Tiếng Trung Giao Tiếp & HSK",
+      ],
     ];
-    teachersSheet.getRange(2, 1, defaultTeachers.length, defaultTeachers[0].length).setValues(defaultTeachers);
+    teachersSheet
+      .getRange(2, 1, defaultTeachers.length, defaultTeachers[0].length)
+      .setValues(defaultTeachers);
   }
 
-  PropertiesService.getScriptProperties().setProperty('STUDYSNAP_IS_PRODUCTION', 'true');
+  PropertiesService.getScriptProperties().setProperty(
+    "STUDYSNAP_IS_PRODUCTION",
+    "true",
+  );
 
   markSchemaReadyCache_();
   invalidateBootstrapCache_();
   bumpDataVersion_();
   return {
     ok: true,
-    message: 'Đã khởi tạo cấu trúc hệ thống với duy nhất 1 tài khoản Giáo viên: Hồ Châu Uyển Nhi (tên đăng nhập: gv_uyennhi).'
+    message:
+      "Đã khởi tạo cấu trúc hệ thống với duy nhất 1 tài khoản Giáo viên: Hồ Châu Uyển Nhi (tên đăng nhập: gv_uyennhi).",
   };
 }
 
@@ -736,7 +890,7 @@ function clearAllData() {
     SHEET_NAMES.EXIT_TICKETS,
     SHEET_NAMES.VOCABULARY,
     SHEET_NAMES.PRACTICE_EXERCISES,
-    SHEET_NAMES.PRACTICE_SUBMISSIONS
+    SHEET_NAMES.PRACTICE_SUBMISSIONS,
   ];
 
   sheetsToClear.forEach(function (sheetName) {
@@ -746,13 +900,24 @@ function clearAllData() {
   // Đảm bảo bảng Teachers vẫn có ít nhất 1 tài khoản Giáo viên để đăng nhập
   const teachersSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
   if (teachersSheet && teachersSheet.getLastRow() <= 1) {
-    teachersSheet.getRange(2, 1, 1, 5).setValues([
-      ['GV01', 'Hồ Châu Uyển Nhi', 'gv_uyennhi', '123456', 'Tiếng Trung Giao Tiếp & HSK']
-    ]);
+    teachersSheet
+      .getRange(2, 1, 1, 5)
+      .setValues([
+        [
+          "GV01",
+          "Hồ Châu Uyển Nhi",
+          "gv_uyennhi",
+          "123456",
+          "Tiếng Trung Giao Tiếp & HSK",
+        ],
+      ]);
   }
 
   const trashedFiles = trashAllDriveUploadFiles_();
-  PropertiesService.getScriptProperties().setProperty('STUDYSNAP_IS_PRODUCTION', 'true');
+  PropertiesService.getScriptProperties().setProperty(
+    "STUDYSNAP_IS_PRODUCTION",
+    "true",
+  );
 
   markSchemaReadyCache_();
   invalidateBootstrapCache_();
@@ -762,7 +927,8 @@ function clearAllData() {
     isProduction: true,
     clearedSheets: sheetsToClear.length,
     trashedFiles: trashedFiles,
-    message: 'Đã xóa toàn bộ dữ liệu thử nghiệm và giữ nguyên tài khoản Giáo viên.'
+    message:
+      "Đã xóa toàn bộ dữ liệu thử nghiệm và giữ nguyên tài khoản Giáo viên.",
   };
 }
 
@@ -778,7 +944,7 @@ function clearAllDataCompletely() {
     SHEET_NAMES.EXIT_TICKETS,
     SHEET_NAMES.VOCABULARY,
     SHEET_NAMES.PRACTICE_EXERCISES,
-    SHEET_NAMES.PRACTICE_SUBMISSIONS
+    SHEET_NAMES.PRACTICE_SUBMISSIONS,
   ];
 
   allSheets.forEach(function (sheetName) {
@@ -786,7 +952,10 @@ function clearAllDataCompletely() {
   });
 
   const trashedFiles = trashAllDriveUploadFiles_();
-  PropertiesService.getScriptProperties().setProperty('STUDYSNAP_IS_PRODUCTION', 'true');
+  PropertiesService.getScriptProperties().setProperty(
+    "STUDYSNAP_IS_PRODUCTION",
+    "true",
+  );
 
   invalidateSchemaCache_();
   invalidateBootstrapCache_();
@@ -796,7 +965,7 @@ function clearAllDataCompletely() {
     isProduction: true,
     clearedSheets: allSheets.length,
     trashedFiles: trashedFiles,
-    message: 'Đã xóa trắng toàn bộ dữ liệu hệ thống.'
+    message: "Đã xóa trắng toàn bộ dữ liệu hệ thống.",
   };
 }
 
@@ -849,51 +1018,60 @@ function trashFolderFilesRecursively_(folder) {
 }
 
 const ASSIGNMENT_HEADERS = [
-  'assignment_id',
-  'title',
-  'lesson_tag',
-  'due_date',
-  'description',
-  'require_media',
-  'session_tag',
-  'class_name',
-  'exercise_id',
-  'lesson_id'
+  "assignment_id",
+  "title",
+  "lesson_tag",
+  "due_date",
+  "description",
+  "require_media",
+  "session_tag",
+  "class_name",
+  "exercise_id",
+  "lesson_id",
 ];
 
 const SUBMISSIONS_HEADERS = [
-  'submission_id',
-  'assignment_id',
-  'student_id',
-  'submitted_at',
-  'student_note',
-  'media_type',
-  'media_url',
-  'media_duration',
-  'status',
-  'score',
-  'teacher_comment',
-  'teacher_voice_url',
-  'teacher_voice_duration',
-  'graded_at',
-  'practice_count',
-  'attempt_number'
+  "submission_id",
+  "assignment_id",
+  "student_id",
+  "submitted_at",
+  "student_note",
+  "media_type",
+  "media_url",
+  "media_duration",
+  "status",
+  "score",
+  "teacher_comment",
+  "teacher_voice_url",
+  "teacher_voice_duration",
+  "graded_at",
+  "practice_count",
+  "attempt_number",
 ];
 
 function ensureSheetHeaders_(sheet, requiredHeaders) {
-  if (!sheet || !Array.isArray(requiredHeaders) || requiredHeaders.length === 0) return [];
+  if (!sheet || !Array.isArray(requiredHeaders) || requiredHeaders.length === 0)
+    return [];
   if (sheet.getLastRow() === 0) {
-    sheet.getRange(1, 1, 1, requiredHeaders.length).setValues([requiredHeaders]);
+    sheet
+      .getRange(1, 1, 1, requiredHeaders.length)
+      .setValues([requiredHeaders]);
     try {
-      sheet.getRange(1, 1, 1, requiredHeaders.length).setFontWeight('bold').setBackground('#CCFBF1');
+      sheet
+        .getRange(1, 1, 1, requiredHeaders.length)
+        .setFontWeight("bold")
+        .setBackground("#CCFBF1");
     } catch (e) {}
-    if (typeof sheet.setFrozenRows === 'function') sheet.setFrozenRows(1);
+    if (typeof sheet.setFrozenRows === "function") sheet.setFrozenRows(1);
     return requiredHeaders.slice();
   }
   const lastCol = Math.max(sheet.getLastColumn(), 1);
-  const currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
-    return String(h || '').trim();
-  });
+  const currentHeaders = sheet
+    .getRange(1, 1, 1, lastCol)
+    .getValues()[0]
+    .map(function (h) {
+      return String(h || "").trim();
+    });
   const missing = requiredHeaders.filter(function (h) {
     return currentHeaders.indexOf(h) === -1;
   });
@@ -901,7 +1079,10 @@ function ensureSheetHeaders_(sheet, requiredHeaders) {
   if (missing.length > 0) {
     sheet.getRange(1, 1, 1, finalHeaders.length).setValues([finalHeaders]);
     try {
-      sheet.getRange(1, 1, 1, finalHeaders.length).setFontWeight('bold').setBackground('#CCFBF1');
+      sheet
+        .getRange(1, 1, 1, finalHeaders.length)
+        .setFontWeight("bold")
+        .setBackground("#CCFBF1");
     } catch (e) {}
   }
   return finalHeaders;
@@ -911,36 +1092,84 @@ function ensureSheetsExist_(ss) {
   const schemas = [
     {
       name: SHEET_NAMES.TEACHERS,
-      headers: ['teacher_id', 'full_name', 'username', 'password', 'subject']
+      headers: ["teacher_id", "full_name", "username", "password", "subject"],
     },
     {
       name: SHEET_NAMES.STUDENTS,
-      headers: ['student_id', 'full_name', 'class_name', 'avatar_initials', 'username', 'password', 'created_at']
+      headers: [
+        "student_id",
+        "full_name",
+        "class_name",
+        "avatar_initials",
+        "username",
+        "password",
+        "created_at",
+      ],
     },
     {
       name: SHEET_NAMES.ASSIGNMENTS,
-      headers: ASSIGNMENT_HEADERS
+      headers: ASSIGNMENT_HEADERS,
     },
     {
       name: SHEET_NAMES.SUBMISSIONS,
-      headers: SUBMISSIONS_HEADERS
+      headers: SUBMISSIONS_HEADERS,
     },
     {
       name: SHEET_NAMES.EXIT_TICKETS,
-      headers: ['record_id', 'ticket_id', 'student_id', 'student_name', 'score', 'total', 'submitted_at', 'answers_json']
+      headers: [
+        "record_id",
+        "ticket_id",
+        "student_id",
+        "student_name",
+        "score",
+        "total",
+        "submitted_at",
+        "answers_json",
+      ],
     },
     {
       name: SHEET_NAMES.VOCABULARY,
-      headers: ['vocab_id', 'lesson_id', 'lesson_title', 'word', 'ipa', 'part_of_speech', 'meaning_vi', 'example_en', 'example_vi']
+      headers: [
+        "vocab_id",
+        "lesson_id",
+        "lesson_title",
+        "word",
+        "ipa",
+        "part_of_speech",
+        "meaning_vi",
+        "example_en",
+        "example_vi",
+      ],
     },
     {
       name: SHEET_NAMES.PRACTICE_EXERCISES,
-      headers: ['exercise_id', 'title', 'lesson_tag', 'total_score', 'thresholds_json', 'sections_json', 'created_at']
+      headers: [
+        "exercise_id",
+        "title",
+        "lesson_tag",
+        "total_score",
+        "thresholds_json",
+        "sections_json",
+        "created_at",
+      ],
     },
     {
       name: SHEET_NAMES.PRACTICE_SUBMISSIONS,
-      headers: ['submission_id', 'exercise_id', 'student_id', 'student_name', 'total_score', 'max_score', 'rating', 'submitted_at', 'section_scores_json', 'answers_json', 'manual_grades_json', 'status']
-    }
+      headers: [
+        "submission_id",
+        "exercise_id",
+        "student_id",
+        "student_name",
+        "total_score",
+        "max_score",
+        "rating",
+        "submitted_at",
+        "section_scores_json",
+        "answers_json",
+        "manual_grades_json",
+        "status",
+      ],
+    },
   ];
 
   schemas.forEach(function (schema) {
@@ -953,7 +1182,10 @@ function ensureSheetsExist_(ss) {
 }
 
 function getBootstrapData_(ss) {
-  const isProdProp = PropertiesService.getScriptProperties().getProperty('STUDYSNAP_IS_PRODUCTION') === 'true';
+  const isProdProp =
+    PropertiesService.getScriptProperties().getProperty(
+      "STUDYSNAP_IS_PRODUCTION",
+    ) === "true";
   let teachersSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
   let studentsSheet = ss.getSheetByName(SHEET_NAMES.STUDENTS);
   let assignmentsSheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS);
@@ -963,7 +1195,16 @@ function getBootstrapData_(ss) {
   let practiceExSheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_EXERCISES);
   let practiceSubSheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_SUBMISSIONS);
 
-  if (!teachersSheet || !studentsSheet || !assignmentsSheet || !submissionsSheet || !exitTicketsSheet || !vocabSheet || !practiceExSheet || !practiceSubSheet) {
+  if (
+    !teachersSheet ||
+    !studentsSheet ||
+    !assignmentsSheet ||
+    !submissionsSheet ||
+    !exitTicketsSheet ||
+    !vocabSheet ||
+    !practiceExSheet ||
+    !practiceSubSheet
+  ) {
     ensureSheetsExist_(ss);
     markSchemaReadyCache_();
     teachersSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
@@ -985,7 +1226,7 @@ function getBootstrapData_(ss) {
     exitTicketLogs: readSheetRows_(exitTicketsSheet),
     vocabulary: readSheetRows_(vocabSheet),
     practiceExercises: readSheetRows_(practiceExSheet),
-    practiceSubmissions: readSheetRows_(practiceSubSheet)
+    practiceSubmissions: readSheetRows_(practiceSubSheet),
   };
 }
 
@@ -993,7 +1234,7 @@ function stripPasswordFromRows_(rows) {
   return (rows || []).map(function (r) {
     const copy = {};
     for (const k in r) {
-      if (Object.prototype.hasOwnProperty.call(r, k) && k !== 'password') {
+      if (Object.prototype.hasOwnProperty.call(r, k) && k !== "password") {
         copy[k] = r[k];
       }
     }
@@ -1004,35 +1245,43 @@ function stripPasswordFromRows_(rows) {
 function sha256HexGs_(text) {
   const digest = Utilities.computeDigest(
     Utilities.DigestAlgorithm.SHA_256,
-    String(text || ''),
-    Utilities.Charset.UTF_8
+    String(text || ""),
+    Utilities.Charset.UTF_8,
   );
-  let hex = '';
+  let hex = "";
   for (let i = 0; i < digest.length; i++) {
     const v = digest[i] < 0 ? digest[i] + 256 : digest[i];
-    hex += ('0' + v.toString(16)).slice(-2);
+    hex += ("0" + v.toString(16)).slice(-2);
   }
   return hex;
 }
 
 function isPasswordHashedGs_(stored) {
-  const s = String(stored || '');
-  return s.indexOf('sha256_v1$') === 0 || s.indexOf('pbkdf2_v1$') === 0;
+  const s = String(stored || "");
+  return s.indexOf("sha256_v1$") === 0 || s.indexOf("pbkdf2_v1$") === 0;
 }
 
 function hashPasswordGs_(plainPassword) {
-  const salt = Utilities.getUuid().replace(/-/g, '').slice(0, 24);
-  return 'sha256_v1$' + salt + '$' + sha256HexGs_(salt + ':' + String(plainPassword || '').trim());
+  const salt = Utilities.getUuid().replace(/-/g, "").slice(0, 24);
+  return (
+    "sha256_v1$" +
+    salt +
+    "$" +
+    sha256HexGs_(salt + ":" + String(plainPassword || "").trim())
+  );
 }
 
 function verifyPasswordGs_(plainInput, storedVal) {
-  const plain = String(plainInput || '').trim();
-  const stored = String(storedVal === undefined || storedVal === null ? '' : storedVal).trim();
+  const plain = String(plainInput || "").trim();
+  const stored = String(
+    storedVal === undefined || storedVal === null ? "" : storedVal,
+  ).trim();
   if (!plain || !stored) return { valid: false, needsUpgrade: false };
-  if (stored.indexOf('sha256_v1$') === 0) {
-    const parts = stored.split('$');
-    if (parts.length !== 3 || !parts[1] || !parts[2]) return { valid: false, needsUpgrade: false };
-    const actual = sha256HexGs_(parts[1] + ':' + plain);
+  if (stored.indexOf("sha256_v1$") === 0) {
+    const parts = stored.split("$");
+    if (parts.length !== 3 || !parts[1] || !parts[2])
+      return { valid: false, needsUpgrade: false };
+    const actual = sha256HexGs_(parts[1] + ":" + plain);
     return { valid: actual === parts[2], needsUpgrade: false };
   }
   const match = plain === stored;
@@ -1059,12 +1308,14 @@ function readSheetRows_(sheet) {
  * Xử lý đăng nhập cho Giáo viên và Học sinh
  */
 function handleLogin_(ss, payload) {
-  const username = String(payload.username || '').trim().toLowerCase();
-  const password = String(payload.password || '').trim();
+  const username = String(payload.username || "")
+    .trim()
+    .toLowerCase();
+  const password = String(payload.password || "").trim();
   if (!username || !password) {
     return {
       ok: false,
-      error: 'Vui lòng nhập đầy đủ Tên đăng nhập và Mật khẩu.'
+      error: "Vui lòng nhập đầy đủ Tên đăng nhập và Mật khẩu.",
     };
   }
 
@@ -1072,7 +1323,9 @@ function handleLogin_(ss, payload) {
   const teachers = readSheetRows_(teachersSheet);
   for (let i = 0; i < teachers.length; i++) {
     const t = teachers[i];
-    const tUser = String(t.username || '').trim().toLowerCase();
+    const tUser = String(t.username || "")
+      .trim()
+      .toLowerCase();
     const checkT = verifyPasswordGs_(password, t.password);
     if (tUser && tUser === username && checkT.valid) {
       if (checkT.needsUpgrade && teachersSheet) {
@@ -1081,12 +1334,12 @@ function handleLogin_(ss, payload) {
       return {
         ok: true,
         user: {
-          role: 'teacher',
+          role: "teacher",
           id: t.teacher_id,
           full_name: t.full_name,
           username: t.username,
-          subject: t.subject || 'Giáo viên phụ trách'
-        }
+          subject: t.subject || "Giáo viên phụ trách",
+        },
       };
     }
   }
@@ -1095,9 +1348,14 @@ function handleLogin_(ss, payload) {
   const students = readSheetRows_(studentsSheet);
   for (let j = 0; j < students.length; j++) {
     const s = students[j];
-    const sUser = String(s.username || '').trim().toLowerCase();
-    const sId = String(s.student_id || '').trim().toLowerCase();
-    const matchUser = (sUser && sUser === username) || (sId && sId === username);
+    const sUser = String(s.username || "")
+      .trim()
+      .toLowerCase();
+    const sId = String(s.student_id || "")
+      .trim()
+      .toLowerCase();
+    const matchUser =
+      (sUser && sUser === username) || (sId && sId === username);
     const checkS = verifyPasswordGs_(password, s.password);
     if (matchUser && checkS.valid) {
       if (checkS.needsUpgrade && studentsSheet) {
@@ -1106,63 +1364,66 @@ function handleLogin_(ss, payload) {
       return {
         ok: true,
         user: {
-          role: 'student',
+          role: "student",
           id: s.student_id,
           student_id: s.student_id,
           full_name: s.full_name,
           username: s.username || s.student_id.toLowerCase(),
           class_name: s.class_name,
-          avatar_initials: s.avatar_initials
-        }
+          avatar_initials: s.avatar_initials,
+        },
       };
     }
   }
 
   return {
     ok: false,
-    error: 'Tên đăng nhập hoặc mật khẩu không chính xác.'
+    error: "Tên đăng nhập hoặc mật khẩu không chính xác.",
   };
 }
 
 function handleChangePassword_(ss, payload) {
-  const role = String(payload.role || '').trim();
-  const userId = String(payload.user_id || payload.student_id || payload.teacher_id || '').trim();
-  const currentPwd = String(payload.current_password || '').trim();
-  const newPwd = String(payload.new_password || '').trim();
+  const role = String(payload.role || "").trim();
+  const userId = String(
+    payload.user_id || payload.student_id || payload.teacher_id || "",
+  ).trim();
+  const currentPwd = String(payload.current_password || "").trim();
+  const newPwd = String(payload.new_password || "").trim();
   if (!userId || !currentPwd || newPwd.length < 6) {
     return {
       ok: false,
-      error: 'Vui lòng nhập mật khẩu hiện tại và mật khẩu mới (tối thiểu 6 ký tự).'
+      error:
+        "Vui lòng nhập mật khẩu hiện tại và mật khẩu mới (tối thiểu 6 ký tự).",
     };
   }
-  if (role === 'teacher') {
+  if (role === "teacher") {
     const tSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
     const vals = tSheet ? tSheet.getDataRange().getValues() : [];
     for (let i = 1; i < vals.length; i++) {
-      if (String(vals[i][0] || '').trim() === userId) {
+      if (String(vals[i][0] || "").trim() === userId) {
         const chk = verifyPasswordGs_(currentPwd, vals[i][3]);
         if (!chk.valid) {
-          return { ok: false, error: 'Mật khẩu hiện tại không chính xác.' };
+          return { ok: false, error: "Mật khẩu hiện tại không chính xác." };
         }
         tSheet.getRange(i + 1, 4).setValue(hashPasswordGs_(newPwd));
         return { ok: true };
       }
     }
-    return { ok: false, error: 'Không tìm thấy tài khoản giáo viên.' };
+    return { ok: false, error: "Không tìm thấy tài khoản giáo viên." };
   }
   const sSheet = ss.getSheetByName(SHEET_NAMES.STUDENTS);
   const sVals = sSheet ? sSheet.getDataRange().getValues() : [];
   for (let j = 1; j < sVals.length; j++) {
-    if (String(sVals[j][0] || '').trim() === userId) {
+    if (String(sVals[j][0] || "").trim() === userId) {
       const chkS = verifyPasswordGs_(currentPwd, sVals[j][5]);
       if (!chkS.valid) {
-        return { ok: false, error: 'Mật khẩu hiện tại không chính xác.' };
+        return { ok: false, error: "Mật khẩu hiện tại không chính xác." };
       }
       sSheet.getRange(j + 1, 6).setValue(hashPasswordGs_(newPwd));
       return { ok: true };
     }
   }
-  return { ok: false, error: 'Không tìm thấy tài khoản học sinh.' };
+  return { ok: false, error: "Không tìm thấy tài khoản học sinh." };
 }
 
 function generateNextStudentId_(sheet) {
@@ -1170,7 +1431,9 @@ function generateNextStudentId_(sheet) {
   let maxNum = 0;
   const existingIds = {};
   for (let i = 1; i < values.length; i++) {
-    const id = String(values[i][0] || '').trim().toUpperCase();
+    const id = String(values[i][0] || "")
+      .trim()
+      .toUpperCase();
     if (!id) continue;
     existingIds[id] = true;
     const match = id.match(/^HS(\d+)$/);
@@ -1180,10 +1443,10 @@ function generateNextStudentId_(sheet) {
     }
   }
   let counter = Math.max(maxNum + 1, Math.max(values.length, 1));
-  let candidate = 'HS' + String(counter).padStart(2, '0');
+  let candidate = "HS" + String(counter).padStart(2, "0");
   while (existingIds[candidate]) {
     counter++;
-    candidate = 'HS' + String(counter).padStart(2, '0');
+    candidate = "HS" + String(counter).padStart(2, "0");
   }
   return candidate;
 }
@@ -1194,14 +1457,24 @@ function generateNextStudentId_(sheet) {
 function handleCreateStudentAccount_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.STUDENTS);
   const studentId = payload.student_id || generateNextStudentId_(sheet);
-  const fullName = payload.full_name || 'Học sinh mới';
-  const className = payload.class_name || 'Lớp Tiếng Trung HSK 2';
+  const fullName = payload.full_name || "Học sinh mới";
+  const className = payload.class_name || "Lớp Tiếng Trung HSK 2";
   const initials = payload.avatar_initials || getInitials_(fullName);
-  const username = String(payload.username || studentId.toLowerCase()).trim().toLowerCase();
-  const password = String(payload.password || '123456').trim();
-  const createdAt = new Date().toLocaleDateString('vi-VN');
+  const username = String(payload.username || studentId.toLowerCase())
+    .trim()
+    .toLowerCase();
+  const password = String(payload.password || "123456").trim();
+  const createdAt = new Date().toLocaleDateString("vi-VN");
 
-  sheet.appendRow([studentId, fullName, className, initials, username, hashPasswordGs_(password), createdAt]);
+  sheet.appendRow([
+    studentId,
+    fullName,
+    className,
+    initials,
+    username,
+    hashPasswordGs_(password),
+    createdAt,
+  ]);
   return {
     student_id: studentId,
     full_name: fullName,
@@ -1209,14 +1482,14 @@ function handleCreateStudentAccount_(ss, payload) {
     avatar_initials: initials,
     username: username,
     password: password,
-    created_at: createdAt
+    created_at: createdAt,
   };
 }
 
 function handleResetStudentPassword_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.STUDENTS);
   const values = sheet.getDataRange().getValues();
-  const newPwd = String(payload.new_password || '123456').trim();
+  const newPwd = String(payload.new_password || "123456").trim();
   for (let i = 1; i < values.length; i++) {
     if (String(values[i][0]) === String(payload.student_id)) {
       sheet.getRange(i + 1, 6).setValue(hashPasswordGs_(newPwd));
@@ -1227,7 +1500,7 @@ function handleResetStudentPassword_(ss, payload) {
 }
 
 function trashDriveFileByUrl_(fileUrl) {
-  const url = String(fileUrl || '').trim();
+  const url = String(fileUrl || "").trim();
   if (!url) return false;
   const match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   if (!match || !match[1]) return false;
@@ -1242,12 +1515,12 @@ function trashDriveFileByUrl_(fileUrl) {
 function deleteRowsByColumnMatch_(sheet, colIndex, targetValue, onRowDelete) {
   if (!sheet || sheet.getLastRow() <= 1) return 0;
   const values = sheet.getDataRange().getValues();
-  const needle = String(targetValue || '').trim();
+  const needle = String(targetValue || "").trim();
   if (!needle) return 0;
   let deletedCount = 0;
   for (let i = values.length - 1; i >= 1; i--) {
-    if (String(values[i][colIndex] || '').trim() === needle) {
-      if (typeof onRowDelete === 'function') {
+    if (String(values[i][colIndex] || "").trim() === needle) {
+      if (typeof onRowDelete === "function") {
         onRowDelete(values[i]);
       }
       sheet.deleteRow(i + 1);
@@ -1258,15 +1531,15 @@ function deleteRowsByColumnMatch_(sheet, colIndex, targetValue, onRowDelete) {
 }
 
 function handleDeleteStudentAccount_(ss, payload) {
-  const studentId = String((payload && payload.student_id) || '').trim();
+  const studentId = String((payload && payload.student_id) || "").trim();
   if (!studentId) {
-    return { deleted: false, student_id: '' };
+    return { deleted: false, student_id: "" };
   }
 
   const deletedStudents = deleteRowsByColumnMatch_(
     ss.getSheetByName(SHEET_NAMES.STUDENTS),
     0,
-    studentId
+    studentId,
   );
 
   const deletedSubmissions = deleteRowsByColumnMatch_(
@@ -1276,19 +1549,19 @@ function handleDeleteStudentAccount_(ss, payload) {
     function (row) {
       trashDriveFileByUrl_(row[6]);
       trashDriveFileByUrl_(row[11]);
-    }
+    },
   );
 
   const deletedExitTickets = deleteRowsByColumnMatch_(
     ss.getSheetByName(SHEET_NAMES.EXIT_TICKETS),
     2,
-    studentId
+    studentId,
   );
 
   const deletedPracticeSubmissions = deleteRowsByColumnMatch_(
     ss.getSheetByName(SHEET_NAMES.PRACTICE_SUBMISSIONS),
     2,
-    studentId
+    studentId,
   );
 
   return {
@@ -1297,52 +1570,62 @@ function handleDeleteStudentAccount_(ss, payload) {
     deleted_students: deletedStudents,
     deleted_submissions: deletedSubmissions,
     deleted_exit_tickets: deletedExitTickets,
-    deleted_practice_submissions: deletedPracticeSubmissions
+    deleted_practice_submissions: deletedPracticeSubmissions,
   };
 }
 
 function getInitials_(fullName) {
-  const parts = String(fullName || '').trim().split(/\s+/);
-  if (parts.length === 0) return 'HS';
+  const parts = String(fullName || "")
+    .trim()
+    .split(/\s+/);
+  if (parts.length === 0) return "HS";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[parts.length - 2].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+  return (
+    parts[parts.length - 2].charAt(0) + parts[parts.length - 1].charAt(0)
+  ).toUpperCase();
 }
 
 function handleSubmitHomework_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.SUBMISSIONS);
   const assignmentId = payload.assignment_id;
   const studentId = payload.student_id;
-  const nowStr = new Date().toLocaleString('vi-VN');
+  const nowStr = new Date().toLocaleString("vi-VN");
 
-  let mediaUrl = payload.media_url || '';
+  let mediaUrl = payload.media_url || "";
   if (payload.media_base64 && payload.media_mime_type) {
-    const rawExtMatch = String(payload.media_filename || '').trim().match(/(\.[a-z0-9]{2,5})$/i);
-    let driveExt = rawExtMatch ? rawExtMatch[1].toLowerCase() : '';
+    const rawExtMatch = String(payload.media_filename || "")
+      .trim()
+      .match(/(\.[a-z0-9]{2,5})$/i);
+    let driveExt = rawExtMatch ? rawExtMatch[1].toLowerCase() : "";
     if (!driveExt) {
-      const mLower = String(payload.media_mime_type || '').toLowerCase();
-      if (mLower.indexOf('quicktime') >= 0) driveExt = '.mov';
-      else if (mLower.indexOf('video/webm') >= 0) driveExt = '.webm';
-      else if (mLower.indexOf('video/') >= 0) driveExt = '.mp4';
-      else if (mLower.indexOf('wav') >= 0) driveExt = '.wav';
-      else if (mLower.indexOf('mp4') >= 0 || mLower.indexOf('m4a') >= 0) driveExt = '.m4a';
-      else driveExt = '.webm';
+      const mLower = String(payload.media_mime_type || "").toLowerCase();
+      if (mLower.indexOf("quicktime") >= 0) driveExt = ".mov";
+      else if (mLower.indexOf("video/webm") >= 0) driveExt = ".webm";
+      else if (mLower.indexOf("video/") >= 0) driveExt = ".mp4";
+      else if (mLower.indexOf("wav") >= 0) driveExt = ".wav";
+      else if (mLower.indexOf("mp4") >= 0 || mLower.indexOf("m4a") >= 0)
+        driveExt = ".m4a";
+      else driveExt = ".webm";
     }
     mediaUrl = saveBase64MediaToDrive_(
       payload.media_base64,
       payload.media_mime_type,
-      'BVN_' + assignmentId + '_' + studentId + '_' + Date.now() + driveExt
+      "BVN_" + assignmentId + "_" + studentId + "_" + Date.now() + driveExt,
     );
   }
 
   ensureSheetHeaders_(sheet, SUBMISSIONS_HEADERS);
   const values = sheet.getDataRange().getValues();
-  const incomingType = String(payload.media_type || 'audio').trim() || 'audio';
-  const isVocabTrack = incomingType === 'vocab' || incomingType === 'vocab_log';
+  const incomingType = String(payload.media_type || "audio").trim() || "audio";
+  const isVocabTrack = incomingType === "vocab" || incomingType === "vocab_log";
 
   if (isVocabTrack) {
     let foundRowIndex = -1;
     for (let i = 1; i < values.length; i++) {
-      if (String(values[i][1]) === String(assignmentId) && String(values[i][2]) === String(studentId)) {
+      if (
+        String(values[i][1]) === String(assignmentId) &&
+        String(values[i][2]) === String(studentId)
+      ) {
         foundRowIndex = i + 1;
         break;
       }
@@ -1350,26 +1633,35 @@ function handleSubmitHomework_(ss, payload) {
 
     if (foundRowIndex > 0) {
       const existing = values[foundRowIndex - 1];
-      const nextStatus = String(payload.status || 'graded');
+      const nextStatus = String(payload.status || "graded");
       const hasIncomingScore =
-        payload.score !== undefined && payload.score !== null && String(payload.score) !== '';
+        payload.score !== undefined &&
+        payload.score !== null &&
+        String(payload.score) !== "";
       const nextScore = hasIncomingScore ? String(payload.score) : existing[9];
       const nextNote =
         payload.student_note !== undefined && payload.student_note !== null
           ? String(payload.student_note)
           : existing[4];
       const rawPriorCount = Number(existing[14] || 0) || 0;
-      const effectivePrior = rawPriorCount === 0 && (existing[3] || existing[8] === 'graded')
-        ? 1
-        : rawPriorCount;
-      const incrementPractice = payload.increment_practice !== false && payload.increment_practice !== 0;
+      const effectivePrior =
+        rawPriorCount === 0 && (existing[3] || existing[8] === "graded")
+          ? 1
+          : rawPriorCount;
+      const incrementPractice =
+        payload.increment_practice !== false &&
+        payload.increment_practice !== 0;
       const explicitPracticeCount =
-        payload.practice_count !== undefined && payload.practice_count !== null && payload.practice_count !== ''
+        payload.practice_count !== undefined &&
+        payload.practice_count !== null &&
+        payload.practice_count !== ""
           ? Math.max(0, Number(payload.practice_count) || 0)
           : null;
       const nextPracticeCount = incrementPractice
         ? Math.max(effectivePrior + 1, explicitPracticeCount || 0)
-        : (explicitPracticeCount !== null ? explicitPracticeCount : effectivePrior);
+        : explicitPracticeCount !== null
+          ? explicitPracticeCount
+          : effectivePrior;
       const keepAttempt = Math.max(1, Number(existing[15] || 1) || 1);
       const updatedRow = [
         existing[0],
@@ -1379,7 +1671,7 @@ function handleSubmitHomework_(ss, payload) {
         nextNote,
         incomingType,
         mediaUrl || existing[6],
-        payload.media_duration || existing[7] || '01:00',
+        payload.media_duration || existing[7] || "01:00",
         nextStatus,
         nextScore,
         existing[10],
@@ -1387,9 +1679,11 @@ function handleSubmitHomework_(ss, payload) {
         existing[12],
         existing[13],
         nextPracticeCount,
-        keepAttempt
+        keepAttempt,
       ];
-      sheet.getRange(foundRowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
+      sheet
+        .getRange(foundRowIndex, 1, 1, updatedRow.length)
+        .setValues([updatedRow]);
       return {
         submission_id: existing[0],
         assignment_id: assignmentId,
@@ -1402,17 +1696,24 @@ function handleSubmitHomework_(ss, payload) {
         student_note: updatedRow[4],
         media_duration: updatedRow[7],
         submitted_at: nowStr,
-        practice_count: nextPracticeCount
+        practice_count: nextPracticeCount,
       };
     } else {
-      const newId = 'SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase();
-      const nextStatus = String(payload.status || 'graded');
+      const newId = "SUB_" + Utilities.getUuid().slice(0, 8).toUpperCase();
+      const nextStatus = String(payload.status || "graded");
       const nextScore =
-        payload.score !== undefined && payload.score !== null ? String(payload.score) : '';
-      const nextNote = String(payload.student_note || '');
-      const nextDur = String(payload.media_duration || '01:00');
-      const incrementPractice = payload.increment_practice !== false && payload.increment_practice !== 0;
-      const nextPracticeCount = Math.max(incrementPractice ? 1 : 0, Number(payload.practice_count || 0) || 0);
+        payload.score !== undefined && payload.score !== null
+          ? String(payload.score)
+          : "";
+      const nextNote = String(payload.student_note || "");
+      const nextDur = String(payload.media_duration || "01:00");
+      const incrementPractice =
+        payload.increment_practice !== false &&
+        payload.increment_practice !== 0;
+      const nextPracticeCount = Math.max(
+        incrementPractice ? 1 : 0,
+        Number(payload.practice_count || 0) || 0,
+      );
       const newRow = [
         newId,
         assignmentId,
@@ -1424,12 +1725,12 @@ function handleSubmitHomework_(ss, payload) {
         nextDur,
         nextStatus,
         nextScore,
-        '',
-        '',
-        '',
-        '',
+        "",
+        "",
+        "",
+        "",
         nextPracticeCount,
-        1
+        1,
       ];
       sheet.appendRow(newRow);
       return {
@@ -1444,7 +1745,7 @@ function handleSubmitHomework_(ss, payload) {
         student_note: nextNote,
         media_duration: nextDur,
         submitted_at: nowStr,
-        practice_count: nextPracticeCount
+        practice_count: nextPracticeCount,
       };
     }
   }
@@ -1453,24 +1754,35 @@ function handleSubmitHomework_(ss, payload) {
   let existingCount = 0;
   let maxAttempt = 0;
   for (let i = 1; i < values.length; i++) {
-    if (String(values[i][1]) === String(assignmentId) && String(values[i][2]) === String(studentId)) {
-      const rowType = String(values[i][5] || '').trim();
-      if (rowType === 'vocab' || rowType === 'vocab_log') continue;
+    if (
+      String(values[i][1]) === String(assignmentId) &&
+      String(values[i][2]) === String(studentId)
+    ) {
+      const rowType = String(values[i][5] || "").trim();
+      if (rowType === "vocab" || rowType === "vocab_log") continue;
       existingCount++;
-      maxAttempt = Math.max(maxAttempt, Math.max(1, Number(values[i][15] || 1) || 1));
+      maxAttempt = Math.max(
+        maxAttempt,
+        Math.max(1, Number(values[i][15] || 1) || 1),
+      );
     }
   }
-  if (existingCount > 0 && !String(mediaUrl || '').trim()) {
-    throw new Error('Vui lòng thu âm hoặc tải lên file Audio/Video mới để nộp lại lần tiếp theo.');
+  if (existingCount > 0 && !String(mediaUrl || "").trim()) {
+    throw new Error(
+      "Vui lòng thu âm hoặc tải lên file Audio/Video mới để nộp lại lần tiếp theo.",
+    );
   }
 
-  const nextAttempt = existingCount > 0 ? Math.max(maxAttempt + 1, existingCount + 1) : 1;
-  const newId = 'SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase();
-  const nextStatus = 'submitted';
+  const nextAttempt =
+    existingCount > 0 ? Math.max(maxAttempt + 1, existingCount + 1) : 1;
+  const newId = "SUB_" + Utilities.getUuid().slice(0, 8).toUpperCase();
+  const nextStatus = "submitted";
   const nextScore =
-    existingCount === 0 && payload.score !== undefined && payload.score !== null ? String(payload.score) : '';
-  const nextNote = String(payload.student_note || '');
-  const nextDur = String(payload.media_duration || '01:00');
+    existingCount === 0 && payload.score !== undefined && payload.score !== null
+      ? String(payload.score)
+      : "";
+  const nextNote = String(payload.student_note || "");
+  const nextDur = String(payload.media_duration || "01:00");
   const newRow = [
     newId,
     assignmentId,
@@ -1482,12 +1794,12 @@ function handleSubmitHomework_(ss, payload) {
     nextDur,
     nextStatus,
     nextScore,
-    '',
-    '',
-    '',
-    '',
+    "",
+    "",
+    "",
+    "",
     0,
-    nextAttempt
+    nextAttempt,
   ];
   sheet.appendRow(newRow);
   return {
@@ -1502,7 +1814,7 @@ function handleSubmitHomework_(ss, payload) {
     student_note: nextNote,
     media_duration: nextDur,
     submitted_at: nowStr,
-    practice_count: 0
+    practice_count: 0,
   };
 }
 
@@ -1510,26 +1822,29 @@ function handleSaveTeacherFeedback_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.SUBMISSIONS);
   const assignmentId = payload.assignment_id;
   const studentId = payload.student_id;
-  const nowStr = new Date().toLocaleString('vi-VN');
+  const nowStr = new Date().toLocaleString("vi-VN");
 
-  const rawVoiceUrl = String(payload.teacher_voice_url || '').trim();
-  let teacherVoiceUrl = rawVoiceUrl.indexOf('demo:') === 0 ? '' : rawVoiceUrl;
+  const rawVoiceUrl = String(payload.teacher_voice_url || "").trim();
+  let teacherVoiceUrl = rawVoiceUrl.indexOf("demo:") === 0 ? "" : rawVoiceUrl;
   if (payload.teacher_voice_base64 && payload.teacher_voice_mime_type) {
     teacherVoiceUrl = saveBase64MediaToDrive_(
       payload.teacher_voice_base64,
       payload.teacher_voice_mime_type,
-      'VoiceFeedback_' + assignmentId + '_' + studentId + '_' + Date.now()
+      "VoiceFeedback_" + assignmentId + "_" + studentId + "_" + Date.now(),
     );
   }
 
   ensureSheetHeaders_(sheet, SUBMISSIONS_HEADERS);
   const values = sheet.getDataRange().getValues();
-  const targetSubId = String(payload.submission_id || '').trim();
+  const targetSubId = String(payload.submission_id || "").trim();
   let foundRowIndex = -1;
   let bestAttempt = -1;
   for (let i = 1; i < values.length; i++) {
-    if (String(values[i][1]) === String(assignmentId) && String(values[i][2]) === String(studentId)) {
-      if (targetSubId && String(values[i][0] || '').trim() === targetSubId) {
+    if (
+      String(values[i][1]) === String(assignmentId) &&
+      String(values[i][2]) === String(studentId)
+    ) {
+      if (targetSubId && String(values[i][0] || "").trim() === targetSubId) {
         foundRowIndex = i + 1;
         break;
       }
@@ -1544,18 +1859,34 @@ function handleSaveTeacherFeedback_(ss, payload) {
   if (foundRowIndex > 0) {
     const existing = values[foundRowIndex - 1];
     const keepAttempt = Math.max(1, Number(existing[15] || 1) || 1);
-    const existingVoiceRaw = String(existing[11] || '').trim();
-    const existingRealVoice = existingVoiceRaw.indexOf('demo:') === 0 ? '' : existingVoiceRaw;
-    const nextVoiceUrl = teacherVoiceUrl || existingRealVoice || '';
+    const existingVoiceRaw = String(existing[11] || "").trim();
+    const existingRealVoice =
+      existingVoiceRaw.indexOf("demo:") === 0 ? "" : existingVoiceRaw;
+    const nextVoiceUrl = teacherVoiceUrl || existingRealVoice || "";
     const nextVoiceDur = nextVoiceUrl
-      ? (teacherVoiceUrl ? (payload.teacher_voice_duration || existing[12] || '') : (existing[12] || payload.teacher_voice_duration || ''))
-      : '';
-    const hasIncomingScore = payload.score !== undefined && (String(payload.score) !== '' || existing[9] === '' || payload.allow_clear_score === true);
+      ? teacherVoiceUrl
+        ? payload.teacher_voice_duration || existing[12] || ""
+        : existing[12] || payload.teacher_voice_duration || ""
+      : "";
+    const hasIncomingScore =
+      payload.score !== undefined &&
+      (String(payload.score) !== "" ||
+        existing[9] === "" ||
+        payload.allow_clear_score === true);
     const nextScore = hasIncomingScore ? payload.score : existing[9];
-    const hasIncomingComment = payload.teacher_comment !== undefined && (String(payload.teacher_comment) !== '' || !existing[10] || payload.allow_clear_comment === true);
-    const nextComment = hasIncomingComment ? payload.teacher_comment : existing[10];
+    const hasIncomingComment =
+      payload.teacher_comment !== undefined &&
+      (String(payload.teacher_comment) !== "" ||
+        !existing[10] ||
+        payload.allow_clear_comment === true);
+    const nextComment = hasIncomingComment
+      ? payload.teacher_comment
+      : existing[10];
     const nextSubmittedAt = existing[3] || nowStr;
-    const nextStatus = String(payload.status || '').trim() === 'resubmit_required' ? 'resubmit_required' : 'graded';
+    const nextStatus =
+      String(payload.status || "").trim() === "resubmit_required"
+        ? "resubmit_required"
+        : "graded";
     const updatedRow = [
       existing[0],
       assignmentId,
@@ -1572,9 +1903,11 @@ function handleSaveTeacherFeedback_(ss, payload) {
       nextVoiceDur,
       nowStr,
       Number(existing[14] || 0) || 0,
-      keepAttempt
+      keepAttempt,
     ];
-    sheet.getRange(foundRowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
+    sheet
+      .getRange(foundRowIndex, 1, 1, updatedRow.length)
+      .setValues([updatedRow]);
     return {
       submission_id: existing[0],
       assignment_id: assignmentId,
@@ -1586,31 +1919,34 @@ function handleSaveTeacherFeedback_(ss, payload) {
       teacher_comment: updatedRow[10],
       teacher_voice_url: updatedRow[11],
       teacher_voice_duration: updatedRow[12],
-      graded_at: nowStr
+      graded_at: nowStr,
     };
   } else {
-    const newId = 'SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase();
-    const newVoiceDur = teacherVoiceUrl ? (payload.teacher_voice_duration || '') : '';
-    const nextStatus = String(payload.status || '').trim() === 'resubmit_required'
-      ? 'resubmit_required'
-      : (payload.status || 'graded');
+    const newId = "SUB_" + Utilities.getUuid().slice(0, 8).toUpperCase();
+    const newVoiceDur = teacherVoiceUrl
+      ? payload.teacher_voice_duration || ""
+      : "";
+    const nextStatus =
+      String(payload.status || "").trim() === "resubmit_required"
+        ? "resubmit_required"
+        : payload.status || "graded";
     const newRow = [
       newId,
       assignmentId,
       studentId,
-      '',
-      '',
-      'audio',
-      '',
-      '',
+      "",
+      "",
+      "audio",
+      "",
+      "",
       nextStatus,
-      payload.score || '',
-      payload.teacher_comment || '',
+      payload.score || "",
+      payload.teacher_comment || "",
       teacherVoiceUrl,
       newVoiceDur,
       nowStr,
       0,
-      1
+      1,
     ];
     sheet.appendRow(newRow);
     return {
@@ -1618,27 +1954,29 @@ function handleSaveTeacherFeedback_(ss, payload) {
       assignment_id: assignmentId,
       student_id: studentId,
       attempt_number: 1,
-      submitted_at: '',
+      submitted_at: "",
       status: newRow[8],
       score: newRow[9],
       teacher_comment: newRow[10],
       teacher_voice_url: teacherVoiceUrl,
       teacher_voice_duration: newVoiceDur,
-      graded_at: nowStr
+      graded_at: nowStr,
     };
   }
 }
 
 function handleCopyTeacherFeedback_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.SUBMISSIONS);
-  const assignmentId = String(payload.assignment_id || '').trim();
-  const sourceStudentId = String(payload.source_student_id || '').trim();
+  const assignmentId = String(payload.assignment_id || "").trim();
+  const sourceStudentId = String(payload.source_student_id || "").trim();
   const includeSource = Boolean(payload.include_source && sourceStudentId);
-  const rawTargets = Array.isArray(payload.target_student_ids) ? payload.target_student_ids : [];
+  const rawTargets = Array.isArray(payload.target_student_ids)
+    ? payload.target_student_ids
+    : [];
   const targetIds = [];
   const seenTargets = {};
   rawTargets.forEach(function (id) {
-    const clean = String(id || '').trim();
+    const clean = String(id || "").trim();
     if (clean && !seenTargets[clean]) {
       seenTargets[clean] = true;
       targetIds.push(clean);
@@ -1649,44 +1987,65 @@ function handleCopyTeacherFeedback_(ss, payload) {
     targetIds.push(sourceStudentId);
   }
   if (!sheet || !assignmentId || targetIds.length === 0) {
-    return { assignment_id: assignmentId, updated_count: 0, teacher_voice_url: '', submissions: [] };
+    return {
+      assignment_id: assignmentId,
+      updated_count: 0,
+      teacher_voice_url: "",
+      submissions: [],
+    };
   }
 
-  const rawVoiceUrl = String(payload.teacher_voice_url || '').trim();
-  let sharedVoiceUrl = rawVoiceUrl.indexOf('demo:') === 0 ? '' : rawVoiceUrl;
+  const rawVoiceUrl = String(payload.teacher_voice_url || "").trim();
+  let sharedVoiceUrl = rawVoiceUrl.indexOf("demo:") === 0 ? "" : rawVoiceUrl;
   if (payload.teacher_voice_base64 && payload.teacher_voice_mime_type) {
     sharedVoiceUrl = saveBase64MediaToDrive_(
       payload.teacher_voice_base64,
       payload.teacher_voice_mime_type,
-      'VoiceFeedback_' + assignmentId + '_Shared_' + Date.now()
+      "VoiceFeedback_" + assignmentId + "_Shared_" + Date.now(),
     );
   }
 
   const copyComment = payload.copy_comment !== false;
   const copyVoice = payload.copy_voice !== false && Boolean(sharedVoiceUrl);
   const copyScore = Boolean(payload.copy_score);
-  const mergeMode = String(payload.merge_mode || 'replace') === 'append' ? 'append' : 'replace';
-  const incomingComment = payload.teacher_comment !== undefined ? String(payload.teacher_comment).trim() : '';
-  const incomingScore = payload.score !== undefined && payload.score !== null ? String(payload.score).trim() : '';
-  const incomingVoiceDur = copyVoice ? String(payload.teacher_voice_duration || '') : '';
-  const nowStr = new Date().toLocaleString('vi-VN');
+  const mergeMode =
+    String(payload.merge_mode || "replace") === "append" ? "append" : "replace";
+  const incomingComment =
+    payload.teacher_comment !== undefined
+      ? String(payload.teacher_comment).trim()
+      : "";
+  const incomingScore =
+    payload.score !== undefined && payload.score !== null
+      ? String(payload.score).trim()
+      : "";
+  const incomingVoiceDur = copyVoice
+    ? String(payload.teacher_voice_duration || "")
+    : "";
+  const nowStr = new Date().toLocaleString("vi-VN");
 
   ensureSheetHeaders_(sheet, SUBMISSIONS_HEADERS);
   const values = sheet.getDataRange().getValues();
-  const sourceSubId = String(payload.source_submission_id || '').trim();
+  const sourceSubId = String(payload.source_submission_id || "").trim();
   const rowIndexByStudent = {};
   const bestAttemptByStudent = {};
   for (let i = 1; i < values.length; i++) {
-    if (String(values[i][1] || '').trim() === assignmentId) {
-      const sId = String(values[i][2] || '').trim();
+    if (String(values[i][1] || "").trim() === assignmentId) {
+      const sId = String(values[i][2] || "").trim();
       if (!sId) continue;
-      if (sourceSubId && sId === sourceStudentId && String(values[i][0] || '').trim() === sourceSubId) {
+      if (
+        sourceSubId &&
+        sId === sourceStudentId &&
+        String(values[i][0] || "").trim() === sourceSubId
+      ) {
         rowIndexByStudent[sId] = i + 1;
         bestAttemptByStudent[sId] = 999999;
         continue;
       }
       const att = Math.max(1, Number(values[i][15] || 1) || 1);
-      if (bestAttemptByStudent[sId] === undefined || att >= bestAttemptByStudent[sId]) {
+      if (
+        bestAttemptByStudent[sId] === undefined ||
+        att >= bestAttemptByStudent[sId]
+      ) {
         bestAttemptByStudent[sId] = att;
         rowIndexByStudent[sId] = i + 1;
       }
@@ -1699,21 +2058,28 @@ function handleCopyTeacherFeedback_(ss, payload) {
     if (rowIdx > 0) {
       const existing = values[rowIdx - 1];
       const keepAttempt = Math.max(1, Number(existing[15] || 1) || 1);
-      const existingVoiceRaw = String(existing[11] || '').trim();
-      const existingRealVoice = existingVoiceRaw.indexOf('demo:') === 0 ? '' : existingVoiceRaw;
-      const nextScore = copyScore && incomingScore !== '' ? incomingScore : existing[9];
-      let nextComment = String(existing[10] || '');
-      if (copyComment && incomingComment !== '') {
-        if (mergeMode === 'append' && nextComment) {
-          nextComment = nextComment.indexOf(incomingComment) !== -1
-            ? nextComment
-            : (nextComment + '\n' + incomingComment);
+      const existingVoiceRaw = String(existing[11] || "").trim();
+      const existingRealVoice =
+        existingVoiceRaw.indexOf("demo:") === 0 ? "" : existingVoiceRaw;
+      const nextScore =
+        copyScore && incomingScore !== "" ? incomingScore : existing[9];
+      let nextComment = String(existing[10] || "");
+      if (copyComment && incomingComment !== "") {
+        if (mergeMode === "append" && nextComment) {
+          nextComment =
+            nextComment.indexOf(incomingComment) !== -1
+              ? nextComment
+              : nextComment + "\n" + incomingComment;
         } else {
           nextComment = incomingComment;
         }
       }
       const nextVoiceUrl = copyVoice ? sharedVoiceUrl : existingRealVoice;
-      const nextVoiceDur = copyVoice ? incomingVoiceDur : (nextVoiceUrl ? (existing[12] || '') : '');
+      const nextVoiceDur = copyVoice
+        ? incomingVoiceDur
+        : nextVoiceUrl
+          ? existing[12] || ""
+          : "";
       const updatedRow = [
         existing[0],
         assignmentId,
@@ -1723,14 +2089,14 @@ function handleCopyTeacherFeedback_(ss, payload) {
         existing[5],
         existing[6],
         existing[7],
-        'graded',
+        "graded",
         nextScore,
         nextComment,
         nextVoiceUrl,
         nextVoiceDur,
         nowStr,
         Number(existing[14] || 0) || 0,
-        keepAttempt
+        keepAttempt,
       ];
       sheet.getRange(rowIdx, 1, 1, updatedRow.length).setValues([updatedRow]);
       updatedSubmissions.push({
@@ -1738,36 +2104,36 @@ function handleCopyTeacherFeedback_(ss, payload) {
         assignment_id: assignmentId,
         student_id: stuId,
         attempt_number: keepAttempt,
-        status: 'graded',
+        status: "graded",
         score: nextScore,
         teacher_comment: nextComment,
         teacher_voice_url: nextVoiceUrl,
         teacher_voice_duration: nextVoiceDur,
-        graded_at: nowStr
+        graded_at: nowStr,
       });
     } else {
-      const newId = 'SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase();
-      const nextScore = copyScore && incomingScore !== '' ? incomingScore : '';
-      const nextComment = copyComment ? incomingComment : '';
-      const nextVoiceUrl = copyVoice ? sharedVoiceUrl : '';
-      const nextVoiceDur = copyVoice ? incomingVoiceDur : '';
+      const newId = "SUB_" + Utilities.getUuid().slice(0, 8).toUpperCase();
+      const nextScore = copyScore && incomingScore !== "" ? incomingScore : "";
+      const nextComment = copyComment ? incomingComment : "";
+      const nextVoiceUrl = copyVoice ? sharedVoiceUrl : "";
+      const nextVoiceDur = copyVoice ? incomingVoiceDur : "";
       const newRow = [
         newId,
         assignmentId,
         stuId,
-        '',
-        '',
-        'audio',
-        '',
-        '',
-        'graded',
+        "",
+        "",
+        "audio",
+        "",
+        "",
+        "graded",
         nextScore,
         nextComment,
         nextVoiceUrl,
         nextVoiceDur,
         nowStr,
         0,
-        1
+        1,
       ];
       sheet.appendRow(newRow);
       updatedSubmissions.push({
@@ -1775,17 +2141,17 @@ function handleCopyTeacherFeedback_(ss, payload) {
         assignment_id: assignmentId,
         student_id: stuId,
         attempt_number: 1,
-        submitted_at: '',
-        student_note: '',
-        media_type: 'audio',
-        media_url: '',
-        media_duration: '',
-        status: 'graded',
+        submitted_at: "",
+        student_note: "",
+        media_type: "audio",
+        media_url: "",
+        media_duration: "",
+        status: "graded",
         score: nextScore,
         teacher_comment: nextComment,
         teacher_voice_url: nextVoiceUrl,
         teacher_voice_duration: nextVoiceDur,
-        graded_at: nowStr
+        graded_at: nowStr,
       });
     }
   });
@@ -1794,44 +2160,46 @@ function handleCopyTeacherFeedback_(ss, payload) {
     assignment_id: assignmentId,
     updated_count: updatedSubmissions.length,
     teacher_voice_url: sharedVoiceUrl,
-    submissions: updatedSubmissions
+    submissions: updatedSubmissions,
   };
 }
 
 function handleSubmitExitTicket_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.EXIT_TICKETS);
-  const recordId = 'EXT_' + Utilities.getUuid().slice(0, 8).toUpperCase();
-  const nowStr = new Date().toLocaleString('vi-VN');
+  const recordId = "EXT_" + Utilities.getUuid().slice(0, 8).toUpperCase();
+  const nowStr = new Date().toLocaleString("vi-VN");
   sheet.appendRow([
     recordId,
-    payload.ticket_id || 'EXIT_BAI_1',
-    payload.student_id || '',
-    payload.student_name || '',
+    payload.ticket_id || "EXIT_BAI_1",
+    payload.student_id || "",
+    payload.student_name || "",
     payload.score || 0,
     payload.total || 0,
     nowStr,
-    JSON.stringify(payload.answers || [])
+    JSON.stringify(payload.answers || []),
   ]);
   return { record_id: recordId, submitted_at: nowStr };
 }
 
 function handleAddVocabulary_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.VOCABULARY);
-  const vocabId = String(payload.vocab_id || '').trim() || ('V_' + Utilities.getUuid().slice(0, 6).toUpperCase());
+  const vocabId =
+    String(payload.vocab_id || "").trim() ||
+    "V_" + Utilities.getUuid().slice(0, 6).toUpperCase();
   const rowData = [
     vocabId,
-    payload.lesson_id || 'bai-1',
-    payload.lesson_title || 'Bài 1',
-    payload.word || '',
-    payload.ipa || '',
-    payload.part_of_speech || '',
-    payload.meaning_vi || '',
-    payload.example_en || '',
-    payload.example_vi || ''
+    payload.lesson_id || "bai-1",
+    payload.lesson_title || "Bài 1",
+    payload.word || "",
+    payload.ipa || "",
+    payload.part_of_speech || "",
+    payload.meaning_vi || "",
+    payload.example_en || "",
+    payload.example_vi || "",
   ];
   const values = sheet.getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
-    if (String(values[i][0] || '').trim() === vocabId) {
+    if (String(values[i][0] || "").trim() === vocabId) {
       sheet.getRange(i + 1, 1, 1, rowData.length).setValues([rowData]);
       return { vocab_id: vocabId, updated: true };
     }
@@ -1843,15 +2211,15 @@ function handleAddVocabulary_(ss, payload) {
 function handleDeleteVocabulary_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.VOCABULARY);
   if (!sheet) return { deleted_count: 0 };
-  const targetVocabId = String(payload.vocab_id || '').trim();
-  const targetLessonId = String(payload.lesson_id || '').trim();
+  const targetVocabId = String(payload.vocab_id || "").trim();
+  const targetLessonId = String(payload.lesson_id || "").trim();
   if (!targetVocabId && !targetLessonId) return { deleted_count: 0 };
 
   const values = sheet.getDataRange().getValues();
   let deletedCount = 0;
   for (let i = values.length - 1; i >= 1; i--) {
-    const rowVocabId = String(values[i][0] || '').trim();
-    const rowLessonId = String(values[i][1] || '').trim();
+    const rowVocabId = String(values[i][0] || "").trim();
+    const rowLessonId = String(values[i][1] || "").trim();
     const matched = targetVocabId
       ? rowVocabId === targetVocabId
       : rowLessonId === targetLessonId;
@@ -1860,7 +2228,11 @@ function handleDeleteVocabulary_(ss, payload) {
       deletedCount++;
     }
   }
-  return { vocab_id: targetVocabId, lesson_id: targetLessonId, deleted_count: deletedCount };
+  return {
+    vocab_id: targetVocabId,
+    lesson_id: targetLessonId,
+    deleted_count: deletedCount,
+  };
 }
 
 function handleBatchAddVocabulary_(ss, payload) {
@@ -1871,7 +2243,7 @@ function handleBatchAddVocabulary_(ss, payload) {
   const values = sheet.getDataRange().getValues();
   const existingRowMap = {};
   for (let r = 1; r < values.length; r++) {
-    const existingId = String(values[r][0] || '').trim();
+    const existingId = String(values[r][0] || "").trim();
     if (existingId) existingRowMap[existingId] = r + 1;
   }
 
@@ -1879,20 +2251,24 @@ function handleBatchAddVocabulary_(ss, payload) {
   let updatedCount = 0;
   for (let i = 0; i < list.length; i++) {
     const v = list[i] || {};
-    const vocabId = String(v.vocab_id || '').trim() || ('V_' + Utilities.getUuid().slice(0, 6).toUpperCase());
+    const vocabId =
+      String(v.vocab_id || "").trim() ||
+      "V_" + Utilities.getUuid().slice(0, 6).toUpperCase();
     const rowArr = [
       vocabId,
-      v.lesson_id || 'bai-1',
-      v.lesson_title || 'Bài 1',
-      v.word || '',
-      v.ipa || '',
-      v.part_of_speech || '',
-      v.meaning_vi || '',
-      v.example_en || '',
-      v.example_vi || ''
+      v.lesson_id || "bai-1",
+      v.lesson_title || "Bài 1",
+      v.word || "",
+      v.ipa || "",
+      v.part_of_speech || "",
+      v.meaning_vi || "",
+      v.example_en || "",
+      v.example_vi || "",
     ];
     if (existingRowMap[vocabId]) {
-      sheet.getRange(existingRowMap[vocabId], 1, 1, rowArr.length).setValues([rowArr]);
+      sheet
+        .getRange(existingRowMap[vocabId], 1, 1, rowArr.length)
+        .setValues([rowArr]);
       updatedCount++;
     } else {
       newRows.push(rowArr);
@@ -1900,7 +2276,9 @@ function handleBatchAddVocabulary_(ss, payload) {
   }
   if (newRows.length > 0) {
     const startRow = sheet.getLastRow() + 1;
-    sheet.getRange(startRow, 1, newRows.length, newRows[0].length).setValues(newRows);
+    sheet
+      .getRange(startRow, 1, newRows.length, newRows[0].length)
+      .setValues(newRows);
   }
   return { inserted: newRows.length, updated: updatedCount };
 }
@@ -1908,23 +2286,26 @@ function handleBatchAddVocabulary_(ss, payload) {
 function handleAddAssignment_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS);
   const headers = ensureSheetHeaders_(sheet, ASSIGNMENT_HEADERS);
-  const assignmentId = payload.assignment_id || ('BVN0' + sheet.getLastRow());
+  const assignmentId = payload.assignment_id || "BVN0" + sheet.getLastRow();
   const rowMap = {
     assignment_id: assignmentId,
-    title: payload.title || '',
-    lesson_tag: payload.lesson_tag || 'Bài mới',
-    due_date: payload.due_date || '',
-    description: payload.description || '',
-    require_media: payload.require_media || 'audio_or_video',
-    session_tag: payload.session_tag || '',
-    class_name: payload.class_name !== undefined && payload.class_name !== null && String(payload.class_name).trim() !== ''
-      ? String(payload.class_name).trim()
-      : 'all',
-    exercise_id: payload.exercise_id || '',
-    lesson_id: payload.lesson_id || ''
+    title: payload.title || "",
+    lesson_tag: payload.lesson_tag || "Bài mới",
+    due_date: payload.due_date || "",
+    description: payload.description || "",
+    require_media: payload.require_media || "audio_or_video",
+    session_tag: payload.session_tag || "",
+    class_name:
+      payload.class_name !== undefined &&
+      payload.class_name !== null &&
+      String(payload.class_name).trim() !== ""
+        ? String(payload.class_name).trim()
+        : "all",
+    exercise_id: payload.exercise_id || "",
+    lesson_id: payload.lesson_id || "",
   };
   const rowValues = headers.map(function (h) {
-    return rowMap[h] !== undefined ? rowMap[h] : '';
+    return rowMap[h] !== undefined ? rowMap[h] : "";
   });
   sheet.appendRow(rowValues);
   return { assignment_id: assignmentId, class_name: rowMap.class_name };
@@ -1932,29 +2313,47 @@ function handleAddAssignment_(ss, payload) {
 
 function handleRenameAssignmentSession_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS);
-  const oldName = String(payload.old_session_tag || '').trim();
-  const newName = String(payload.new_session_tag || '').trim();
+  const oldName = String(payload.old_session_tag || "").trim();
+  const newName = String(payload.new_session_tag || "").trim();
   if (!sheet || !oldName || !newName) {
-    return { old_session_tag: oldName, new_session_tag: newName, updated_count: 0 };
+    return {
+      old_session_tag: oldName,
+      new_session_tag: newName,
+      updated_count: 0,
+    };
   }
   const headers = ensureSheetHeaders_(sheet, ASSIGNMENT_HEADERS);
-  const sessionColIdx = headers.indexOf('session_tag');
-  const reqColIdx = headers.indexOf('require_media');
+  const sessionColIdx = headers.indexOf("session_tag");
+  const reqColIdx = headers.indexOf("require_media");
   if (sessionColIdx === -1) {
-    return { old_session_tag: oldName, new_session_tag: newName, updated_count: 0 };
+    return {
+      old_session_tag: oldName,
+      new_session_tag: newName,
+      updated_count: 0,
+    };
   }
   const values = sheet.getDataRange().getValues();
   let updatedCount = 0;
   for (let i = 1; i < values.length; i++) {
-    const reqMedia = reqColIdx >= 0 ? String(values[i][reqColIdx] || 'audio_or_video').trim().toLowerCase() : 'audio_or_video';
-    if (reqMedia === 'practice' || reqMedia === 'vocab') continue;
-    const curSession = String(values[i][sessionColIdx] || 'Buổi 1').trim() || 'Buổi 1';
+    const reqMedia =
+      reqColIdx >= 0
+        ? String(values[i][reqColIdx] || "audio_or_video")
+            .trim()
+            .toLowerCase()
+        : "audio_or_video";
+    if (reqMedia === "practice" || reqMedia === "vocab") continue;
+    const curSession =
+      String(values[i][sessionColIdx] || "Buổi 1").trim() || "Buổi 1";
     if (curSession === oldName) {
       sheet.getRange(i + 1, sessionColIdx + 1).setValue(newName);
       updatedCount++;
     }
   }
-  return { old_session_tag: oldName, new_session_tag: newName, updated_count: updatedCount };
+  return {
+    old_session_tag: oldName,
+    new_session_tag: newName,
+    updated_count: updatedCount,
+  };
 }
 
 function updateAssignmentsClass_(ss, assignmentIds, targetClass) {
@@ -1967,23 +2366,24 @@ function updateAssignmentsClass_(ss, assignmentIds, targetClass) {
     return { updated_count: 0, target_class: targetClass };
   }
   let headers = values[0];
-  let classColIdx = headers.indexOf('class_name');
+  let classColIdx = headers.indexOf("class_name");
   if (classColIdx === -1) {
     headers = ensureSheetHeaders_(sheet, ASSIGNMENT_HEADERS);
-    classColIdx = headers.indexOf('class_name');
-    if (classColIdx === -1) return { updated_count: 0, target_class: targetClass };
+    classColIdx = headers.indexOf("class_name");
+    if (classColIdx === -1)
+      return { updated_count: 0, target_class: targetClass };
   }
 
   const idSet = {};
   assignmentIds.forEach(function (id) {
-    const clean = String(id || '').trim();
+    const clean = String(id || "").trim();
     if (clean) idSet[clean] = true;
   });
 
   let updatedCount = 0;
-  const normalizedTarget = String(targetClass || 'unassigned').trim();
+  const normalizedTarget = String(targetClass || "unassigned").trim();
   for (let i = 1; i < values.length; i++) {
-    const rowId = String(values[i][0] || '').trim();
+    const rowId = String(values[i][0] || "").trim();
     if (idSet[rowId]) {
       sheet.getRange(i + 1, classColIdx + 1).setValue(normalizedTarget);
       updatedCount++;
@@ -1993,13 +2393,13 @@ function updateAssignmentsClass_(ss, assignmentIds, targetClass) {
 }
 
 function handleDeleteAssignment_(ss, payload) {
-  const assignmentId = String((payload && payload.assignment_id) || '').trim();
-  if (!assignmentId) return { deleted: false, assignment_id: '' };
+  const assignmentId = String((payload && payload.assignment_id) || "").trim();
+  if (!assignmentId) return { deleted: false, assignment_id: "" };
 
   const deletedAssignments = deleteRowsByColumnMatch_(
     ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS),
     0,
-    assignmentId
+    assignmentId,
   );
   const deletedSubmissions = deleteRowsByColumnMatch_(
     ss.getSheetByName(SHEET_NAMES.SUBMISSIONS),
@@ -2008,28 +2408,31 @@ function handleDeleteAssignment_(ss, payload) {
     function (row) {
       trashDriveFileByUrl_(row[6]);
       trashDriveFileByUrl_(row[11]);
-    }
+    },
   );
   return {
     deleted: deletedAssignments > 0,
     assignment_id: assignmentId,
     deleted_assignments: deletedAssignments,
-    deleted_submissions: deletedSubmissions
+    deleted_submissions: deletedSubmissions,
   };
 }
 
 function getOrCreateUploadFolder_() {
-  const folderPropKey = 'STUDYSNAP_DRIVE_FOLDER_ID';
+  const folderPropKey = "STUDYSNAP_DRIVE_FOLDER_ID";
   const cache = getScriptCacheSafe_();
-  let folderId = '';
+  let folderId = "";
   if (cache) {
     try {
-      folderId = String(cache.get(folderPropKey) || '');
+      folderId = String(cache.get(folderPropKey) || "");
     } catch (e) {}
   }
   if (!folderId) {
     try {
-      folderId = String(PropertiesService.getScriptProperties().getProperty(folderPropKey) || '');
+      folderId = String(
+        PropertiesService.getScriptProperties().getProperty(folderPropKey) ||
+          "",
+      );
     } catch (e) {}
   }
   if (folderId) {
@@ -2037,7 +2440,9 @@ function getOrCreateUploadFolder_() {
       const existingFolder = DriveApp.getFolderById(folderId);
       if (existingFolder && !existingFolder.isTrashed()) {
         if (cache) {
-          try { cache.put(folderPropKey, folderId, 21600); } catch (e) {}
+          try {
+            cache.put(folderPropKey, folderId, 21600);
+          } catch (e) {}
         }
         return existingFolder;
       }
@@ -2045,69 +2450,102 @@ function getOrCreateUploadFolder_() {
   }
 
   const folders = DriveApp.getFoldersByName(DRIVE_FOLDER_NAME);
-  const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(DRIVE_FOLDER_NAME);
-  const resolvedId = folder && typeof folder.getId === 'function' ? folder.getId() : '';
+  const folder = folders.hasNext()
+    ? folders.next()
+    : DriveApp.createFolder(DRIVE_FOLDER_NAME);
+  const resolvedId =
+    folder && typeof folder.getId === "function" ? folder.getId() : "";
   if (resolvedId) {
     try {
-      PropertiesService.getScriptProperties().setProperty(folderPropKey, resolvedId);
+      PropertiesService.getScriptProperties().setProperty(
+        folderPropKey,
+        resolvedId,
+      );
     } catch (e) {}
     if (cache) {
-      try { cache.put(folderPropKey, resolvedId, 21600); } catch (e) {}
+      try {
+        cache.put(folderPropKey, resolvedId, 21600);
+      } catch (e) {}
     }
   }
   return folder;
 }
 
 function inferMediaMimeType_(fileName, rawMime) {
-  const mime = String(rawMime || '').trim().toLowerCase();
-  const extMatch = String(fileName || '').match(/\.([a-z0-9]+)$/i);
-  const ext = extMatch ? extMatch[1].toLowerCase() : '';
+  const mime = String(rawMime || "")
+    .trim()
+    .toLowerCase();
+  const extMatch = String(fileName || "").match(/\.([a-z0-9]+)$/i);
+  const ext = extMatch ? extMatch[1].toLowerCase() : "";
   const extMap = {
-    m4a: 'audio/mp4',
-    m4b: 'audio/mp4',
-    mp3: 'audio/mpeg',
-    wav: 'audio/wav',
-    aac: 'audio/aac',
-    caf: 'audio/x-caf',
-    amr: 'audio/amr',
-    ogg: 'audio/ogg',
-    oga: 'audio/ogg',
-    opus: 'audio/opus',
-    flac: 'audio/flac',
-    weba: 'audio/webm',
-    webm: 'audio/webm',
-    '3gp': 'audio/3gpp',
-    mp4: 'video/mp4',
-    m4v: 'video/mp4',
-    mov: 'video/quicktime',
-    avi: 'video/x-msvideo',
-    mkv: 'video/x-matroska',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    png: 'image/png',
-    webp: 'image/webp',
-    gif: 'image/gif'
+    m4a: "audio/mp4",
+    m4b: "audio/mp4",
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    aac: "audio/aac",
+    caf: "audio/x-caf",
+    amr: "audio/amr",
+    ogg: "audio/ogg",
+    oga: "audio/ogg",
+    opus: "audio/opus",
+    flac: "audio/flac",
+    weba: "audio/webm",
+    webm: "audio/webm",
+    "3gp": "audio/3gpp",
+    mp4: "video/mp4",
+    m4v: "video/mp4",
+    mov: "video/quicktime",
+    avi: "video/x-msvideo",
+    mkv: "video/x-matroska",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    gif: "image/gif",
   };
-  if (mime.indexOf('video/') === 0 && ext !== 'm4a' && ext !== 'm4b') {
+  if (mime.indexOf("video/") === 0 && ext !== "m4a" && ext !== "m4b") {
     return mime;
   }
-  if (ext && extMap[ext] && ext !== 'webm' && ext !== 'mp4') {
-    if (!mime || mime === 'application/octet-stream' || mime === 'binary/octet-stream' || mime === 'audio/x-m4a' || mime === 'audio/m4a' || mime === 'audio/mp3' || (ext === 'm4a' && mime === 'video/mp4')) {
+  if (ext && extMap[ext] && ext !== "webm" && ext !== "mp4") {
+    if (
+      !mime ||
+      mime === "application/octet-stream" ||
+      mime === "binary/octet-stream" ||
+      mime === "audio/x-m4a" ||
+      mime === "audio/m4a" ||
+      mime === "audio/mp3" ||
+      (ext === "m4a" && mime === "video/mp4")
+    ) {
       return extMap[ext];
     }
   }
-  if (mime === 'audio/x-m4a' || mime === 'audio/m4a' || mime === 'audio/mp4a-latm') return 'audio/mp4';
-  if (mime === 'audio/mp3') return 'audio/mpeg';
-  if (mime === 'audio/x-wav' || mime === 'audio/wave') return 'audio/wav';
-  if (mime === 'audio/x-aac' || mime === 'audio/x-hx-aac-adts' || mime === 'audio/aacp') return 'audio/aac';
-  if (!mime || mime === 'application/octet-stream' || mime === 'binary/octet-stream') {
-    return (ext && extMap[ext]) || 'audio/webm';
+  if (
+    mime === "audio/x-m4a" ||
+    mime === "audio/m4a" ||
+    mime === "audio/mp4a-latm"
+  )
+    return "audio/mp4";
+  if (mime === "audio/mp3") return "audio/mpeg";
+  if (mime === "audio/x-wav" || mime === "audio/wave") return "audio/wav";
+  if (
+    mime === "audio/x-aac" ||
+    mime === "audio/x-hx-aac-adts" ||
+    mime === "audio/aacp"
+  )
+    return "audio/aac";
+  if (
+    !mime ||
+    mime === "application/octet-stream" ||
+    mime === "binary/octet-stream"
+  ) {
+    return (ext && extMap[ext]) || "audio/webm";
   }
   return mime;
 }
 
 function saveBase64MediaToDrive_(base64Data, mimeType, fileName) {
-  const cleaned = base64Data.indexOf(',') >= 0 ? base64Data.split(',')[1] : base64Data;
+  const cleaned =
+    base64Data.indexOf(",") >= 0 ? base64Data.split(",")[1] : base64Data;
   const bytes = Utilities.base64Decode(cleaned);
   const resolvedMime = inferMediaMimeType_(fileName, mimeType);
   const blob = Utilities.newBlob(bytes, resolvedMime, fileName);
@@ -2120,7 +2558,7 @@ function saveBase64MediaToDrive_(base64Data, mimeType, fileName) {
     // Workspace policies may restrict public sharing; GAS getMedia still serves via owner auth.
   }
 
-  return 'https://drive.google.com/uc?export=download&id=' + file.getId();
+  return "https://drive.google.com/uc?export=download&id=" + file.getId();
 }
 
 function handleDeleteMediaFiles_(payload) {
@@ -2128,12 +2566,14 @@ function handleDeleteMediaFiles_(payload) {
   const seenIds = {};
   const urls = Array.isArray(payload && payload.urls) ? payload.urls : [];
   urls.forEach(function (u) {
-    const m = String(u || '').match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    const m = String(u || "").match(/[?&]id=([a-zA-Z0-9_-]+)/);
     if (m && m[1]) seenIds[m[1]] = true;
   });
-  const fileIds = Array.isArray(payload && payload.fileIds) ? payload.fileIds : [];
+  const fileIds = Array.isArray(payload && payload.fileIds)
+    ? payload.fileIds
+    : [];
   fileIds.forEach(function (id) {
-    const clean = String(id || '').trim();
+    const clean = String(id || "").trim();
     if (clean) seenIds[clean] = true;
   });
   Object.keys(seenIds).forEach(function (fileId) {
@@ -2147,40 +2587,56 @@ function handleDeleteMediaFiles_(payload) {
 
 function handleSubmitPracticeExercise_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_SUBMISSIONS);
-  const exerciseId = String(payload.exercise_id || '');
-  const studentId = String(payload.student_id || '');
-  const nowStr = new Date().toLocaleString('vi-VN');
+  const exerciseId = String(payload.exercise_id || "");
+  const studentId = String(payload.student_id || "");
+  const nowStr = new Date().toLocaleString("vi-VN");
 
   const values = sheet.getDataRange().getValues();
   let foundRowIndex = -1;
   for (let i = 1; i < values.length; i++) {
-    if (String(values[i][1]) === exerciseId && String(values[i][2]) === studentId) {
+    if (
+      String(values[i][1]) === exerciseId &&
+      String(values[i][2]) === studentId
+    ) {
       foundRowIndex = i + 1;
       break;
     }
   }
 
-  const subId = foundRowIndex > 0 ? values[foundRowIndex - 1][0] : ('PRAC_SUB_' + Utilities.getUuid().slice(0, 8).toUpperCase());
-  const rawSubmitRating = payload.rating && typeof payload.rating === 'object' && payload.rating.key
-    ? payload.rating.key
-    : payload.rating;
-  const cleanSubmitRating = String(rawSubmitRating || '').trim();
-  const safeSubmitRating = (cleanSubmitRating === 'very_good' || cleanSubmitRating === 'good' || cleanSubmitRating === 'needs_review')
-    ? cleanSubmitRating
-    : '';
+  const subId =
+    foundRowIndex > 0
+      ? values[foundRowIndex - 1][0]
+      : "PRAC_SUB_" + Utilities.getUuid().slice(0, 8).toUpperCase();
+  const rawSubmitRating =
+    payload.rating && typeof payload.rating === "object" && payload.rating.key
+      ? payload.rating.key
+      : payload.rating;
+  const cleanSubmitRating = String(rawSubmitRating || "").trim();
+  const safeSubmitRating =
+    cleanSubmitRating === "very_good" ||
+    cleanSubmitRating === "good" ||
+    cleanSubmitRating === "needs_review"
+      ? cleanSubmitRating
+      : "";
   const rowData = [
     subId,
     exerciseId,
     studentId,
-    payload.student_name || '',
+    payload.student_name || "",
     payload.total_score !== undefined ? payload.total_score : 0,
     payload.max_score || 35,
     safeSubmitRating,
     nowStr,
-    typeof payload.section_scores === 'object' ? JSON.stringify(payload.section_scores) : String(payload.section_scores_json || '{}'),
-    typeof payload.answers === 'object' ? JSON.stringify(payload.answers) : String(payload.answers_json || '{}'),
-    typeof payload.manual_grades === 'object' ? JSON.stringify(payload.manual_grades) : String(payload.manual_grades_json || '{}'),
-    payload.status || 'submitted'
+    typeof payload.section_scores === "object"
+      ? JSON.stringify(payload.section_scores)
+      : String(payload.section_scores_json || "{}"),
+    typeof payload.answers === "object"
+      ? JSON.stringify(payload.answers)
+      : String(payload.answers_json || "{}"),
+    typeof payload.manual_grades === "object"
+      ? JSON.stringify(payload.manual_grades)
+      : String(payload.manual_grades_json || "{}"),
+    payload.status || "submitted",
   ];
 
   if (foundRowIndex > 0) {
@@ -2193,23 +2649,31 @@ function handleSubmitPracticeExercise_(ss, payload) {
 
 function handleGradeManualTranslation_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_SUBMISSIONS);
-  const subId = String(payload.submission_id || '');
+  const subId = String(payload.submission_id || "");
   const values = sheet.getDataRange().getValues();
 
   for (let i = 1; i < values.length; i++) {
     if (String(values[i][0]) === subId) {
       const existing = values[i];
-      const rawUpdatedRating = payload.rating && typeof payload.rating === 'object' && payload.rating.key
-        ? payload.rating.key
-        : payload.rating;
-      const cleanUpdatedRating = String(rawUpdatedRating || existing[6] || '').trim();
-      const safeUpdatedRating = cleanUpdatedRating === '[object Object]' ? '' : cleanUpdatedRating;
+      const rawUpdatedRating =
+        payload.rating &&
+        typeof payload.rating === "object" &&
+        payload.rating.key
+          ? payload.rating.key
+          : payload.rating;
+      const cleanUpdatedRating = String(
+        rawUpdatedRating || existing[6] || "",
+      ).trim();
+      const safeUpdatedRating =
+        cleanUpdatedRating === "[object Object]" ? "" : cleanUpdatedRating;
       const nextSectionScoresJson =
-        typeof payload.section_scores === 'object' && payload.section_scores !== null
+        typeof payload.section_scores === "object" &&
+        payload.section_scores !== null
           ? JSON.stringify(payload.section_scores)
-          : (typeof payload.section_scores_json === 'string' && payload.section_scores_json
+          : typeof payload.section_scores_json === "string" &&
+              payload.section_scores_json
             ? payload.section_scores_json
-            : existing[8]);
+            : existing[8];
       const updatedRow = [
         existing[0],
         existing[1],
@@ -2221,24 +2685,36 @@ function handleGradeManualTranslation_(ss, payload) {
         existing[7],
         nextSectionScoresJson,
         existing[9],
-        typeof payload.manual_grades === 'object' ? JSON.stringify(payload.manual_grades) : String(payload.manual_grades_json || existing[10]),
-        'graded'
+        typeof payload.manual_grades === "object"
+          ? JSON.stringify(payload.manual_grades)
+          : String(payload.manual_grades_json || existing[10]),
+        "graded",
       ];
       sheet.getRange(i + 1, 1, 1, updatedRow.length).setValues([updatedRow]);
-      return { submission_id: subId, status: 'graded', total_score: updatedRow[4] };
+      return {
+        submission_id: subId,
+        status: "graded",
+        total_score: updatedRow[4],
+      };
     }
   }
   return null;
 }
 
 function formatPracticeAssignmentTitle_(rawTitle) {
-  const clean = String(rawTitle || '').trim() || 'Bài tập mới';
+  const clean = String(rawTitle || "").trim() || "Bài tập mới";
   if (/^Luyện tập cuối (buổi|bài):/i.test(clean)) {
-    return 'Luyện tập cuối buổi:' + clean.replace(/^Luyện tập cuối (?:buổi|bài):/i, '');
+    return (
+      "Luyện tập cuối buổi:" +
+      clean.replace(/^Luyện tập cuối (?:buổi|bài):/i, "")
+    );
   }
   return (
-    'Luyện tập cuối buổi: ' +
-    clean.replace(/^(?:Bài tập luyện tập cuối bài|Bài luyện tập cuối buổi)\s*—\s*/i, '')
+    "Luyện tập cuối buổi: " +
+    clean.replace(
+      /^(?:Bài tập luyện tập cuối bài|Bài luyện tập cuối buổi)\s*—\s*/i,
+      "",
+    )
   );
 }
 
@@ -2250,16 +2726,16 @@ function syncLinkedPracticeAssignmentMeta_(ss, exId, cleanTitle, cleanTag) {
   if (!values || values.length <= 1) return 0;
 
   let headers = values[0];
-  let titleColIdx = headers.indexOf('title');
-  let tagColIdx = headers.indexOf('lesson_tag');
-  let reqColIdx = headers.indexOf('require_media');
-  let exIdColIdx = headers.indexOf('exercise_id');
+  let titleColIdx = headers.indexOf("title");
+  let tagColIdx = headers.indexOf("lesson_tag");
+  let reqColIdx = headers.indexOf("require_media");
+  let exIdColIdx = headers.indexOf("exercise_id");
   if (exIdColIdx === -1 || titleColIdx === -1 || tagColIdx === -1) {
     headers = ensureSheetHeaders_(asgSheet, ASSIGNMENT_HEADERS);
-    titleColIdx = headers.indexOf('title');
-    tagColIdx = headers.indexOf('lesson_tag');
-    reqColIdx = headers.indexOf('require_media');
-    exIdColIdx = headers.indexOf('exercise_id');
+    titleColIdx = headers.indexOf("title");
+    tagColIdx = headers.indexOf("lesson_tag");
+    reqColIdx = headers.indexOf("require_media");
+    exIdColIdx = headers.indexOf("exercise_id");
     if (exIdColIdx === -1 || titleColIdx === -1 || tagColIdx === -1) return 0;
   }
 
@@ -2267,9 +2743,10 @@ function syncLinkedPracticeAssignmentMeta_(ss, exId, cleanTitle, cleanTag) {
   let updatedCount = 0;
 
   for (let i = 1; i < values.length; i++) {
-    const rowExId = String(values[i][exIdColIdx] || '').trim();
-    const rowReq = reqColIdx >= 0 ? String(values[i][reqColIdx] || '').trim() : 'practice';
-    if (rowExId === exId && (reqColIdx === -1 || rowReq === 'practice')) {
+    const rowExId = String(values[i][exIdColIdx] || "").trim();
+    const rowReq =
+      reqColIdx >= 0 ? String(values[i][reqColIdx] || "").trim() : "practice";
+    if (rowExId === exId && (reqColIdx === -1 || rowReq === "practice")) {
       asgSheet.getRange(i + 1, titleColIdx + 1).setValue(formattedAsgTitle);
       asgSheet.getRange(i + 1, tagColIdx + 1).setValue(cleanTag);
       updatedCount++;
@@ -2279,41 +2756,59 @@ function syncLinkedPracticeAssignmentMeta_(ss, exId, cleanTitle, cleanTag) {
 }
 
 function persistListeningDataUrlToDrive_(dataUrl, filePrefix) {
-  if (typeof dataUrl !== 'string' || dataUrl.indexOf('data:') !== 0) {
+  if (typeof dataUrl !== "string" || dataUrl.indexOf("data:") !== 0) {
     return dataUrl;
   }
   const mimeMatch = dataUrl.match(/^data:([^;]+);base64,/i);
-  const mimeType = mimeMatch && mimeMatch[1] ? mimeMatch[1] : 'audio/webm';
-  const ext = mimeType.indexOf('mp3') >= 0 || mimeType.indexOf('mpeg') >= 0
-    ? '.mp3'
-    : (mimeType.indexOf('wav') >= 0 ? '.wav' : (mimeType.indexOf('mp4') >= 0 || mimeType.indexOf('m4a') >= 0 ? '.m4a' : '.webm'));
-  const fileName = filePrefix + '_' + Date.now() + ext;
+  const mimeType = mimeMatch && mimeMatch[1] ? mimeMatch[1] : "audio/webm";
+  const ext =
+    mimeType.indexOf("mp3") >= 0 || mimeType.indexOf("mpeg") >= 0
+      ? ".mp3"
+      : mimeType.indexOf("wav") >= 0
+        ? ".wav"
+        : mimeType.indexOf("mp4") >= 0 || mimeType.indexOf("m4a") >= 0
+          ? ".m4a"
+          : ".webm";
+  const fileName = filePrefix + "_" + Date.now() + ext;
   return saveBase64MediaToDrive_(dataUrl, mimeType, fileName);
 }
 
 function handleSavePracticeExercise_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_EXERCISES);
   const ex = payload.exercise || payload;
-  const exId = String(ex.exercise_id || ('EX_' + Date.now()));
-  const nowStr = new Date().toLocaleString('vi-VN');
-  const cleanTitle = String(ex.title || '').trim() || 'Bài tập mới';
-  const cleanTag = String(ex.lesson_tag || '').trim() || 'Bài 1';
+  const exId = String(ex.exercise_id || "EX_" + Date.now());
+  const nowStr = new Date().toLocaleString("vi-VN");
+  const cleanTitle = String(ex.title || "").trim() || "Bài tập mới";
+  const cleanTag = String(ex.lesson_tag || "").trim() || "Bài 1";
 
   // Đẩy audio nhúng Base64 (cả ở mức phần nghe chung và mức từng câu hỏi riêng) lên Drive để tránh vượt giới hạn 50k ký tự/ô của Google Sheets
   if (Array.isArray(ex.sections)) {
     for (let sIdx = 0; sIdx < ex.sections.length; sIdx++) {
       const sec = ex.sections[sIdx];
       if (!sec || !sec.data) continue;
-      const secPrefix = exId + '_' + (sec.section_id || ('listen_' + (sIdx + 1)));
-      if (typeof sec.data.audio_url === 'string' && sec.data.audio_url.indexOf('data:') === 0) {
-        sec.data.audio_url = persistListeningDataUrlToDrive_(sec.data.audio_url, secPrefix);
+      const secPrefix = exId + "_" + (sec.section_id || "listen_" + (sIdx + 1));
+      if (
+        typeof sec.data.audio_url === "string" &&
+        sec.data.audio_url.indexOf("data:") === 0
+      ) {
+        sec.data.audio_url = persistListeningDataUrlToDrive_(
+          sec.data.audio_url,
+          secPrefix,
+        );
       }
       if (Array.isArray(sec.data.items)) {
         for (let qIdx = 0; qIdx < sec.data.items.length; qIdx++) {
           const item = sec.data.items[qIdx];
-          if (item && typeof item.audio_url === 'string' && item.audio_url.indexOf('data:') === 0) {
-            const qPrefix = secPrefix + '_' + (item.id || ('q' + (qIdx + 1)));
-            item.audio_url = persistListeningDataUrlToDrive_(item.audio_url, qPrefix);
+          if (
+            item &&
+            typeof item.audio_url === "string" &&
+            item.audio_url.indexOf("data:") === 0
+          ) {
+            const qPrefix = secPrefix + "_" + (item.id || "q" + (qIdx + 1));
+            item.audio_url = persistListeningDataUrlToDrive_(
+              item.audio_url,
+              qPrefix,
+            );
           }
         }
       }
@@ -2334,9 +2829,13 @@ function handleSavePracticeExercise_(ss, payload) {
     cleanTitle,
     cleanTag,
     ex.total_score || 35,
-    typeof ex.thresholds === 'object' ? JSON.stringify(ex.thresholds) : String(ex.thresholds_json || '{"very_good":31,"good":25}'),
-    typeof ex.sections === 'object' ? JSON.stringify(ex.sections) : String(ex.sections_json || '[]'),
-    nowStr
+    typeof ex.thresholds === "object"
+      ? JSON.stringify(ex.thresholds)
+      : String(ex.thresholds_json || '{"very_good":31,"good":25}'),
+    typeof ex.sections === "object"
+      ? JSON.stringify(ex.sections)
+      : String(ex.sections_json || "[]"),
+    nowStr,
   ];
 
   if (foundRowIndex > 0) {
@@ -2350,15 +2849,15 @@ function handleSavePracticeExercise_(ss, payload) {
     title: cleanTitle,
     lesson_tag: cleanTag,
     total_score: rowData[3],
-    thresholds: typeof ex.thresholds === 'object' ? ex.thresholds : undefined,
+    thresholds: typeof ex.thresholds === "object" ? ex.thresholds : undefined,
     sections: Array.isArray(ex.sections) ? ex.sections : undefined,
-    updated_at: nowStr
+    updated_at: nowStr,
   };
 }
 
 function handleDeletePracticeExercise_(ss, payload) {
   const sheet = ss.getSheetByName(SHEET_NAMES.PRACTICE_EXERCISES);
-  const exId = String(payload.exercise_id || '');
+  const exId = String(payload.exercise_id || "");
   const values = sheet.getDataRange().getValues();
 
   for (let i = values.length - 1; i >= 1; i--) {
@@ -2371,7 +2870,7 @@ function handleDeletePracticeExercise_(ss, payload) {
 }
 
 function jsonResponse(obj) {
-  return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
+    ContentService.MimeType.JSON,
+  );
 }

@@ -340,18 +340,16 @@
     if (isHskLevelKey(vs.sourceKey) && levelBanks && (levelBanks[vs.sourceKey] || []).length > 0) {
       return vs.sourceKey;
     }
-    if (vs.sourceKey === 'all-lessons' && (lessonItems.length > 0 || adapter.isTeacher)) return 'all-lessons';
     if (vs.sourceKey && buckets.some(function (b) { return b.lesson_id === vs.sourceKey; })) {
       return vs.sourceKey;
     }
-    const firstNonEmpty = buckets.find(function (b) { return b.count > 0; });
-    if (firstNonEmpty) return firstNonEmpty.lesson_id;
-    if (adapter.isTeacher && buckets.length > 0) return buckets[0].lesson_id;
-    if (lessonItems.length > 0) return 'all-lessons';
     for (let i = 0; i < HSK_LEVEL_KEYS.length; i++) {
       const k = HSK_LEVEL_KEYS[i];
       if (levelBanks && (levelBanks[k] || []).length > 0) return k;
     }
+    const firstNonEmpty = buckets.find(function (b) { return b.count > 0; });
+    if (firstNonEmpty) return firstNonEmpty.lesson_id;
+    if (adapter.isTeacher && buckets.length > 0) return buckets[0].lesson_id;
     return 'hsk-1';
   }
 
@@ -379,7 +377,6 @@
       }
       return meta.label + ' (' + fullCount + ' từ)';
     }
-    if (sourceKey === 'all-lessons') return 'Tổng hợp theo bài (' + lessonItems.length + ' từ)';
     const bucket = buckets.find(function (b) { return b.lesson_id === sourceKey; });
     return bucket ? bucket.title : sourceKey;
   }
@@ -412,8 +409,6 @@
       } else {
         baseList = fullLevelList;
       }
-    } else if (vs.sourceKey === 'all-lessons') {
-      baseList = lessonItems;
     } else {
       baseList = lessonItems.filter(function (v) { return v.lesson_id === vs.sourceKey; });
     }
@@ -773,8 +768,6 @@
       );
     }).join('');
 
-    const allLessonsCls = vs.sourceKey === 'all-lessons' ? ' is-active' : '';
-
     const hskLevelPillsHtml = HSK_LEVEL_KEYS.map(function (lvlKey) {
       const meta = HSK_LEVEL_META[lvlKey];
       const list = (ctx.levelBanks && ctx.levelBanks[lvlKey]) || [];
@@ -824,10 +817,6 @@
         '</div>';
     }
 
-    const emptySyncHint = (adapter.isTeacher && ctx.buckets.length === 0)
-      ? '<span class="vocab-strip-caption" style="font-weight:500;">(Chưa có bài từ tab Luyện tập cuối buổi — tạo bài bên Luyện cuối buổi hoặc chọn "+ Tạo bài học mới..." khi thêm từ)</span>'
-      : '';
-
     let pCounts = null;
     let practiceCounterHtml = '';
     if (!adapter.isTeacher && typeof adapter.getPracticeCounts === 'function') {
@@ -849,16 +838,11 @@
       '<div class="vocab-source-header">' +
         '<span class="vocab-strip-caption">Nguồn từ vựng:</span>' +
         '<strong class="vocab-active-source-name">' + escapeHtml(ctx.sourceLabel) + '</strong>' +
-        emptySyncHint +
         practiceCounterHtml +
       '</div>' +
-      '<div class="lesson-selector-bar vocab-lesson-pills-bar" role="group" aria-label="Chọn bài học hoặc kho từ vựng">' +
-        lessonPillsHtml +
-        '<button type="button" class="lesson-pill is-master-review' + allLessonsCls + '" data-vocab-source="all-lessons">' +
-          '<span>Tổng hợp theo bài</span>' +
-          '<span class="lesson-count-badge tabular-nums">' + ctx.lessonItems.length + '</span>' +
-        '</button>' +
+      '<div class="lesson-selector-bar vocab-lesson-pills-bar" role="group" aria-label="Chọn kho từ vựng HSK hoặc bài học">' +
         hskLevelPillsHtml +
+        lessonPillsHtml +
       '</div>' +
       hskLessonRowHtml +
       masteryBarHtml;
@@ -871,8 +855,6 @@
       if (isHskLevelKey(vs.sourceKey)) {
         shortName = HSK_LEVEL_META[vs.sourceKey].badgeLabel +
           (vs.hskLessonFilter && vs.hskLessonFilter !== 'all' ? ' · Bài ' + vs.hskLessonFilter : '');
-      } else if (vs.sourceKey === 'all-lessons') {
-        shortName = 'Tổng hợp theo bài';
       } else {
         shortName = formatShortLessonLabel(vs.sourceKey, ctx.sourceLabel);
       }
@@ -897,7 +879,7 @@
     let actionBtn = '<button type="button" class="btn btn-outline btn-sm" data-vocab-empty-hsk="1" style="margin-top:14px;">Mở Kho HSK 1 (3.0)</button>';
     if (isFilterEmpty) {
       actionBtn = '<button type="button" class="btn btn-outline btn-sm" data-vocab-mfilter="all" style="margin-top:14px;">Hiển thị tất cả từ</button>';
-    } else if (adapter.isTeacher && !isBuiltInBankKey(vs.sourceKey) && vs.sourceKey !== 'all-lessons') {
+    } else if (adapter.isTeacher && !isBuiltInBankKey(vs.sourceKey)) {
       actionBtn = '<button type="button" class="btn btn-primary btn-sm" data-vocab-empty-add="1" style="margin-top:14px;">+ Thêm từ vào bài này</button>';
     }
     return (
@@ -1427,7 +1409,7 @@
 
     tbody.innerHTML = list.map(function (v, idx) {
       const mastered = isItemMastered(v, ctx.masteredMap);
-      const showLessonTag = vs.sourceKey === 'all-lessons' || isHskLevelKey(vs.sourceKey) || v.isCustom;
+      const showLessonTag = isHskLevelKey(vs.sourceKey) || v.isCustom;
       const metaBadges =
         '<div class="vlist-meta-tags">' +
           (showLessonTag ? '<span class="vlist-lesson-tag">' + escapeHtml(v.lesson_short) + '</span>' : '') +
