@@ -2326,7 +2326,7 @@
           (sub && sub.submitted_at ? (' • Nộp lúc ' + escapeHtml(sub.submitted_at)) : '') + '.</p>';
       } else if (row.manualInfo.pendingManual > 0) {
         reviewNoteHtml = '<p class="matrix-teacher-note">' +
-          '<span class="status-badge status-submitted" style="margin-bottom:4px;">' + PRACTICE_SUMMARY_ICONS.clock + '<span>Chờ cô chấm (' + row.manualInfo.gradedManual + '/' + row.manualInfo.totalManual + ' câu Dịch)</span></span>' +
+          '<span class="status-badge status-submitted" style="margin-bottom:4px;">' + PRACTICE_SUMMARY_ICONS.clock + '<span>Chờ cô chấm (' + row.manualInfo.gradedManual + '/' + row.manualInfo.totalManual + ' câu)</span></span>' +
           (sub && sub.submitted_at ? ('<br><span style="font-size:0.75rem;color:var(--color-muted-foreground);">Nộp lúc ' + escapeHtml(sub.submitted_at) + '</span>') : '') +
           '</p>';
       } else {
@@ -2520,6 +2520,25 @@
     if (typeof renderStudentPracticeSummaryTable === 'function') {
       renderStudentPracticeSummaryTable();
     }
+  }
+
+  function getPracticeItemPoints(item) {
+    const p = Number(item && item.points);
+    return Number.isFinite(p) && p > 0 ? p : 1;
+  }
+
+  function getPracticeScaledMcPoints(sec, items) {
+    const count = Array.isArray(items) ? items.length : 0;
+    const secMax = Number(sec && sec.max_score) || count;
+    if (count > 0 && secMax !== count) {
+      return Math.round((secMax / count) * 10) / 10;
+    }
+    return 1;
+  }
+
+  function formatPracticePtsLabel(pts) {
+    const n = Math.round(Number(pts || 0) * 10) / 10;
+    return Number.isInteger(n) ? String(n) : String(n);
   }
 
   function renderSectionBodyHtml(sec) {
@@ -3180,46 +3199,74 @@
   function renderShortAnswerBodyHtml(sec) {
     const secAns = ui.practiceAnswers[sec.section_id] || {};
     const items = (sec.data && sec.data.items) || [];
+    const passageText = sec.data && sec.data.passage ? String(sec.data.passage).trim() : '';
+    const passageHtml = passageText
+      ? '<div class="practice-passage-box">' +
+          '<div class="practice-passage-label">Đoạn văn đọc hiểu</div>' +
+          '<div class="practice-passage-text">' + escapeHtml(passageText) + '</div>' +
+        '</div>'
+      : '';
     const mediaHtml = renderSectionMediaContextHtml(sec, 'student-sa-');
-    const isCompactGrid = items.length >= 4;
+    const hasLongOrMultiline = items.some(function (it) {
+      return Boolean(it && (it.multiline || String(it.prompt || '').length > 36));
+    });
+    const isCompactGrid = items.length >= 4 && !passageText && !hasLongOrMultiline;
 
     const cardsHtml = items
       .map(function (item, idx) {
         const currentVal = secAns[item.id] || '';
+        const itemPts = getPracticeItemPoints(item);
         const itemImgUrl = resolveStudentDisplayImageUrl(item.image_url);
         const itemImgHtml = itemImgUrl
           ? '<div class="practice-prompt-image-box"><img src="' + escapeHtml(itemImgUrl) + '" alt="Hình minh họa câu ' + (idx + 1) + '" loading="lazy"></div>'
           : '';
         const placeholderText = item.hint ? String(item.hint) : 'Nhập câu trả lời của em...';
+        const badgeLabel = 'Câu ' + (idx + 1) + (itemPts !== 1 ? ' • ' + formatPracticePtsLabel(itemPts) + 'đ' : '');
+        const fieldHtml = item.multiline
+          ? '<textarea rows="' + (Number(item.rows) || 5) + '" class="form-control chinese-text-input practice-essay-textarea" placeholder="' +
+            escapeHtml(placeholderText) +
+            '" data-sa-sec="' +
+            escapeHtml(sec.section_id) +
+            '" data-sa-item="' +
+            escapeHtml(item.id) +
+            '">' +
+            escapeHtml(currentVal) +
+            '</textarea>' +
+            '<div class="practice-char-counter tabular-nums" data-sa-char-count="' +
+            escapeHtml(sec.section_id + ':' + item.id) +
+            '">Đã viết: ' + currentVal.trim().length + ' ký tự</div>'
+          : '<input type="text" class="form-control chinese-text-input" placeholder="' +
+            escapeHtml(placeholderText) +
+            '" value="' +
+            escapeHtml(currentVal) +
+            '" data-sa-sec="' +
+            escapeHtml(sec.section_id) +
+            '" data-sa-item="' +
+            escapeHtml(item.id) +
+            '">';
+
         return (
           '<div class="short-answer-card">' +
           '<div class="short-answer-card-head">' +
           '<div class="short-answer-prompt">' +
           escapeHtml(item.prompt || ('Câu ' + (idx + 1))) +
           '</div>' +
-          '<span class="practice-section-num-badge" style="font-size:0.75rem;flex-shrink:0;">Câu ' +
-          (idx + 1) +
+          '<span class="practice-section-num-badge" style="font-size:0.75rem;flex-shrink:0;">' +
+          escapeHtml(badgeLabel) +
           '</span>' +
           '</div>' +
           itemImgHtml +
           (item.hint
             ? '<div class="short-answer-hint">' + escapeHtml(item.hint) + '</div>'
             : '') +
-          '<input type="text" class="form-control chinese-text-input" placeholder="' +
-          escapeHtml(placeholderText) +
-          '" value="' +
-          escapeHtml(currentVal) +
-          '" data-sa-sec="' +
-          escapeHtml(sec.section_id) +
-          '" data-sa-item="' +
-          escapeHtml(item.id) +
-          '">' +
+          fieldHtml +
           '</div>'
         );
       })
       .join('');
 
     return (
+      passageHtml +
       mediaHtml +
       '<div class="short-answer-grid' + (isCompactGrid ? ' is-compact' : '') + '">' +
       cardsHtml +
@@ -3454,13 +3501,17 @@
       });
     });
 
-    // 7. Short Answer Inputs (Realtime auto-save)
+    // 7. Short Answer Inputs (Realtime auto-save + char counter)
     document.querySelectorAll('[data-sa-sec]').forEach(function (input) {
       input.addEventListener('input', function () {
         const secId = input.getAttribute('data-sa-sec');
         const itemId = input.getAttribute('data-sa-item');
         if (!ui.practiceAnswers[secId]) ui.practiceAnswers[secId] = {};
         ui.practiceAnswers[secId][itemId] = input.value;
+        const charEl = document.querySelector('[data-sa-char-count="' + secId + ':' + itemId + '"]');
+        if (charEl) {
+          charEl.textContent = 'Đã viết: ' + String(input.value || '').trim().length + ' ký tự';
+        }
         savePracticeDraft();
       });
     });
@@ -3645,6 +3696,7 @@
         .join('');
     } else if (sec.type === 'multiple_choice' || sec.type === 'listening_mc') {
       const items = (sec.data && sec.data.items) || [];
+      const mcPtsLabel = formatPracticePtsLabel(getPracticeScaledMcPoints(sec, items));
       const isPerQuestionListening =
         sec.type === 'listening_mc' && sec.data && sec.data.listening_mode === 'per_question';
       return items
@@ -3672,7 +3724,7 @@
             (isCorrect ? 'is-correct' : 'is-wrong') +
             '">' +
             '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">' +
-            '<div style="font-weight:700;">Câu ' +
+            '<div style="font-weight:700;white-space:pre-line;">Câu ' +
             (idx + 1) +
             ': ' +
             escapeHtml(item.prompt) +
@@ -3680,7 +3732,7 @@
             '<span class="status-badge ' +
             (isCorrect ? 'status-graded' : 'status-submitted') +
             '">' +
-            (isCorrect ? '✓ Đúng (+1đ)' : '✕ Sai') +
+            (isCorrect ? '✓ Đúng (+' + mcPtsLabel + 'đ)' : '✕ Sai') +
             '</span>' +
             '</div>' +
             itemAudioReviewHtml +
@@ -3752,6 +3804,7 @@
       return items
         .map(function (item, idx) {
           const userVal = studentAns[item.id] || '';
+          const itemPts = getPracticeItemPoints(item);
           const isCorrect = window.StudySnapStore.isAnswerMatch(userVal, item.accepted || []);
 
           return (
@@ -3767,7 +3820,7 @@
             '<span class="status-badge ' +
             (isCorrect ? 'status-graded' : 'status-submitted') +
             '">' +
-            (isCorrect ? '✓ Đúng (+1đ)' : '✕ Sai') +
+            (isCorrect ? '✓ Đúng (+' + formatPracticePtsLabel(itemPts) + 'đ)' : '✕ Sai') +
             '</span>' +
             '</div>' +
             '<div class="error-wrong-sentence" style="font-size:1rem;margin:6px 0;">' +
@@ -3802,6 +3855,7 @@
       return items
         .map(function (item, idx) {
           const userVal = studentAns[item.id] || '';
+          const itemPts = getPracticeItemPoints(item);
           const isManual = item.mode === 'manual';
           const mg = manualGrades[item.id];
 
@@ -3811,9 +3865,9 @@
           if (isManual) {
             if (mg) {
               const sc = Number(mg.score || 0);
-              isCorrect = sc >= 0.5;
+              isCorrect = sc >= itemPts * 0.5;
               badgeHtml =
-                '<span class="status-badge status-graded">Giáo viên chấm: ' + sc + '/1 đ</span>';
+                '<span class="status-badge status-graded">Giáo viên chấm: ' + sc + '/' + formatPracticePtsLabel(itemPts) + ' đ</span>';
             } else {
               badgeHtml =
                 '<span class="status-badge status-submitted">⏳ Đang chờ cô chấm</span>';
@@ -3824,7 +3878,7 @@
               '<span class="status-badge ' +
               (isCorrect ? 'status-graded' : 'status-submitted') +
               '">' +
-              (isCorrect ? '✓ Đúng (+1đ)' : '✕ Sai') +
+              (isCorrect ? '✓ Đúng (+' + formatPracticePtsLabel(itemPts) + 'đ)' : '✕ Sai') +
               '</span>';
           }
 
@@ -3871,11 +3925,19 @@
     } else if (sec.type === 'short_answer') {
       const items = (sec.data && sec.data.items) || [];
       const manualGrades = sub.manual_grades || {};
+      const passageText = sec.data && sec.data.passage ? String(sec.data.passage).trim() : '';
+      const passageHtml = passageText
+        ? '<div class="practice-passage-box">' +
+            '<div class="practice-passage-label">Đoạn văn đọc hiểu</div>' +
+            '<div class="practice-passage-text">' + escapeHtml(passageText) + '</div>' +
+          '</div>'
+        : '';
       const mediaHtml = renderSectionMediaContextHtml(sec, 'student-sa-review-');
 
       const itemsHtml = items
         .map(function (item, idx) {
           const userVal = studentAns[item.id] || '';
+          const itemPts = getPracticeItemPoints(item);
           const hasAccepted = Array.isArray(item.accepted) && item.accepted.length > 0;
           const isManual = item.mode === 'manual' || !hasAccepted;
           const mg = manualGrades[item.id];
@@ -3886,9 +3948,9 @@
           if (isManual) {
             if (mg) {
               const sc = Number(mg.score || 0);
-              isCorrect = sc >= 0.5;
+              isCorrect = sc >= itemPts * 0.5;
               badgeHtml =
-                '<span class="status-badge status-graded">Giáo viên chấm: ' + sc + '/1 đ</span>';
+                '<span class="status-badge status-graded">Giáo viên chấm: ' + sc + '/' + formatPracticePtsLabel(itemPts) + ' đ</span>';
             } else {
               badgeHtml =
                 '<span class="status-badge status-submitted">Đang chờ giáo viên chấm</span>';
@@ -3899,7 +3961,7 @@
               '<span class="status-badge ' +
               (isCorrect ? 'status-graded' : 'status-submitted') +
               '">' +
-              (isCorrect ? '✓ Đúng (+1đ)' : '✕ Sai') +
+              (isCorrect ? '✓ Đúng (+' + formatPracticePtsLabel(itemPts) + 'đ)' : '✕ Sai') +
               '</span>';
           }
 
@@ -3912,7 +3974,7 @@
               : 'is-wrong') +
             '">' +
             '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">' +
-            '<div style="font-weight:700;">Câu ' +
+            '<div style="font-weight:700;white-space:pre-line;">Câu ' +
             (idx + 1) +
             ': ' +
             escapeHtml(item.prompt || '') +
@@ -3920,7 +3982,7 @@
             badgeHtml +
             '</div>' +
             '<div style="font-size:0.875rem;margin-top:6px;">' +
-            '<div>Câu trả lời của em: <strong>' +
+            '<div>Câu trả lời của em: <strong' + (item.multiline ? ' style="display:block;white-space:pre-wrap;margin-top:4px;"' : '') + '>' +
             escapeHtml(userVal || 'Chưa nhập') +
             '</strong></div>' +
             (!isManual && !isCorrect
@@ -3943,7 +4005,7 @@
           );
         })
         .join('');
-      return mediaHtml + itemsHtml;
+      return passageHtml + mediaHtml + itemsHtml;
     }
 
     return '';
@@ -4128,20 +4190,21 @@
             items.forEach(function (item) {
               const userVal = secAns[item.id] || '';
               if (window.StudySnapStore.isAnswerMatch(userVal, item.accepted || [])) {
-                secScore += 1;
+                secScore += getPracticeItemPoints(item);
               }
             });
           } else if (sec.type === 'translation') {
             const items = (sec.data && sec.data.items) || [];
             items.forEach(function (item) {
+              const pts = getPracticeItemPoints(item);
               const userVal = secAns[item.id] || '';
               if (item.mode === 'exact') {
                 if (window.StudySnapStore.isAnswerMatch(userVal, item.accepted || [])) {
-                  secScore += 1;
+                  secScore += pts;
                 }
               } else if (item.mode === 'keywords') {
                 if (window.StudySnapStore.isKeywordsMatch(userVal, item.required_keywords || [])) {
-                  secScore += 1;
+                  secScore += pts;
                 }
               } else if (item.mode === 'manual') {
                 hasManualQuestions = true;
@@ -4152,19 +4215,20 @@
                   existingSub.manual_grades &&
                   existingSub.manual_grades[item.id]
                 ) {
-                  secScore += Number(existingSub.manual_grades[item.id].score || 0);
+                  secScore += Math.min(pts, Math.max(0, Number(existingSub.manual_grades[item.id].score || 0)));
                 }
               }
             });
           } else if (sec.type === 'short_answer') {
             const items = (sec.data && sec.data.items) || [];
             items.forEach(function (item) {
+              const pts = getPracticeItemPoints(item);
               const userVal = secAns[item.id] || '';
               const hasKey = Array.isArray(item.accepted) && item.accepted.length > 0;
               const isManual = item.mode === 'manual' || !hasKey;
               if (!isManual) {
                 if (window.StudySnapStore.isAnswerMatch(userVal, item.accepted || [])) {
-                  secScore += 1;
+                  secScore += pts;
                 }
               } else {
                 hasManualQuestions = true;
@@ -4174,14 +4238,15 @@
                   existingSub.manual_grades &&
                   existingSub.manual_grades[item.id]
                 ) {
-                  secScore += Number(existingSub.manual_grades[item.id].score || 0);
+                  secScore += Math.min(pts, Math.max(0, Number(existingSub.manual_grades[item.id].score || 0)));
                 }
               }
             });
           }
 
+          secScore = Math.round(secScore * 10) / 10;
           sectionScores[sec.section_id] = secScore;
-          totalEarnedScore += secScore;
+          totalEarnedScore = Math.round((totalEarnedScore + secScore) * 10) / 10;
         });
 
         const ratingObj = window.StudySnapStore.calculateRating(

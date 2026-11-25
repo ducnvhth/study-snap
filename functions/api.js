@@ -720,6 +720,7 @@ function sanitizePracticeExerciseForStudent(exRow, hasSubmitted) {
     const secCopy = Object.assign({}, sec);
     const data = Object.assign({}, sec && sec.data ? sec.data : {});
     if (!hasSubmitted) {
+      delete data.listening_script;
       if (sec.type === 'matching') {
         delete data.answer;
       } else if (Array.isArray(data.items)) {
@@ -1968,6 +1969,11 @@ function calculateRatingServer(score, thresholds, maxScore) {
   return 'needs_review';
 }
 
+function getPracticeItemPointsServer(item) {
+  const p = Number(item && item.points);
+  return Number.isFinite(p) && p > 0 ? p : 1;
+}
+
 function gradePracticeSubmissionServer(exRow, answersObj, existingManualGrades) {
   let sections = [];
   let thresholds = {};
@@ -2048,55 +2054,71 @@ function gradePracticeSubmissionServer(exRow, answersObj, existingManualGrades) 
       });
     } else if (sec.type === 'error_correction') {
       const items = (sec.data && sec.data.items) || [];
-      computedMaxScore += Number(sec.max_score || items.length);
+      let itemSum = 0;
       items.forEach(function (item) {
+        const pts = getPracticeItemPointsServer(item);
+        itemSum += pts;
         const userVal = secAns[item.id] || '';
         if (isAnswerMatchServer(userVal, item.accepted || [])) {
-          secScore += 1;
+          secScore += pts;
         }
       });
+      computedMaxScore += Number(sec.max_score || itemSum);
     } else if (sec.type === 'translation') {
       const items = (sec.data && sec.data.items) || [];
-      computedMaxScore += Number(sec.max_score || items.length);
+      let itemSum = 0;
       items.forEach(function (item) {
+        const pts = getPracticeItemPointsServer(item);
+        itemSum += pts;
         const userVal = secAns[item.id] || '';
         if (item.mode === 'exact') {
           if (isAnswerMatchServer(userVal, item.accepted || [])) {
-            secScore += 1;
+            secScore += pts;
           }
         } else if (item.mode === 'keywords') {
           if (isKeywordsMatchServer(userVal, item.required_keywords || [])) {
-            secScore += 1;
+            secScore += pts;
           }
         } else if (item.mode === 'manual') {
           hasManualQuestions = true;
           if (cleanManualGrades[item.id]) {
-            secScore += Number(cleanManualGrades[item.id].score || 0);
+            const rawScore = Number(cleanManualGrades[item.id].score || 0);
+            if (Number.isFinite(rawScore) && rawScore > 0) {
+              secScore += Math.min(pts, rawScore);
+            }
           }
         }
       });
+      computedMaxScore += Number(sec.max_score || itemSum);
     } else if (sec.type === 'short_answer') {
       const items = (sec.data && sec.data.items) || [];
-      computedMaxScore += Number(sec.max_score || items.length);
+      let itemSum = 0;
       items.forEach(function (item) {
+        const pts = getPracticeItemPointsServer(item);
+        itemSum += pts;
         const userVal = secAns[item.id] || '';
         const hasKey = Array.isArray(item.accepted) && item.accepted.length > 0;
         const isManual = item.mode === 'manual' || !hasKey;
         if (!isManual) {
           if (isAnswerMatchServer(userVal, item.accepted || [])) {
-            secScore += 1;
+            secScore += pts;
           }
         } else {
           hasManualQuestions = true;
           if (cleanManualGrades[item.id]) {
-            secScore += Number(cleanManualGrades[item.id].score || 0);
+            const rawScore = Number(cleanManualGrades[item.id].score || 0);
+            if (Number.isFinite(rawScore) && rawScore > 0) {
+              secScore += Math.min(pts, rawScore);
+            }
           }
         }
       });
+      computedMaxScore += Number(sec.max_score || itemSum);
     }
 
+    secScore = Math.round(secScore * 10) / 10;
     sectionScores[sec.section_id] = secScore;
-    totalEarnedScore += secScore;
+    totalEarnedScore = Math.round((totalEarnedScore + secScore) * 10) / 10;
   });
 
   const maxScore = Number(exRow.total_score) || computedMaxScore || 35;

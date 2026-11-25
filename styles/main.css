@@ -2539,6 +2539,8 @@ html.is-auth-redirecting .login-shell {
   font-weight: 600;
   color: var(--color-foreground);
   margin: 0;
+  white-space: pre-line;
+  line-height: 1.65;
 }
 
 .mc-options-grid {
@@ -6216,11 +6218,58 @@ body.ss-sync-locked .ss-api-status-chip {
   font-size: 0.95rem;
   color: var(--ink);
   word-break: break-word;
+  white-space: pre-line;
+  line-height: 1.6;
 }
 
 .short-answer-hint {
   font-size: 0.8125rem;
   color: var(--color-muted-foreground);
+}
+
+.practice-passage-box {
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--color-border-soft);
+  background: var(--color-surface-soft);
+}
+
+.practice-passage-label {
+  font-size: 0.8125rem;
+  font-weight: 800;
+  color: var(--color-primary-deep);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.practice-passage-text {
+  font-size: 1.125rem;
+  line-height: 1.85;
+  color: var(--ink);
+  white-space: pre-line;
+}
+
+.practice-essay-textarea {
+  min-height: 140px;
+  resize: vertical;
+  line-height: 1.7;
+  font-size: 1rem;
+}
+
+.practice-char-counter {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-muted-foreground);
+  text-align: right;
+}
+
+.listening-script-box {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1.5px dashed var(--color-border-strong);
+  background: var(--color-surface-subtle);
 }
 
 .bulk-answer-bar {

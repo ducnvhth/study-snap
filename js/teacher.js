@@ -3177,9 +3177,11 @@
 
         const lsImgEl = card.querySelector('[data-sec-img-url]');
         const lsYtEl = card.querySelector('[data-sec-yt-url]');
+        const lsScriptEl = card.querySelector('[data-ls-script]');
         const resolvedLsImg = lsImgEl ? lsImgEl.value.trim() : String(prevData.image_url || '');
         const rawLsYt = lsYtEl ? lsYtEl.value.trim() : String(prevData.youtube_id || prevData.youtube_url || '');
         const resolvedLsYtId = window.StudySnapGoogleForm ? window.StudySnapGoogleForm.extractYouTubeId(rawLsYt) : '';
+        const resolvedLsScript = lsScriptEl ? lsScriptEl.value.trim() : String(prevData.listening_script || '').trim();
 
         sec.data = {
           listening_mode: listeningMode,
@@ -3191,6 +3193,7 @@
           audio_duration: secAudio.audio_duration,
           items: items
         };
+        if (resolvedLsScript) sec.data.listening_script = resolvedLsScript;
         if (resolvedLsImg) sec.data.image_url = resolvedLsImg;
         if (resolvedLsYtId) {
           sec.data.youtube_id = resolvedLsYtId;
@@ -3209,15 +3212,23 @@
           if (descEl) descEl.value = sec.description;
         }
 
+        const passageEl = card.querySelector('[data-sa-passage]');
+        const passageVal = passageEl ? passageEl.value.trim() : String(prevData.passage || '').trim();
         const imgUrlEl = card.querySelector('[data-sec-img-url]');
         const ytUrlEl = card.querySelector('[data-sec-yt-url]');
         const imgVal = imgUrlEl ? imgUrlEl.value.trim() : String(prevData.image_url || '');
         const rawYt = ytUrlEl ? ytUrlEl.value.trim() : String(prevData.youtube_id || prevData.youtube_url || '');
         const ytId = window.StudySnapGoogleForm ? window.StudySnapGoogleForm.extractYouTubeId(rawYt) : '';
 
+        const prevItemsById = {};
+        (prevData.items || []).forEach(function (it) {
+          if (it && it.id) prevItemsById[it.id] = it;
+        });
+
         const items = [];
         card.querySelectorAll('[data-sa-qcard]').forEach(function (qCard, qIdx) {
           const itemId = qCard.getAttribute('data-sa-qcard') || ('SA_' + (qIdx + 1));
+          const prevItem = prevItemsById[itemId] || {};
           const prompt = (qCard.querySelector('[data-sa-prompt]') || {}).value || '';
           const hint = (qCard.querySelector('[data-sa-hint]') || {}).value || '';
           const accRaw = (qCard.querySelector('[data-sa-acc]') || {}).value || '';
@@ -3226,15 +3237,19 @@
             .split(/[\/;]/)
             .map(function (s) { return s.trim(); })
             .filter(Boolean);
-          items.push({
+          const nextItem = {
             id: itemId,
             prompt: prompt.trim(),
             hint: hint.trim(),
             mode: accepted.length > 0 ? 'exact' : 'manual',
             accepted: accepted,
-            grading_note: '',
+            grading_note: String(prevItem.grading_note || ''),
             explanation: exp.trim()
-          });
+          };
+          if (Number(prevItem.points) > 0) nextItem.points = Number(prevItem.points);
+          if (prevItem.multiline) nextItem.multiline = true;
+          if (Number(prevItem.rows) > 0) nextItem.rows = Number(prevItem.rows);
+          items.push(nextItem);
         });
 
         sec.data = {
@@ -3246,6 +3261,7 @@
           audio_duration: String(prevData.audio_duration || '00:45'),
           items: items
         };
+        if (passageVal) sec.data.passage = passageVal;
       }
     });
 
@@ -4394,6 +4410,12 @@
               includeLabelField: false
             })
           : '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);font-weight:600;">Đang bật chế độ Mỗi câu hỏi 1 file nghe riêng — giáo viên tải file audio, ghi âm hoặc dán link file nghe trực tiếp trong từng thẻ câu hỏi bên dưới.</div>') +
+        '<details class="listening-script-box"' + (data.listening_script ? ' open' : '') + ' style="margin-top:10px;">' +
+          '<summary style="cursor:pointer;font-size:0.8125rem;font-weight:700;color:var(--color-primary-deep);">Lời thoại đọc phần nghe (chỉ giáo viên xem — dùng đọc trên lớp hoặc thu âm)</summary>' +
+          '<textarea class="form-control" rows="4" data-ls-script style="margin-top:8px;" placeholder="Dán lời thoại đọc cho giáo viên nếu có...">' +
+            escapeHtml(data.listening_script || '') +
+          '</textarea>' +
+        '</details>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:12px;">' +
         questionsHtml +
@@ -4407,17 +4429,19 @@
       );
     } else if (sec.type === 'short_answer') {
       const items = (sec.data && sec.data.items) || [];
+      const passageVal = (sec.data && sec.data.passage) ? String(sec.data.passage) : '';
       const questionsHtml = items
         .map(function (item, idx) {
           const acceptedStr = Array.isArray(item.accepted) ? item.accepted.join(' / ') : item.accepted || '';
           const isAuto = Array.isArray(item.accepted) && item.accepted.length > 0 && item.mode !== 'manual';
+          const itemPts = Number(item && item.points) > 0 ? Number(item.points) : 1;
           return (
             '<div class="gform-question-card" data-sa-qcard="' +
             escapeHtml(item.id) +
             '">' +
             '<div class="gform-question-header">' +
             '<div style="display:flex;align-items:center;gap:8px;">' +
-            '<strong style="color:var(--color-primary-deep);">Câu ' + (idx + 1) + '</strong>' +
+            '<strong style="color:var(--color-primary-deep);">Câu ' + (idx + 1) + (itemPts !== 1 ? (' (' + itemPts + 'đ)') : '') + '</strong>' +
             '<span class="status-badge ' + (isAuto ? 'status-graded' : 'status-submitted') + '" style="font-size:0.75rem;">' +
             (isAuto ? 'Tự động chấm' : 'Chờ cô chấm') +
             '</span>' +
@@ -4471,6 +4495,12 @@
             '<input type="text" class="form-control" data-sa-sec-desc value="' + escapeHtml(sec.description || '') + '" placeholder="Ví dụ: Chỉ cần viết thanh mẫu, không viết hoa...">' +
           '</div>' +
         '</div>' +
+        '<details class="listening-script-box"' + (passageVal ? ' open' : '') + ' style="margin-bottom:12px;">' +
+          '<summary style="cursor:pointer;font-size:0.8125rem;font-weight:700;color:var(--color-primary-deep);">Đoạn văn đọc hiểu chung cho phần này (tùy chọn)</summary>' +
+          '<textarea class="form-control" rows="4" data-sa-passage style="margin-top:8px;" placeholder="Dán đoạn văn đọc hiểu nếu các câu hỏi bên dưới cùng dựa trên một đoạn văn...">' +
+            escapeHtml(passageVal) +
+          '</textarea>' +
+        '</details>' +
         renderBuilderSectionMediaHtml(sec, true) +
         (items.length > 1
           ? '<div class="bulk-answer-bar">' +
@@ -5972,6 +6002,16 @@
     });
   }
 
+  function getTeacherPracticeItemPoints(item) {
+    const p = Number(item && item.points);
+    return Number.isFinite(p) && p > 0 ? p : 1;
+  }
+
+  function formatTeacherPracticePts(pts) {
+    const n = Math.round(Number(pts || 0) * 10) / 10;
+    return Number.isInteger(n) ? String(n) : String(n);
+  }
+
   function hasManualItemsInSection(sec) {
     if (!sec || (sec.type !== 'translation' && sec.type !== 'short_answer')) return false;
     return ((sec.data && sec.data.items) || []).some(function (it) {
@@ -6073,13 +6113,14 @@
       const items = (sec.data && sec.data.items) || [];
       itemsHtml = items.map(function (item, idx) {
         const userVal = studentAns[item.id] || '';
+        const itemPts = getTeacherPracticeItemPoints(item);
         const isCorrect = window.StudySnapStore.isAnswerMatch(userVal, item.accepted || []);
         return (
           '<div class="trans-item-card ' + (isCorrect ? 'is-correct' : 'is-wrong') + '" style="padding:10px 12px;border-radius:var(--radius-md);margin-bottom:8px;">' +
             '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">' +
               '<div style="font-weight:700;color:var(--ink);">Câu ' + (idx + 1) + (item.situation ? (' — ' + escapeHtml(item.situation)) : '') + '</div>' +
               '<span class="status-badge ' + (isCorrect ? 'status-graded' : 'status-missing') + '">' +
-                (isCorrect ? ICONS.check + '<span>Đúng (+1đ)</span>' : ICONS.alert + '<span>Sai</span>') +
+                (isCorrect ? ICONS.check + '<span>Đúng (+' + formatTeacherPracticePts(itemPts) + 'đ)</span>' : ICONS.alert + '<span>Sai</span>') +
               '</span>' +
             '</div>' +
             '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-top:2px;">Câu sai: ' + escapeHtml(item.wrong || '') + '</div>' +
@@ -6094,9 +6135,11 @@
       const items = (sec.data && sec.data.items) || [];
       itemsHtml = items.map(function (item, idx) {
         const userVal = studentAns[item.id] || '';
+        const itemPts = getTeacherPracticeItemPoints(item);
+        const ptsLabel = formatTeacherPracticePts(itemPts);
         if (item.mode === 'manual') {
           const mg = manualGrades[item.id] || {};
-          const currentScore = mg.score !== undefined ? mg.score : 1;
+          const currentScore = mg.score !== undefined ? mg.score : itemPts;
           const currentComment = mg.comment || '';
           return (
             '<div class="trans-item-card is-pending" style="padding:12px;border-radius:var(--radius-md);margin-bottom:8px;">' +
@@ -6104,7 +6147,7 @@
                 '<div style="font-weight:700;color:var(--color-foreground);font-size:0.9375rem;">' +
                   'Câu Dịch ' + (idx + 1) + ': <span style="font-size:1.125rem;color:var(--color-primary-deep);">' + escapeHtml(item.prompt || '') + '</span>' +
                 '</div>' +
-                '<span class="status-badge status-submitted" style="font-size:0.75rem;">Chấm thủ công</span>' +
+                '<span class="status-badge status-submitted" style="font-size:0.75rem;">Chấm thủ công • ' + ptsLabel + 'đ</span>' +
               '</div>' +
               (item.grading_note
                 ? '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-bottom:8px;">Gợi ý chấm: ' + escapeHtml(item.grading_note) + '</div>'
@@ -6117,8 +6160,8 @@
               '</div>' +
               '<div class="form-row-2">' +
                 '<div class="form-group" style="margin-bottom:0;">' +
-                  '<label class="form-label" style="font-size:0.8125rem;" for="manual-score-' + escapeHtml(item.id) + '">Điểm câu này (0 đến 1):</label>' +
-                  '<input type="number" id="manual-score-' + escapeHtml(item.id) + '" class="form-control tabular-nums" min="0" max="1" step="0.5" value="' + currentScore + '" data-manual-item-score="' + escapeHtml(item.id) + '" required>' +
+                  '<label class="form-label" style="font-size:0.8125rem;" for="manual-score-' + escapeHtml(item.id) + '">Điểm câu này (0 đến ' + ptsLabel + '):</label>' +
+                  '<input type="number" id="manual-score-' + escapeHtml(item.id) + '" class="form-control tabular-nums" min="0" max="' + itemPts + '" step="0.5" value="' + currentScore + '" data-manual-item-score="' + escapeHtml(item.id) + '" required>' +
                 '</div>' +
                 '<div class="form-group" style="margin-bottom:0;">' +
                   '<label class="form-label" style="font-size:0.8125rem;" for="manual-comment-' + escapeHtml(item.id) + '">Nhận xét cho học sinh:</label>' +
@@ -6141,7 +6184,7 @@
             '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">' +
               '<div style="font-weight:700;color:var(--ink);">Câu ' + (idx + 1) + ': ' + escapeHtml(item.prompt || '') + '</div>' +
               '<span class="status-badge ' + (isCorrect ? 'status-graded' : 'status-missing') + '">' +
-                (isCorrect ? ICONS.check + '<span>Đúng (+1đ)</span>' : ICONS.alert + '<span>Sai</span>') +
+                (isCorrect ? ICONS.check + '<span>Đúng (+' + ptsLabel + 'đ)</span>' : ICONS.alert + '<span>Sai</span>') +
               '</span>' +
             '</div>' +
             '<div style="font-size:0.875rem;margin-top:4px;color:var(--color-foreground);">' +
@@ -6153,32 +6196,41 @@
       }).join('');
     } else if (sec.type === 'short_answer') {
       const items = (sec.data && sec.data.items) || [];
-      itemsHtml = items.map(function (item, idx) {
+      const passageText = sec.data && sec.data.passage ? String(sec.data.passage).trim() : '';
+      const passageReviewHtml = passageText
+        ? '<div class="practice-passage-box" style="margin-bottom:10px;"><div class="practice-passage-label">Đoạn văn đọc hiểu</div><div class="practice-passage-text">' + escapeHtml(passageText) + '</div></div>'
+        : '';
+      itemsHtml = passageReviewHtml + items.map(function (item, idx) {
         const userVal = studentAns[item.id] || '';
+        const itemPts = getTeacherPracticeItemPoints(item);
+        const ptsLabel = formatTeacherPracticePts(itemPts);
         const hasKey = Array.isArray(item.accepted) && item.accepted.length > 0;
         const isManual = item.mode === 'manual' || !hasKey;
         if (isManual) {
           const mg = manualGrades[item.id] || {};
-          const currentScore = mg.score !== undefined ? mg.score : 1;
+          const currentScore = mg.score !== undefined ? mg.score : itemPts;
           const currentComment = mg.comment || '';
           return (
             '<div class="trans-item-card is-pending" style="padding:12px;border-radius:var(--radius-md);margin-bottom:8px;">' +
               '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;">' +
-                '<div style="font-weight:700;color:var(--color-foreground);font-size:0.9375rem;">' +
+                '<div style="font-weight:700;color:var(--color-foreground);font-size:0.9375rem;white-space:pre-line;">' +
                   'Câu ' + (idx + 1) + ': <span style="color:var(--color-primary-deep);">' + escapeHtml(item.prompt || '') + '</span>' +
                 '</div>' +
-                '<span class="status-badge status-submitted" style="font-size:0.75rem;">Chấm thủ công</span>' +
+                '<span class="status-badge status-submitted" style="font-size:0.75rem;flex-shrink:0;">Chấm thủ công • ' + ptsLabel + 'đ</span>' +
               '</div>' +
+              (item.grading_note
+                ? '<div style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-bottom:8px;">Gợi ý chấm: ' + escapeHtml(item.grading_note) + '</div>'
+                : '') +
               '<div style="background:var(--white);padding:8px 10px;border-radius:var(--radius-sm);margin-bottom:10px;border:1px solid var(--color-border-soft);">' +
                 '<div style="font-size:0.75rem;color:var(--color-muted-foreground);font-weight:700;">Câu trả lời của học sinh:</div>' +
-                '<div style="font-size:0.9375rem;font-weight:700;color:var(--color-foreground);margin-top:2px;">' +
+                '<div style="font-size:0.9375rem;font-weight:700;color:var(--color-foreground);margin-top:2px;white-space:pre-wrap;">' +
                   (userVal ? escapeHtml(userVal) : '<em style="color:var(--color-destructive);">Chưa nhập câu trả lời</em>') +
                 '</div>' +
               '</div>' +
               '<div class="form-row-2">' +
                 '<div class="form-group" style="margin-bottom:0;">' +
-                  '<label class="form-label" style="font-size:0.8125rem;" for="manual-score-' + escapeHtml(item.id) + '">Điểm câu này (0 đến 1):</label>' +
-                  '<input type="number" id="manual-score-' + escapeHtml(item.id) + '" class="form-control tabular-nums" min="0" max="1" step="0.5" value="' + currentScore + '" data-manual-item-score="' + escapeHtml(item.id) + '" required>' +
+                  '<label class="form-label" style="font-size:0.8125rem;" for="manual-score-' + escapeHtml(item.id) + '">Điểm câu này (0 đến ' + ptsLabel + '):</label>' +
+                  '<input type="number" id="manual-score-' + escapeHtml(item.id) + '" class="form-control tabular-nums" min="0" max="' + itemPts + '" step="0.5" value="' + currentScore + '" data-manual-item-score="' + escapeHtml(item.id) + '" required>' +
                 '</div>' +
                 '<div class="form-group" style="margin-bottom:0;">' +
                   '<label class="form-label" style="font-size:0.8125rem;" for="manual-comment-' + escapeHtml(item.id) + '">Nhận xét cho học sinh:</label>' +
@@ -6196,7 +6248,7 @@
             '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">' +
               '<div style="font-weight:700;color:var(--ink);">Câu ' + (idx + 1) + ': ' + escapeHtml(item.prompt || '') + '</div>' +
               '<span class="status-badge ' + (isCorrect ? 'status-graded' : 'status-missing') + '">' +
-                (isCorrect ? ICONS.check + '<span>Đúng (+1đ)</span>' : ICONS.alert + '<span>Sai</span>') +
+                (isCorrect ? ICONS.check + '<span>Đúng (+' + ptsLabel + 'đ)</span>' : ICONS.alert + '<span>Sai</span>') +
               '</span>' +
             '</div>' +
             '<div style="font-size:0.875rem;margin-top:4px;color:var(--color-foreground);">' +
@@ -6308,40 +6360,30 @@
       return;
     }
 
+    const sections = ex.sections || [];
+    const sectionHeaders = sections.map(function (sec, idx) {
+      return sec.title || ('Phần ' + (sec.section_num || idx + 1));
+    });
+
     const headers = [
       'Mã Học Sinh',
       'Họ và Tên',
       'Bài Tập',
       'Điểm Tổng',
       'Điểm Tối Đa',
-      'Xếp Loại',
-      'Phần 1: Nối từ',
-      'Phần 2: Trắc nghiệm',
-      'Phần 3: Điền từ',
-      'Phần 4: Sửa câu sai',
-      'Phần 5: Dịch',
+      'Xếp Loại'
+    ].concat(sectionHeaders).concat([
       'Thời Gian Nộp',
       'Trạng Thái'
-    ];
+    ]);
 
     const rows = [headers];
     subs.forEach(function (sub) {
       const student = findStudent(sub.student_id);
       const studentName = student ? student.full_name : sub.student_name;
       const secScores = sub.section_scores || {};
-
-      let p1 = 0,
-        p2 = 0,
-        p3 = 0,
-        p4 = 0,
-        p5 = 0;
-      (ex.sections || []).forEach(function (sec, idx) {
-        const sc = secScores[sec.section_id] !== undefined ? secScores[sec.section_id] : 0;
-        if (idx === 0) p1 = sc;
-        else if (idx === 1) p2 = sc;
-        else if (idx === 2) p3 = sc;
-        else if (idx === 3) p4 = sc;
-        else if (idx === 4) p5 = sc;
+      const secCols = sections.map(function (sec) {
+        return secScores[sec.section_id] !== undefined ? secScores[sec.section_id] : 0;
       });
 
       const ratingText = getPracticeRatingMeta(sub, ex).label;
@@ -6352,15 +6394,11 @@
         ex.title,
         sub.total_score,
         sub.max_score || ex.total_score || 35,
-        ratingText,
-        p1,
-        p2,
-        p3,
-        p4,
-        p5,
+        ratingText
+      ].concat(secCols).concat([
         sub.submitted_at,
         sub.status === 'graded' ? 'Đã chấm' : 'Chờ chấm câu Dịch'
-      ]);
+      ]));
     });
 
     const csvContent =
@@ -7220,18 +7258,19 @@
           if ((sec.type === 'translation' || sec.type === 'short_answer') && hasManualItemsInSection(sec)) {
             let secSum = 0;
             ((sec.data && sec.data.items) || []).forEach(function (item) {
+              const pts = getTeacherPracticeItemPoints(item);
               const hasKey = Array.isArray(item && item.accepted) && item.accepted.length > 0;
               const isManualItem = Boolean(item && (item.mode === 'manual' || (sec.type === 'short_answer' && !hasKey)));
               if (isManualItem) {
                 const mg = manualGrades[item.id];
-                secSum += mg ? Number(mg.score || 0) : 0;
+                secSum += mg ? Math.min(pts, Math.max(0, Number(mg.score || 0))) : 0;
               } else {
                 const userVal =
                   sub.answers && sub.answers[sec.section_id] && sub.answers[sec.section_id][item.id];
                 const ok = item.mode === 'keywords'
                   ? window.StudySnapStore.isKeywordsMatch(userVal, item.required_keywords || [])
                   : window.StudySnapStore.isAnswerMatch(userVal, item.accepted || []);
-                if (ok) secSum += 1;
+                if (ok) secSum += pts;
               }
             });
             nextSectionScores[sec.section_id] = Math.round(secSum * 10) / 10;
