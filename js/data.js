@@ -1,4 +1,4 @@
-/**
+          /**
  * StudySnap — Kho dữ liệu trung tâm (Shared Store) — Đào tạo Tiếng Trung Giao Tiếp & HSK
  */
 
@@ -847,6 +847,7 @@ window.StudySnapLoading = (function () {
     deletePracticeExercise: 'Đang xóa đề luyện tập...',
     gradeManualTranslation: 'Đang lưu điểm chấm câu dịch...',
     addAssignment: 'Đang giao bài tập mới...',
+    updateAssignmentRequireMedia: 'Đang cập nhật loại bài nộp BVN...',
     renameAssignmentSession: 'Đang cập nhật tên buổi học...',
     deleteAssignment: 'Đang xóa bài tập...',
     assignExercisesToClass: 'Đang giao bài tập cho lớp...',
@@ -862,7 +863,7 @@ window.StudySnapLoading = (function () {
     addVocabulary: 'Đang thêm từ vựng mới...',
     batchAddVocabulary: 'Đang nhập danh sách từ vựng...',
     deleteVocabulary: 'Đang xóa từ vựng...',
-    uploadMedia: 'Đang tải tệp âm thanh/video lên Google Drive...',
+    uploadMedia: 'Đang tải tệp bài làm (âm thanh/video/ảnh) lên Google Drive...',
     importFromBootstrapData: 'Đang chuyển dữ liệu sang Cloudflare D1...',
     getMedia: 'Đang tải tệp âm thanh...'
   };
@@ -1856,6 +1857,16 @@ window.StudySnapStore = (function () {
         if (pe.total_score !== undefined) foundEx.total_score = pe.total_score;
         syncLinkedPracticeAssignments(stateObj, foundEx);
       }
+    } else if (action === 'updateAssignmentRequireMedia' && json.assignment) {
+      const targetId = String(json.assignment.assignment_id || payload.assignment_id || '').trim();
+      const nextReq = String(json.assignment.require_media || payload.require_media || '').trim();
+      const asgList = Array.isArray(stateObj.assignments) ? stateObj.assignments : [];
+      const foundAsg = asgList.find(function (a) {
+        return String(a.assignment_id || '').trim() === targetId;
+      });
+      if (foundAsg && nextReq) {
+        foundAsg.require_media = nextReq;
+      }
     } else if (action === 'createStudentAccount' && json.student) {
       const stu = json.student;
       const students = Array.isArray(stateObj.students) ? stateObj.students : [];
@@ -2445,7 +2456,7 @@ window.StudySnapStore = (function () {
         const legacyHint =
           json && json.error && String(json.error).indexOf('không hợp lệ') >= 0
             ? 'Vui lòng cập nhật và Deploy New Version cho backend/Code.gs để bật tải tệp lên Google Drive.'
-            : (json && json.error) || 'Không thể tải tệp âm thanh/video lên Google Drive.';
+            : (json && json.error) || 'Không thể tải tệp bài làm lên Google Drive.';
         return { ok: false, error: legacyHint };
       }
       return json;
@@ -2454,8 +2465,8 @@ window.StudySnapStore = (function () {
       return {
         ok: false,
         error: isAbort
-          ? 'Tải tệp âm thanh lên Google Drive quá thời gian (tệp hơi lớn hoặc mạng chậm). Vui lòng thử lại.'
-          : 'Không thể kết nối cầu nối Google Drive (GAS) khi tải tệp âm thanh.'
+          ? 'Tải tệp lên Google Drive quá thời gian (tệp hơi lớn hoặc mạng chậm). Vui lòng thử lại.'
+          : 'Không thể kết nối cầu nối Google Drive (GAS) khi tải tệp lên.'
       };
     }
   }
@@ -2506,10 +2517,52 @@ window.StudySnapStore = (function () {
     const payloadCopy = Object.assign({}, rawPayload || {});
     const actionName = String(payloadCopy.action || '');
 
+    if (
+      actionName === 'submitHomework' &&
+      Array.isArray(payloadCopy.media_images_base64) &&
+      payloadCopy.media_images_base64.length > 0
+    ) {
+      const uploadedUrls = [];
+      const rawImgs = payloadCopy.media_images_base64;
+      for (let imgIdx = 0; imgIdx < rawImgs.length; imgIdx++) {
+        const entry = rawImgs[imgIdx] || {};
+        const dataUrl = String(entry.dataUrl || '');
+        if (!dataUrl || dataUrl.indexOf('data:') !== 0) continue;
+        const imgMeta = inferMimeAndExtFromDataUrl(
+          dataUrl,
+          entry.mimeType || 'image/jpeg',
+          entry.fileName || ''
+        );
+        const upImg = await uploadMediaToDriveViaGas({
+          base64_data: dataUrl,
+          mime_type: imgMeta.mimeType,
+          filename: 'BVN_' + (payloadCopy.assignment_id || 'EX') + '_' + (payloadCopy.student_id || 'HS') + '_IMG' + (imgIdx + 1) + '_' + Date.now() + imgMeta.ext
+        });
+        if (!upImg.ok) return { errorResponse: upImg };
+        cacheUploadedDriveMedia(upImg.media_url, dataUrl, entry.fileName || ('bvn_img_' + (imgIdx + 1) + imgMeta.ext));
+        uploadedUrls.push(upImg.media_url);
+      }
+      if (uploadedUrls.length > 0) {
+        payloadCopy.media_url = uploadedUrls.length === 1 ? uploadedUrls[0] : JSON.stringify(uploadedUrls);
+      }
+      payloadCopy.media_images_base64 = [];
+      payloadCopy.media_base64 = '';
+      if (stateObj && Array.isArray(stateObj.submissions) && payloadCopy.submission_id && payloadCopy.media_url) {
+        const localSub = stateObj.submissions.find(function (s) {
+          return s.submission_id === payloadCopy.submission_id;
+        });
+        if (localSub) {
+          localSub.media_url = payloadCopy.media_url;
+          saveState(stateObj);
+        }
+      }
+      return { payload: payloadCopy };
+    }
+
     if (actionName === 'submitHomework' && payloadCopy.media_base64 && String(payloadCopy.media_base64).indexOf('data:') === 0) {
       const hwMeta = inferMimeAndExtFromDataUrl(
         payloadCopy.media_base64,
-        payloadCopy.media_mime_type || (payloadCopy.media_type === 'video' ? 'video/mp4' : 'audio/webm'),
+        payloadCopy.media_mime_type || (payloadCopy.media_type === 'image' ? 'image/jpeg' : (payloadCopy.media_type === 'video' ? 'video/mp4' : 'audio/webm')),
         payloadCopy.media_filename || ''
       );
       const up = await uploadMediaToDriveViaGas({
@@ -2696,6 +2749,7 @@ window.StudySnapStore = (function () {
     const hasHeavyBody = Boolean(
       payload &&
         (payload.media_base64 ||
+          (Array.isArray(payload.media_images_base64) && payload.media_images_base64.length > 0) ||
           payload.teacher_voice_base64 ||
           (Array.isArray(payload.vocabulary) && payload.vocabulary.length > 10))
     );
@@ -3181,6 +3235,40 @@ window.StudySnapStore = (function () {
     return await updateAssignmentsTargetClass(stateObj, assignmentIds, 'unassigned', 'unassignAssignment');
   }
 
+  async function updateAssignmentRequireMedia(stateObj, assignmentId, nextRequireMedia) {
+    const targetId = String(assignmentId || '').trim();
+    const cleanReq = String(nextRequireMedia || '').trim();
+    const ALLOWED = { audio_or_video: true, image: true, audio_video_image: true };
+    if (!stateObj || !Array.isArray(stateObj.assignments) || !targetId || !ALLOWED[cleanReq]) {
+      return { ok: false, error: 'Loại hình nộp bài không hợp lệ.' };
+    }
+    const target = stateObj.assignments.find(function (a) {
+      return String(a.assignment_id || '').trim() === targetId;
+    });
+    if (!target) {
+      return { ok: false, error: 'Không tìm thấy BVN cần cập nhật.' };
+    }
+    const prevReq = target.require_media || 'audio_or_video';
+    target.require_media = cleanReq;
+    saveState(stateObj);
+
+    const hasRemote = Boolean(
+      getGasUrl() ||
+      (typeof window !== 'undefined' && window.location && /^https?:$/i.test(String(window.location.protocol || '')))
+    );
+    const res = await syncPostToGas(stateObj, {
+      action: 'updateAssignmentRequireMedia',
+      assignment_id: targetId,
+      require_media: cleanReq
+    });
+    if (hasRemote && (!res || res.ok === false)) {
+      target.require_media = prevReq;
+      saveState(stateObj);
+      return { ok: false, remote: res, error: (res && res.error) || 'Không thể cập nhật loại BVN lúc này.' };
+    }
+    return { ok: true, remote: res, assignment: target };
+  }
+
   async function batchAddVocabulary(stateObj, vocabList) {
     if (!stateObj.vocabulary) stateObj.vocabulary = [];
     if (Array.isArray(vocabList) && vocabList.length > 0) {
@@ -3622,6 +3710,7 @@ window.StudySnapStore = (function () {
     deleteStudentAccount: deleteStudentAccount,
     assignExercisesToClass: assignExercisesToClass,
     unassignExercises: unassignExercises,
+    updateAssignmentRequireMedia: updateAssignmentRequireMedia,
     batchAddVocabulary: batchAddVocabulary,
     deleteVocabulary: deleteVocabulary,
     submitVocabCompletion: submitVocabCompletion,

@@ -760,6 +760,13 @@ function doPost(e) {
       });
     }
 
+    if (action === "updateAssignmentRequireMedia") {
+      const result = handleUpdateAssignmentRequireMedia_(ss, payload);
+      return buildMutationResponse_(ss, payload, preVer, {
+        assignment: result,
+      });
+    }
+
     if (action === "renameAssignmentSession") {
       const result = handleRenameAssignmentSession_(ss, payload);
       return buildMutationResponse_(ss, payload, preVer, {
@@ -1592,14 +1599,43 @@ function handleSubmitHomework_(ss, payload) {
   const nowStr = new Date().toLocaleString("vi-VN");
 
   let mediaUrl = payload.media_url || "";
-  if (payload.media_base64 && payload.media_mime_type) {
+  if (Array.isArray(payload.media_images_base64) && payload.media_images_base64.length > 0) {
+    const uploadedImgUrls = [];
+    for (let imgIdx = 0; imgIdx < payload.media_images_base64.length; imgIdx++) {
+      const imgEntry = payload.media_images_base64[imgIdx] || {};
+      const imgB64 = String(imgEntry.dataUrl || "");
+      if (!imgB64 || imgB64.indexOf("data:") !== 0) continue;
+      const imgMime = String(imgEntry.mimeType || "image/jpeg");
+      const extMatch = String(imgEntry.fileName || "").trim().match(/(\.[a-z0-9]{2,5})$/i);
+      let imgExt = extMatch ? extMatch[1].toLowerCase() : "";
+      if (!imgExt) {
+        if (imgMime.indexOf("png") >= 0) imgExt = ".png";
+        else if (imgMime.indexOf("webp") >= 0) imgExt = ".webp";
+        else if (imgMime.indexOf("gif") >= 0) imgExt = ".gif";
+        else imgExt = ".jpg";
+      }
+      uploadedImgUrls.push(
+        saveBase64MediaToDrive_(
+          imgB64,
+          imgMime,
+          "BVN_" + assignmentId + "_" + studentId + "_IMG" + (imgIdx + 1) + "_" + Date.now() + imgExt,
+        ),
+      );
+    }
+    if (uploadedImgUrls.length === 1) mediaUrl = uploadedImgUrls[0];
+    else if (uploadedImgUrls.length > 1) mediaUrl = JSON.stringify(uploadedImgUrls);
+  } else if (payload.media_base64 && payload.media_mime_type) {
     const rawExtMatch = String(payload.media_filename || "")
       .trim()
       .match(/(\.[a-z0-9]{2,5})$/i);
     let driveExt = rawExtMatch ? rawExtMatch[1].toLowerCase() : "";
     if (!driveExt) {
       const mLower = String(payload.media_mime_type || "").toLowerCase();
-      if (mLower.indexOf("quicktime") >= 0) driveExt = ".mov";
+      if (mLower.indexOf("image/png") >= 0) driveExt = ".png";
+      else if (mLower.indexOf("image/webp") >= 0) driveExt = ".webp";
+      else if (mLower.indexOf("image/gif") >= 0) driveExt = ".gif";
+      else if (mLower.indexOf("image/") >= 0) driveExt = ".jpg";
+      else if (mLower.indexOf("quicktime") >= 0) driveExt = ".mov";
       else if (mLower.indexOf("video/webm") >= 0) driveExt = ".webm";
       else if (mLower.indexOf("video/") >= 0) driveExt = ".mp4";
       else if (mLower.indexOf("wav") >= 0) driveExt = ".wav";
@@ -1769,7 +1805,7 @@ function handleSubmitHomework_(ss, payload) {
   }
   if (existingCount > 0 && !String(mediaUrl || "").trim()) {
     throw new Error(
-      "Vui lòng thu âm hoặc tải lên file Audio/Video mới để nộp lại lần tiếp theo.",
+      "Vui lòng thu âm hoặc tải lên tệp bài làm (Audio / Video / Ảnh) mới để nộp lại lần tiếp theo.",
     );
   }
 
@@ -2308,7 +2344,32 @@ function handleAddAssignment_(ss, payload) {
     return rowMap[h] !== undefined ? rowMap[h] : "";
   });
   sheet.appendRow(rowValues);
-  return { assignment_id: assignmentId, class_name: rowMap.class_name };
+  return {
+    assignment_id: assignmentId,
+    class_name: rowMap.class_name,
+    require_media: rowMap.require_media,
+  };
+}
+
+function handleUpdateAssignmentRequireMedia_(ss, payload) {
+  const sheet = ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS);
+  const asgId = String(payload.assignment_id || "").trim();
+  const nextReq = String(payload.require_media || "").trim();
+  const allowed = { audio_or_video: true, image: true, audio_video_image: true };
+  if (!sheet || !asgId || !allowed[nextReq]) {
+    throw new Error("Loại hình nộp bài không hợp lệ.");
+  }
+  const headers = ensureSheetHeaders_(sheet, ASSIGNMENT_HEADERS);
+  const idIdx = headers.indexOf("assignment_id");
+  const reqIdx = headers.indexOf("require_media");
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][idIdx] || "").trim() === asgId) {
+      sheet.getRange(i + 1, reqIdx + 1).setValue(nextReq);
+      return { assignment_id: asgId, require_media: nextReq };
+    }
+  }
+  throw new Error("Không tìm thấy BVN cần cập nhật.");
 }
 
 function handleRenameAssignmentSession_(ss, payload) {
@@ -2565,9 +2626,19 @@ function handleDeleteMediaFiles_(payload) {
   let trashedCount = 0;
   const seenIds = {};
   const urls = Array.isArray(payload && payload.urls) ? payload.urls : [];
-  urls.forEach(function (u) {
-    const m = String(u || "").match(/[?&]id=([a-zA-Z0-9_-]+)/);
-    if (m && m[1]) seenIds[m[1]] = true;
+  urls.forEach(function (rawEntry) {
+    const clean = String(rawEntry || "").trim();
+    let list = [clean];
+    if (clean.charAt(0) === "[") {
+      try {
+        const parsed = JSON.parse(clean);
+        if (Array.isArray(parsed)) list = parsed;
+      } catch (e) {}
+    }
+    list.forEach(function (u) {
+      const m = String(u || "").match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      if (m && m[1]) seenIds[m[1]] = true;
+    });
   });
   const fileIds = Array.isArray(payload && payload.fileIds)
     ? payload.fileIds

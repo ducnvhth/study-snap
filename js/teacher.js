@@ -67,6 +67,10 @@
     matrixFilter: 'all',
     matrixSort: 'default',
     teacherDraftVoice: null,
+    lastDiscardedVoiceId: null,
+    activeTeacherRecordingMeta: null,
+    voiceHistoryOpen: false,
+    voiceHistoryFilter: 'current',
     isTeacherRecording: false,
     vocabFilter: '',
     selectedLesson: '',
@@ -578,6 +582,15 @@
             ? ''
             : ' style="background:var(--color-primary-light);color:var(--color-primary-deep);font-weight:700;"';
 
+          const reqMediaRaw = String(asg.require_media || 'audio_or_video').trim().toLowerCase();
+          const reqMediaSelectHtml = reqMediaRaw !== 'practice'
+            ? ('<select class="asg-media-select" data-asg-media-select="' + escapeHtml(asg.assignment_id) + '" aria-label="Loại bài nộp yêu cầu">' +
+                '<option value="audio_or_video"' + (reqMediaRaw === 'audio_or_video' ? ' selected' : '') + '>Audio / Video</option>' +
+                '<option value="image"' + (reqMediaRaw === 'image' ? ' selected' : '') + '>Ảnh bài làm</option>' +
+                '<option value="audio_video_image"' + ((reqMediaRaw === 'audio_video_image' || reqMediaRaw === 'any') ? ' selected' : '') + '>Audio / Video / Ảnh</option>' +
+              '</select>')
+            : '';
+
           return (
             '<div class="asg-check-item">' +
               '<div class="asg-check-left">' +
@@ -594,6 +607,7 @@
                 '</div>' +
               '</div>' +
               '<div class="asg-item-actions">' +
+                reqMediaSelectHtml +
                 (isUnassigned
                   ? ''
                   : '<button type="button" class="btn btn-outline btn-sm" data-unassign-asg-item="' + escapeHtml(asg.assignment_id) + '" title="Hủy giao BVN này khỏi lớp nhưng vẫn giữ BVN">' +
@@ -606,6 +620,25 @@
             '</div>'
           );
         }).join('');
+
+        checklist.querySelectorAll('[data-asg-media-select]').forEach(function (selEl) {
+          selEl.addEventListener('change', async function () {
+            const asgId = selEl.getAttribute('data-asg-media-select');
+            const nextType = selEl.value;
+            if (!asgId || !nextType) return;
+            selEl.disabled = true;
+            const res = await window.StudySnapStore.updateAssignmentRequireMedia(state, asgId, nextType);
+            selEl.disabled = false;
+            if (!res || !res.ok) {
+              showToast((res && res.error) || 'Không thể đổi loại hình nộp bài lúc này.');
+              renderSessionManager();
+              return;
+            }
+            const typeText = nextType === 'image' ? 'Ảnh bài làm' : (nextType === 'audio_video_image' ? 'Audio / Video / Ảnh' : 'Audio / Video');
+            showToast('Đã chuyển yêu cầu nộp bài sang "' + typeText + '"!');
+            renderGradingPanel();
+          });
+        });
 
         checklist.querySelectorAll('[data-unassign-asg-item]').forEach(function (btn) {
           btn.addEventListener('click', async function () {
@@ -658,8 +691,16 @@
     return true;
   }
 
-  function resetGradingDraftInputs(preserveSubmissionSelection) {
+  function resetGradingDraftInputs(preserveSubmissionSelection, keepDiscardedNotice) {
+    if (ui.teacherDraftVoice && ui.teacherDraftVoice.historyId && window.StudySnapVoiceHistory) {
+      window.StudySnapVoiceHistory.markStatus(ui.teacherDraftVoice.historyId, 'unsaved_switch').then(function () {
+        if (typeof renderTeacherVoiceHistoryPanel === 'function') renderTeacherVoiceHistoryPanel();
+      });
+    }
     ui.teacherDraftVoice = null;
+    if (!keepDiscardedNotice) {
+      ui.lastDiscardedVoiceId = null;
+    }
     if (!preserveSubmissionSelection) {
       ui.gradingSubmissionId = null;
     }
@@ -680,6 +721,146 @@
     }
     const timerEl = document.getElementById('teacher-record-timer');
     if (timerEl) timerEl.textContent = '00:00';
+  }
+
+  function formatVoiceHistoryStatusBadge(statusKey) {
+    const k = String(statusKey || 'draft');
+    if (k === 'discarded') {
+      return '<span class="status-badge status-resubmit">Vừa hủy nháp</span>';
+    }
+    if (k === 'replaced') {
+      return '<span class="status-badge status-submitted">Thu trước đó</span>';
+    }
+    if (k === 'unsaved_switch' || k === 'draft_switched') {
+      return '<span class="status-badge status-submitted">Chưa lưu khi chuyển bài</span>';
+    }
+    if (k === 'saved') {
+      return '<span class="status-badge status-graded">Đã lưu phản hồi</span>';
+    }
+    return '<span class="status-badge" style="background:var(--sky-lt);color:var(--sky-dark);border:1px solid var(--sky-border);">Đang dùng làm nháp</span>';
+  }
+
+  function renderTeacherVoiceHistoryPanel() {
+    const slot = document.getElementById('teacher-voice-history-slot');
+    if (!slot) return;
+    const store = window.StudySnapVoiceHistory;
+    if (!store || typeof store.listCached !== 'function') {
+      slot.innerHTML = '';
+      return;
+    }
+    const allItems = store.listCached() || [];
+    if (allItems.length === 0) {
+      slot.innerHTML = '';
+      return;
+    }
+
+    const curStuId = String(ui.gradingStudentId || '');
+    const curAsgId = String(ui.gradingAssignmentId || '');
+    const matchingCurrent = allItems.filter(function (it) {
+      return it && it.studentId === curStuId && it.assignmentId === curAsgId;
+    });
+    const activeFilter = ui.voiceHistoryFilter === 'current' && matchingCurrent.length > 0 ? 'current' : 'all';
+    const visibleItems = activeFilter === 'current' ? matchingCurrent : allItems;
+    const isOpen = Boolean(ui.voiceHistoryOpen);
+
+    const historySvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>';
+    const restoreSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>';
+    const trashSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
+
+    let bodyHtml = '';
+    if (isOpen) {
+      const rowsHtml = visibleItems.map(function (it) {
+        const isCurrentlyLoaded = Boolean(ui.teacherDraftVoice && ui.teacherDraftVoice.historyId === it.id);
+        const contextLabel = (it.studentName || it.studentId || 'Học sinh') +
+          (it.assignmentTitle ? (' • ' + it.assignmentTitle) : '');
+        return (
+          '<div class="teacher-voice-history-row">' +
+            '<div class="teacher-voice-history-meta">' +
+              '<div>' +
+                '<strong>' + escapeHtml(contextLabel) + '</strong>' +
+                '<span class="tabular-nums" style="margin-left:8px;">' + escapeHtml(it.createdLabel || '') + ' (' + escapeHtml(it.duration || '00:01') + ')</span>' +
+              '</div>' +
+              formatVoiceHistoryStatusBadge(isCurrentlyLoaded ? 'draft' : it.status) +
+            '</div>' +
+            window.StudySnapAudio.renderVoicePlayer({
+              id: 'vh-player-' + it.id,
+              url: it.dataUrl,
+              duration: it.duration || '00:15',
+              label: 'Bản thu ' + (it.createdLabel || ''),
+              fallbackText: '',
+              lang: 'vi-VN',
+              compact: true,
+              variant: 'teacher',
+              requireRealAudio: true
+            }) +
+            '<div class="teacher-voice-history-actions">' +
+              (isCurrentlyLoaded
+                ? '<span style="font-size:0.75rem;font-weight:700;color:var(--color-success-text);">Đang nạp sẵn trong ô nháp</span>'
+                : '<button type="button" class="btn btn-secondary btn-xs" data-restore-voice-history="' + escapeHtml(it.id) + '">' +
+                    restoreSvg + '<span>Khôi phục bản này</span>' +
+                  '</button>') +
+              '<button type="button" class="btn-danger-outline btn-xs" data-delete-voice-history="' + escapeHtml(it.id) + '" title="Xóa khỏi lịch sử">' +
+                trashSvg + '<span>Xóa</span>' +
+              '</button>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+
+      bodyHtml =
+        '<div class="teacher-voice-history-body">' +
+          '<div class="teacher-voice-history-toolbar">' +
+            '<div class="teacher-voice-history-filters">' +
+              (matchingCurrent.length > 0
+                ? '<button type="button" class="filter-pill' + (activeFilter === 'current' ? ' is-active' : '') + '" data-vh-filter="current">Bài này (' + matchingCurrent.length + ')</button>'
+                : '') +
+              '<button type="button" class="filter-pill' + (activeFilter === 'all' ? ' is-active' : '') + '" data-vh-filter="all">Tất cả (' + allItems.length + ')</button>' +
+            '</div>' +
+            '<button type="button" class="btn-danger-outline btn-xs" id="btn-clear-teacher-voice-history">Xóa hết lịch sử</button>' +
+          '</div>' +
+          '<div class="teacher-voice-history-list">' + rowsHtml + '</div>' +
+        '</div>';
+    }
+
+    slot.innerHTML =
+      '<div class="teacher-voice-history-wrap">' +
+        '<button type="button" class="teacher-voice-history-toggle" id="btn-toggle-teacher-voice-history" aria-expanded="' + (isOpen ? 'true' : 'false') + '">' +
+          '<span class="teacher-voice-history-title">' +
+            historySvg +
+            '<span>Lịch sử Voice đã thu (lấy lại bản lỡ xóa)</span>' +
+            '<span class="teacher-voice-history-count tabular-nums">' + allItems.length + ' bản</span>' +
+          '</span>' +
+          '<span style="font-size:0.8125rem;color:var(--color-muted-foreground);">' + (isOpen ? 'Thu gọn' : 'Mở danh sách') + '</span>' +
+        '</button>' +
+        bodyHtml +
+      '</div>';
+  }
+
+  async function restoreTeacherVoiceFromHistory(historyId) {
+    const store = window.StudySnapVoiceHistory;
+    if (!store || !historyId) return false;
+    const list = store.listCached() || [];
+    const found = list.find(function (x) { return x && x.id === historyId; });
+    if (!found || !found.dataUrl) {
+      showToast('Không tìm thấy bản thu âm này trong lịch sử.');
+      return false;
+    }
+    if (ui.teacherDraftVoice && ui.teacherDraftVoice.historyId && ui.teacherDraftVoice.historyId !== found.id) {
+      await store.markStatus(ui.teacherDraftVoice.historyId, 'replaced');
+    }
+    ui.teacherDraftVoice = {
+      dataUrl: found.dataUrl,
+      mimeType: found.mimeType || 'audio/wav',
+      duration: found.duration || '00:15',
+      historyId: found.id
+    };
+    ui.lastDiscardedVoiceId = null;
+    await store.markStatus(found.id, 'draft');
+    const timerEl = document.getElementById('teacher-record-timer');
+    if (timerEl) timerEl.textContent = found.duration || '00:15';
+    renderGradingPanel();
+    showToast('Đã khôi phục bản thu Voice (' + (found.duration || '') + '). Bạn có thể nghe lại hoặc bấm Lưu!');
+    return true;
   }
 
   function compareSessionTagsAsc(a, b) {
@@ -1310,28 +1491,38 @@
       }
 
       if (sub && (sub.status === 'submitted' || sub.status === 'graded' || sub.status === 'resubmit_required') && sub.media_url) {
-        const isVideo = typeof window.StudySnapAudio.isVideoSubmission === 'function'
+        const isImage = typeof window.StudySnapAudio.isImageSubmission === 'function'
+          ? window.StudySnapAudio.isImageSubmission(sub.media_url, sub.media_type)
+          : sub.media_type === 'image';
+        const isVideo = !isImage && (typeof window.StudySnapAudio.isVideoSubmission === 'function'
           ? window.StudySnapAudio.isVideoSubmission(sub.media_url, sub.media_type)
-          : sub.media_type === 'video';
-        const typeText = isVideo
-          ? ('Video BVN Lần ' + activeAttemptNum)
-          : ('Ghi âm BVN Lần ' + activeAttemptNum);
-        const mediaPlayerHtml = isVideo && typeof window.StudySnapAudio.renderVideoPlayer === 'function'
-          ? window.StudySnapAudio.renderVideoPlayer({
-              id: 'grading-student-' + sub.submission_id,
+          : sub.media_type === 'video');
+        const typeText = isImage
+          ? ('Ảnh BVN Lần ' + activeAttemptNum)
+          : (isVideo
+            ? ('Video BVN Lần ' + activeAttemptNum)
+            : ('Ghi âm BVN Lần ' + activeAttemptNum));
+        const mediaPlayerHtml = isImage && typeof window.StudySnapAudio.renderImageViewer === 'function'
+          ? window.StudySnapAudio.renderImageViewer({
               url: sub.media_url,
-              duration: sub.media_duration || '01:15',
               label: st.full_name + ' — ' + typeText
             })
-          : window.StudySnapAudio.renderVoicePlayer({
-              id: 'grading-student-' + sub.submission_id,
-              url: sub.media_url,
-              duration: sub.media_duration || '01:15',
-              label: st.full_name + ' — ' + typeText,
-              fallbackText: '老师好！我是越南留学生，我每天都很努力学习汉语。',
-              lang: 'zh-CN',
-              variant: 'student'
-            });
+          : (isVideo && typeof window.StudySnapAudio.renderVideoPlayer === 'function'
+            ? window.StudySnapAudio.renderVideoPlayer({
+                id: 'grading-student-' + sub.submission_id,
+                url: sub.media_url,
+                duration: sub.media_duration || '01:15',
+                label: st.full_name + ' — ' + typeText
+              })
+            : window.StudySnapAudio.renderVoicePlayer({
+                id: 'grading-student-' + sub.submission_id,
+                url: sub.media_url,
+                duration: sub.media_duration || '01:15',
+                label: st.full_name + ' — ' + typeText,
+                fallbackText: '老师好！我是越南留学生，我每天都很努力学习汉语。',
+                lang: 'zh-CN',
+                variant: 'student'
+              }));
         const resubmitPillHtml = sub.status === 'resubmit_required'
           ? '<span class="status-badge status-resubmit">' + ICONS.refresh + '<span>Đã yêu cầu nộp lại</span></span>'
           : '';
@@ -1348,7 +1539,9 @@
             '<p class="assignment-brief-desc" style="margin-bottom:6px;">Lời nhắn của học sinh: "' + escapeHtml(sub.student_note || 'Em nộp BVN ạ.') + '"</p>' +
             mediaPlayerHtml +
           '</div>';
-        if (isVideo && typeof window.StudySnapAudio.hydrateVideoPlayers === 'function') {
+        if (isImage && typeof window.StudySnapAudio.hydrateImageViewers === 'function') {
+          window.StudySnapAudio.hydrateImageViewers(studentMediaBox);
+        } else if (isVideo && typeof window.StudySnapAudio.hydrateVideoPlayers === 'function') {
           window.StudySnapAudio.hydrateVideoPlayers(studentMediaBox);
         }
       } else {
@@ -1356,7 +1549,7 @@
           attemptTabsHtml +
           '<div class="assignment-brief-box">' +
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">' +
-              '<span class="status-badge status-missing">' + ICONS.alert + '<span>Học sinh chưa nộp file BVN (ghi âm/video)</span></span>' +
+              '<span class="status-badge status-missing">' + ICONS.alert + '<span>Học sinh chưa nộp file BVN (ghi âm/video/ảnh)</span></span>' +
               '<span style="font-size:0.875rem;color:var(--color-muted-foreground);">Giáo viên vẫn có thể gửi nhận xét hoặc nhắc nhở bằng Voice/Text</span>' +
             '</div>' +
           '</div>';
@@ -1409,6 +1602,16 @@
     }
 
     if (voicePreview) {
+      const discardedUndoHtml = (!ui.teacherDraftVoice && ui.lastDiscardedVoiceId)
+        ? ('<div class="teacher-voice-undo-bar">' +
+            '<span>Đã đưa bản thu vừa hủy vào Lịch sử Voice — lỡ xóa có thể lấy lại ngay.</span>' +
+            '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+              '<button type="button" class="btn btn-secondary btn-xs" id="btn-undo-discard-teacher-voice">Khôi phục vừa hủy</button>' +
+              '<button type="button" class="btn btn-outline btn-xs" id="btn-open-voice-history-inline">Xem Lịch sử</button>' +
+            '</div>' +
+          '</div>')
+        : '';
+
       if (ui.teacherDraftVoice) {
         voicePreview.innerHTML =
           '<div class="voice-feedback-box">' +
@@ -1439,13 +1642,16 @@
               variant: 'teacher',
               requireRealAudio: true
             }) +
-          '</div>';
+          '</div>' + discardedUndoHtml;
       } else {
         voicePreview.innerHTML =
           '<p style="margin:6px 0 0;font-size:0.8125rem;color:var(--color-muted-foreground);">' +
             'Chưa có bản thu Voice Feedback — bấm <strong>Thu âm phản hồi Voice</strong> ở trên để giáo viên tự ghi âm nếu muốn gửi kèm giọng nói.' +
-          '</p>';
+          '</p>' + discardedUndoHtml;
       }
+    }
+    if (typeof renderTeacherVoiceHistoryPanel === 'function') {
+      renderTeacherVoiceHistoryPanel();
     }
   }
 
@@ -1760,10 +1966,22 @@
 
         const voicePlayersHtml = [];
         if (sub && sub.media_url) {
-          const isVideo = typeof window.StudySnapAudio.isVideoSubmission === 'function'
+          const isImage = typeof window.StudySnapAudio.isImageSubmission === 'function'
+            ? window.StudySnapAudio.isImageSubmission(sub.media_url, sub.media_type)
+            : sub.media_type === 'image';
+          const isVideo = !isImage && (typeof window.StudySnapAudio.isVideoSubmission === 'function'
             ? window.StudySnapAudio.isVideoSubmission(sub.media_url, sub.media_type)
-            : sub.media_type === 'video';
-          if (isVideo && typeof window.StudySnapAudio.renderVideoPlayer === 'function') {
+            : sub.media_type === 'video');
+          if (isImage && typeof window.StudySnapAudio.renderImageViewer === 'function') {
+            voicePlayersHtml.push(
+              window.StudySnapAudio.renderImageViewer({
+                url: sub.media_url,
+                label: st.full_name + ' — ' + (asg ? asg.title : 'Ảnh BVN'),
+                compact: true,
+                gradeKey: asg.assignment_id + ':' + st.student_id
+              })
+            );
+          } else if (isVideo && typeof window.StudySnapAudio.renderVideoPlayer === 'function') {
             voicePlayersHtml.push(
               window.StudySnapAudio.renderVideoPlayer({
                 id: 'matrix-student-' + sub.submission_id,
@@ -7712,14 +7930,74 @@
 
     const voicePreviewEl = document.getElementById('teacher-voice-preview');
     if (voicePreviewEl) {
-      voicePreviewEl.addEventListener('click', function (ev) {
+      voicePreviewEl.addEventListener('click', async function (ev) {
         const discardBtn = ev.target && ev.target.closest ? ev.target.closest('#btn-discard-teacher-draft-voice') : null;
-        if (!discardBtn) return;
-        ui.teacherDraftVoice = null;
-        const timerEl = document.getElementById('teacher-record-timer');
-        if (timerEl) timerEl.textContent = '00:00';
-        renderGradingPanel();
-        showToast('Đã hủy bản thu âm nháp.');
+        if (discardBtn) {
+          const draftId = ui.teacherDraftVoice && ui.teacherDraftVoice.historyId ? ui.teacherDraftVoice.historyId : '';
+          ui.teacherDraftVoice = null;
+          if (draftId) {
+            ui.lastDiscardedVoiceId = draftId;
+            if (window.StudySnapVoiceHistory) {
+              await window.StudySnapVoiceHistory.markStatus(draftId, 'discarded');
+            }
+          }
+          const timerEl = document.getElementById('teacher-record-timer');
+          if (timerEl) timerEl.textContent = '00:00';
+          renderGradingPanel();
+          showToast('Đã hủy bản thu âm nháp (vẫn lưu trong Lịch sử Voice để khôi phục nếu cần).');
+          return;
+        }
+        const undoBtn = ev.target && ev.target.closest ? ev.target.closest('#btn-undo-discard-teacher-voice') : null;
+        if (undoBtn && ui.lastDiscardedVoiceId) {
+          await restoreTeacherVoiceFromHistory(ui.lastDiscardedVoiceId);
+          return;
+        }
+        const openHistBtn = ev.target && ev.target.closest ? ev.target.closest('#btn-open-voice-history-inline') : null;
+        if (openHistBtn) {
+          ui.voiceHistoryOpen = true;
+          renderTeacherVoiceHistoryPanel();
+        }
+      });
+    }
+
+    const voiceHistorySlotEl = document.getElementById('teacher-voice-history-slot');
+    if (voiceHistorySlotEl) {
+      voiceHistorySlotEl.addEventListener('click', async function (ev) {
+        const toggleBtn = ev.target && ev.target.closest ? ev.target.closest('#btn-toggle-teacher-voice-history') : null;
+        if (toggleBtn) {
+          ui.voiceHistoryOpen = !ui.voiceHistoryOpen;
+          renderTeacherVoiceHistoryPanel();
+          return;
+        }
+        const filterBtn = ev.target && ev.target.closest ? ev.target.closest('[data-vh-filter]') : null;
+        if (filterBtn) {
+          ui.voiceHistoryFilter = filterBtn.getAttribute('data-vh-filter') || 'all';
+          renderTeacherVoiceHistoryPanel();
+          return;
+        }
+        const restoreBtn = ev.target && ev.target.closest ? ev.target.closest('[data-restore-voice-history]') : null;
+        if (restoreBtn) {
+          const histId = restoreBtn.getAttribute('data-restore-voice-history');
+          await restoreTeacherVoiceFromHistory(histId);
+          return;
+        }
+        const delBtn = ev.target && ev.target.closest ? ev.target.closest('[data-delete-voice-history]') : null;
+        if (delBtn && window.StudySnapVoiceHistory) {
+          const histId = delBtn.getAttribute('data-delete-voice-history');
+          if (ui.lastDiscardedVoiceId === histId) ui.lastDiscardedVoiceId = null;
+          await window.StudySnapVoiceHistory.removeTake(histId);
+          renderGradingPanel();
+          showToast('Đã xóa bản thu khỏi lịch sử.');
+          return;
+        }
+        const clearBtn = ev.target && ev.target.closest ? ev.target.closest('#btn-clear-teacher-voice-history') : null;
+        if (clearBtn && window.StudySnapVoiceHistory) {
+          if (!confirm('Xóa toàn bộ lịch sử các bản thu Voice đã lưu trên trình duyệt này?')) return;
+          ui.lastDiscardedVoiceId = null;
+          await window.StudySnapVoiceHistory.clearAll();
+          renderGradingPanel();
+          showToast('Đã dọn sạch Lịch sử Voice.');
+        }
       });
     }
 
@@ -7731,31 +8009,77 @@
       btnTeacherRecord.addEventListener('click', function () {
         if (!ui.isTeacherRecording) {
           ui.isTeacherRecording = true;
+          const recStudent = findStudent(ui.gradingStudentId);
+          const recAsg = findAssignment(ui.gradingAssignmentId);
+          const recMeta = {
+            studentId: ui.gradingStudentId || '',
+            studentName: recStudent ? recStudent.full_name : '',
+            assignmentId: ui.gradingAssignmentId || '',
+            assignmentTitle: recAsg ? (recAsg.lesson_tag || recAsg.title || '') : '',
+            submissionId: ui.gradingSubmissionId || ''
+          };
+          ui.activeTeacherRecordingMeta = recMeta;
           btnTeacherRecord.textContent = 'Dừng thu Voice';
           if (teacherRecorderBar) teacherRecorderBar.classList.add('is-recording');
           window.StudySnapAudio.startRecording(
             function (timeStr) {
               if (teacherRecordTimer) teacherRecordTimer.textContent = timeStr;
             },
-            function (result) {
+            async function (result) {
               ui.isTeacherRecording = false;
+              ui.activeTeacherRecordingMeta = null;
               btnTeacherRecord.disabled = false;
               btnTeacherRecord.textContent = 'Thu âm phản hồi Voice';
               if (teacherRecorderBar) teacherRecorderBar.classList.remove('is-recording');
-              ui.teacherDraftVoice = {
-                dataUrl: result.dataUrl,
-                mimeType: result.mimeType,
-                duration: result.duration
-              };
-              renderGradingPanel();
-              showToast(
-                result.trimmedSeconds >= 1
-                  ? 'Đã thu Voice, lọc tạp âm & cắt ' + result.trimmedSeconds + 's khoảng trống (' + result.duration + ')!'
-                  : 'Đã thu âm & lọc tạp âm Voice (' + result.duration + ')!'
-              );
+
+              const sameTarget =
+                String(ui.gradingStudentId || '') === String(recMeta.studentId || '') &&
+                String(ui.gradingAssignmentId || '') === String(recMeta.assignmentId || '');
+
+              if (sameTarget && ui.teacherDraftVoice && ui.teacherDraftVoice.historyId && window.StudySnapVoiceHistory) {
+                await window.StudySnapVoiceHistory.markStatus(ui.teacherDraftVoice.historyId, 'replaced');
+              }
+
+              let savedTake = null;
+              if (window.StudySnapVoiceHistory) {
+                savedTake = await window.StudySnapVoiceHistory.addTake({
+                  studentId: recMeta.studentId,
+                  studentName: recMeta.studentName,
+                  assignmentId: recMeta.assignmentId,
+                  assignmentTitle: recMeta.assignmentTitle,
+                  submissionId: recMeta.submissionId,
+                  duration: result.duration,
+                  mimeType: result.mimeType,
+                  sizeKB: result.sizeKB,
+                  dataUrl: result.dataUrl,
+                  status: sameTarget ? 'draft' : 'draft_switched'
+                });
+              }
+
+              if (sameTarget) {
+                ui.teacherDraftVoice = {
+                  dataUrl: result.dataUrl,
+                  mimeType: result.mimeType,
+                  duration: result.duration,
+                  historyId: savedTake ? savedTake.id : ''
+                };
+                ui.lastDiscardedVoiceId = null;
+                renderGradingPanel();
+                showToast(
+                  result.trimmedSeconds >= 1
+                    ? 'Đã thu Voice, lọc tạp âm & cắt ' + result.trimmedSeconds + 's khoảng trống (' + result.duration + ')!'
+                    : 'Đã thu âm & lọc tạp âm Voice (' + result.duration + ')!'
+                );
+              } else {
+                renderTeacherVoiceHistoryPanel();
+                showToast(
+                  'Đã lưu bản thu Voice cho ' + (recMeta.studentName || 'học sinh trước') + ' (' + result.duration + ') vào Lịch sử Voice!'
+                );
+              }
             },
             function (errMsg) {
               ui.isTeacherRecording = false;
+              ui.activeTeacherRecordingMeta = null;
               btnTeacherRecord.disabled = false;
               btnTeacherRecord.textContent = 'Thu âm phản hồi Voice';
               if (teacherRecorderBar) teacherRecorderBar.classList.remove('is-recording');
@@ -7951,6 +8275,10 @@
         window.StudySnapStore.saveState(state);
       }
 
+      if (hasVoiceUpload && draftVoice && draftVoice.historyId && window.StudySnapVoiceHistory) {
+        await window.StudySnapVoiceHistory.markStatus(draftVoice.historyId, 'saved');
+      }
+      ui.teacherDraftVoice = null;
       resetGradingDraftInputs();
       renderAll();
       const st = findStudent(ui.gradingStudentId);
@@ -8303,6 +8631,10 @@
 
         window.StudySnapStore.saveState(state);
         if (sourceHasUnsavedEdits) {
+          if (snap && snap.hasVoiceUpload && snap.draftVoice && snap.draftVoice.historyId && window.StudySnapVoiceHistory) {
+            await window.StudySnapVoiceHistory.markStatus(snap.draftVoice.historyId, 'saved');
+          }
+          ui.teacherDraftVoice = null;
           resetGradingDraftInputs();
         }
         closeCopyFeedbackModal();
@@ -8328,6 +8660,8 @@
         const title = document.getElementById('new-asg-title').value.trim();
         const desc = document.getElementById('new-asg-desc').value.trim();
         const asgClass = document.getElementById('new-asg-class') ? document.getElementById('new-asg-class').value : 'all';
+        const reqMediaSelect = document.getElementById('new-asg-require-media');
+        const reqMediaVal = reqMediaSelect ? String(reqMediaSelect.value || 'audio_or_video').trim() : 'audio_or_video';
         if (!title) return;
 
         const newId = 'BVN_' + Date.now();
@@ -8338,7 +8672,7 @@
           lesson_tag: tag || ('Bài ' + (state.assignments.length + 1)),
           due_date: due || '20/11/2026',
           description: desc,
-          require_media: 'audio_or_video',
+          require_media: reqMediaVal || 'audio_or_video',
           class_name: asgClass
         };
 
@@ -8359,6 +8693,7 @@
             lesson_tag: newAsg.lesson_tag,
             due_date: newAsg.due_date,
             description: newAsg.description,
+            require_media: newAsg.require_media,
             class_name: newAsg.class_name
           });
         });
@@ -11383,6 +11718,21 @@
         return;
       }
 
+      const openGradeFromMediaKey = function (gradeKey) {
+        if (!gradeKey) return null;
+        return function () {
+          const parts = gradeKey.split(':');
+          ui.gradingAssignmentId = parts[0];
+          ui.gradingStudentId = parts[1];
+          const pickedAsg = findAssignment(parts[0]);
+          if (pickedAsg) ui.gradingPanelSession = (pickedAsg.session_tag || 'Buổi 1').trim();
+          resetGradingDraftInputs();
+          renderGradingPanel();
+          const panel = document.getElementById('teacher-grading-panel');
+          if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        };
+      };
+
       const videoCompactBtn = ev.target.closest('[data-video-compact-open]');
       if (videoCompactBtn && typeof window.StudySnapAudio.openVideoModal === 'function') {
         ev.stopPropagation();
@@ -11392,17 +11742,42 @@
           label: videoCompactBtn.getAttribute('data-video-label') || 'Video BVN học sinh',
           duration: videoCompactBtn.getAttribute('data-video-duration') || '01:15',
           mimeType: videoCompactBtn.getAttribute('data-video-mime') || 'video/mp4',
-          onGrade: gradeKey ? function () {
-            const parts = gradeKey.split(':');
-            ui.gradingAssignmentId = parts[0];
-            ui.gradingStudentId = parts[1];
-            const pickedAsg = findAssignment(parts[0]);
-            if (pickedAsg) ui.gradingPanelSession = (pickedAsg.session_tag || 'Buổi 1').trim();
-            resetGradingDraftInputs();
-            renderGradingPanel();
-            const panel = document.getElementById('teacher-grading-panel');
-            if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          } : null
+          onGrade: openGradeFromMediaKey(gradeKey)
+        });
+        return;
+      }
+
+      const imageCompactBtn = ev.target.closest('[data-image-compact-open]');
+      if (imageCompactBtn && typeof window.StudySnapAudio.openImageModal === 'function') {
+        ev.stopPropagation();
+        let urls = [];
+        try {
+          urls = JSON.parse(imageCompactBtn.getAttribute('data-image-urls') || '[]');
+        } catch (e) {}
+        const gradeKey = imageCompactBtn.getAttribute('data-image-grade-key') || '';
+        window.StudySnapAudio.openImageModal({
+          urls: urls,
+          index: 0,
+          label: imageCompactBtn.getAttribute('data-image-label') || 'Ảnh BVN học sinh',
+          onGrade: openGradeFromMediaKey(gradeKey)
+        });
+        return;
+      }
+
+      const imageModalBtn = ev.target.closest('[data-image-modal-open]');
+      if (imageModalBtn && typeof window.StudySnapAudio.openImageModal === 'function') {
+        ev.stopPropagation();
+        let urls = [];
+        try {
+          urls = JSON.parse(imageModalBtn.getAttribute('data-image-urls') || '[]');
+        } catch (e) {}
+        const idx = parseInt(imageModalBtn.getAttribute('data-image-index') || '0', 10) || 0;
+        const gradeKey = imageModalBtn.getAttribute('data-image-grade-key') || '';
+        window.StudySnapAudio.openImageModal({
+          urls: urls,
+          index: idx,
+          label: imageModalBtn.getAttribute('data-image-label') || 'Ảnh BVN học sinh',
+          onGrade: openGradeFromMediaKey(gradeKey)
         });
         return;
       }
@@ -11701,6 +12076,11 @@
   document.addEventListener('DOMContentLoaded', function () {
     bindEvents();
     renderAll();
+    if (window.StudySnapVoiceHistory && typeof window.StudySnapVoiceHistory.loadAll === 'function') {
+      window.StudySnapVoiceHistory.loadAll().then(function () {
+        renderTeacherVoiceHistoryPanel();
+      });
+    }
     if (
       window.StudySnapStore.getGasUrl() ||
       (window.StudySnapAuth && typeof window.StudySnapAuth.isHttpRuntime === 'function' && window.StudySnapAuth.isHttpRuntime())

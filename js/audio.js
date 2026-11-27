@@ -47,15 +47,67 @@ window.StudySnapAudio = (function () {
     '3gp': 'video/3gpp'
   };
 
+  const IMAGE_EXT_MIME_MAP = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    gif: 'image/gif',
+    heic: 'image/heic',
+    heif: 'image/heif',
+    bmp: 'image/bmp'
+  };
+
   function isVideoSubmission(url, mediaType, mimeType) {
     const cleanType = String(mediaType || '').trim().toLowerCase();
     const cleanMime = String(mimeType || '').trim().toLowerCase();
     const cleanUrl = String(url || '').trim().toLowerCase();
+    if (cleanType === 'image' || cleanMime.indexOf('image/') === 0 || cleanUrl.indexOf('data:image/') === 0) {
+      return false;
+    }
     if (cleanType === 'video' || cleanMime.indexOf('video/') === 0 || cleanUrl.indexOf('data:video/') === 0) {
       return true;
     }
     if (cleanType === 'audio') return false;
     return /(?:[?&]mime=video(?:%2f|\/))|\.(?:mp4|mov|m4v|avi|mkv|ogv)(?:$|[?#])/i.test(cleanUrl);
+  }
+
+  function parseImageSubmissionUrls(rawUrl) {
+    if (Array.isArray(rawUrl)) {
+      return rawUrl.map(function (u) { return String(u || '').trim(); }).filter(Boolean);
+    }
+    const clean = String(rawUrl || '').trim();
+    if (!clean) return [];
+    if (clean.charAt(0) === '[') {
+      try {
+        const parsed = JSON.parse(clean);
+        if (Array.isArray(parsed)) {
+          return parsed.map(function (u) { return String(u || '').trim(); }).filter(Boolean);
+        }
+      } catch (e) {}
+    }
+    return [clean];
+  }
+
+  function isImageSubmission(url, mediaType, mimeType) {
+    const cleanType = String(mediaType || '').trim().toLowerCase();
+    const cleanMime = String(mimeType || '').trim().toLowerCase();
+    if (cleanType === 'image' || cleanMime.indexOf('image/') === 0) {
+      return true;
+    }
+    if (cleanType === 'video' || cleanType === 'audio') {
+      return false;
+    }
+    const urls = parseImageSubmissionUrls(url);
+    if (!urls.length) return false;
+    return urls.every(function (u) {
+      const low = u.toLowerCase();
+      return (
+        low.indexOf('data:image/') === 0 ||
+        low.indexOf('demo:image') === 0 ||
+        /(?:[?&]mime=image(?:%2f|\/))|\.(?:jpg|jpeg|png|webp|gif|heic|heif|bmp)(?:$|[?#])/i.test(low)
+      );
+    });
   }
 
   function showGlobalAudioToast(msg) {
@@ -119,14 +171,35 @@ window.StudySnapAudio = (function () {
     return false;
   }
 
-  function sniffAudioMimeFromBytes(bytes, currentMime, expectVideo) {
-    const normalizedCur = normalizePlayableMime(currentMime, expectVideo ? 'video/mp4' : '', '');
+  function sniffAudioMimeFromBytes(bytes, currentMime, expectVideo, expectImage) {
+    const normalizedCur = normalizePlayableMime(currentMime, expectImage ? 'image/jpeg' : (expectVideo ? 'video/mp4' : ''), '');
+    const prefersImage = Boolean(
+      expectImage || (normalizedCur && normalizedCur.indexOf('image/') === 0)
+    );
     const prefersVideo = Boolean(
-      expectVideo || (currentMime && String(currentMime).toLowerCase().indexOf('video/') === 0)
+      !prefersImage && (expectVideo || (currentMime && String(currentMime).toLowerCase().indexOf('video/') === 0))
     );
     if (bytes && bytes.length >= 4) {
       if (isLikelyTextErrorBytes(bytes)) {
         return '';
+      }
+      // PNG: 89 50 4E 47
+      if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+        return 'image/png';
+      }
+      // JPEG: FF D8 FF
+      if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+        return 'image/jpeg';
+      }
+      // GIF: GIF8
+      if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) {
+        return 'image/gif';
+      }
+      // WEBP: RIFF....WEBP
+      if (bytes.length >= 12 &&
+          bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+          bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
+        return 'image/webp';
       }
       // RIFF....WAVE -> WAV
       if (bytes.length >= 12 &&
@@ -156,9 +229,10 @@ window.StudySnapAudio = (function () {
           return 'audio/mpeg';
         }
       }
-      // ISO Base Media (.m4a / .mp4 / .mov / .3gp) -> ....ftyp + major brand
+      // ISO Base Media (.m4a / .mp4 / .mov / .3gp / heic) -> ....ftyp + major brand
       if (bytes.length >= 12 && bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
         const brand = String.fromCharCode(bytes[8] || 0, bytes[9] || 0, bytes[10] || 0, bytes[11] || 0).toLowerCase();
+        if (brand === 'heic' || brand === 'heix' || brand === 'mif1' || brand === 'hevc') return 'image/heic';
         if (brand === 'm4a ' || brand === 'm4b ') return 'audio/mp4';
         if (brand === 'qt  ') return 'video/quicktime';
         if (brand.indexOf('3gp') === 0 || brand.indexOf('3g2') === 0) {
@@ -179,13 +253,14 @@ window.StudySnapAudio = (function () {
         return prefersVideo ? 'video/webm' : 'audio/webm';
       }
     }
-    return normalizedCur || (prefersVideo ? 'video/mp4' : 'audio/webm');
+    return normalizedCur || (prefersImage ? 'image/jpeg' : (prefersVideo ? 'video/mp4' : 'audio/webm'));
   }
 
-  async function ensurePlayableAudioBlob(blob, hintName, expectVideo) {
+  async function ensurePlayableAudioBlob(blob, hintName, expectVideo, expectImage) {
     if (!blob || blob.size === 0) return null;
     const rawType = String(blob.type || '').trim().toLowerCase();
-    let detected = normalizePlayableMime(rawType, expectVideo ? 'video/mp4' : '', hintName);
+    const fallbackHint = expectImage ? 'image/jpeg' : (expectVideo ? 'video/mp4' : '');
+    let detected = normalizePlayableMime(rawType, fallbackHint, hintName);
     if (typeof blob.slice === 'function') {
       try {
         const headerBuf = await blob.slice(0, 64).arrayBuffer();
@@ -193,7 +268,7 @@ window.StudySnapAudio = (function () {
         if (isLikelyTextErrorBytes(headerBytes)) {
           return null;
         }
-        const sniffed = sniffAudioMimeFromBytes(headerBytes, rawType, expectVideo);
+        const sniffed = sniffAudioMimeFromBytes(headerBytes, rawType, expectVideo, expectImage);
         if (sniffed) detected = sniffed;
       } catch (e) {}
     }
@@ -244,29 +319,32 @@ window.StudySnapAudio = (function () {
   function cacheDriveMediaFromDataUrl(urlOrId, dataUrl, hintName) {
     const fileId = extractDriveFileId(urlOrId) || String(urlOrId || '').trim();
     if (!fileId || !dataUrl || String(dataUrl).indexOf('data:') !== 0) return '';
+    const isImg = String(dataUrl).toLowerCase().indexOf('data:image/') === 0;
     const blob = dataUrlToBlobSync(dataUrl, hintName);
     if (!blob) return '';
     writeBrowserCachedMedia(fileId, blob);
     if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
       const objUrl = URL.createObjectURL(blob);
-      resolvedMediaCache[fileId] = objUrl;
-      resolvedBlobCache[fileId] = blob;
+      if (isImg) resolvedMediaCache['image:' + fileId] = objUrl;
+      else resolvedMediaCache[fileId] = objUrl;
+      if (isImg) resolvedBlobCache['image:' + fileId] = blob;
+      else resolvedBlobCache[fileId] = blob;
       delete driveMediaErrors[fileId];
       return objUrl;
     }
     return '';
   }
 
-  async function readBrowserCachedMedia(fileId, expectVideo) {
+  async function readBrowserCachedMedia(fileId, expectVideo, expectImage) {
     if (!fileId || typeof caches === 'undefined') return '';
     try {
       const cache = await caches.open(MEDIA_CACHE_NAME);
       const cached = await cache.match('https://studysnap-media-cache.local/drive/' + encodeURIComponent(fileId));
       if (!cached) return '';
       const rawBlob = await cached.blob();
-      const blob = await ensurePlayableAudioBlob(rawBlob, '', expectVideo);
+      const blob = await ensurePlayableAudioBlob(rawBlob, '', expectVideo, expectImage);
       if (!blob || blob.size === 0) return '';
-      const cacheSlot = expectVideo ? 'video:' + fileId : fileId;
+      const cacheSlot = expectImage ? 'image:' + fileId : (expectVideo ? 'video:' + fileId : fileId);
       resolvedBlobCache[cacheSlot] = blob;
       if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
         return URL.createObjectURL(blob);
@@ -318,10 +396,13 @@ window.StudySnapAudio = (function () {
   async function resolveDriveMediaSource(driveFileId, opts) {
     if (!driveFileId) return '';
     const expectVideo = Boolean(opts && opts.expectVideo);
+    const expectImage = Boolean(opts && opts.expectImage);
     const bypassCache = Boolean(opts && opts.bypassCache);
-    const cacheSlot = expectVideo ? 'video:' + driveFileId : driveFileId;
+    const cacheSlot = expectImage
+      ? 'image:' + driveFileId
+      : (expectVideo ? 'video:' + driveFileId : driveFileId);
     if (!bypassCache && resolvedMediaCache[cacheSlot]) return resolvedMediaCache[cacheSlot];
-    if (!bypassCache && !expectVideo && resolvedMediaCache[driveFileId]) return resolvedMediaCache[driveFileId];
+    if (!bypassCache && !expectVideo && !expectImage && resolvedMediaCache[driveFileId]) return resolvedMediaCache[driveFileId];
     if (!bypassCache && inflightMediaFetches[cacheSlot]) return await inflightMediaFetches[cacheSlot];
 
     delete driveMediaErrors[driveFileId];
@@ -330,7 +411,7 @@ window.StudySnapAudio = (function () {
       let lastErrMsg = '';
       try {
         if (!bypassCache) {
-          const cachedObjUrl = await readBrowserCachedMedia(driveFileId, expectVideo);
+          const cachedObjUrl = await readBrowserCachedMedia(driveFileId, expectVideo, expectImage);
           if (cachedObjUrl) {
             resolvedMediaCache[cacheSlot] = cachedObjUrl;
             return cachedObjUrl;
@@ -343,13 +424,13 @@ window.StudySnapAudio = (function () {
             const edgeUrl =
               '/api?action=media&fileId=' +
               encodeURIComponent(driveFileId) +
-              (expectVideo ? '&mime=video%2Fmp4' : '') +
+              (expectImage ? '&mime=image%2Fjpeg' : (expectVideo ? '&mime=video%2Fmp4' : '')) +
               (bypassCache ? '&nocache=1' : '');
             const edgeRes = await fetch(edgeUrl, { credentials: 'same-origin' });
             const ct = String(edgeRes.headers.get('content-type') || '').toLowerCase();
             if (edgeRes.ok && ct.indexOf('application/json') === -1 && ct.indexOf('text/') === -1 && ct.indexOf('xml') === -1) {
               const rawBlob = await edgeRes.blob();
-              const blob = await ensurePlayableAudioBlob(rawBlob, '', expectVideo);
+              const blob = await ensurePlayableAudioBlob(rawBlob, '', expectVideo, expectImage);
               if (blob && blob.size > 0) {
                 await writeBrowserCachedMedia(driveFileId, blob);
                 resolvedBlobCache[cacheSlot] = blob;
@@ -386,7 +467,7 @@ window.StudySnapAudio = (function () {
 
         if (json && json.ok && json.dataUrl) {
           const blob = await dataUrlToBlob(json.dataUrl);
-          const safeBlob = blob ? await ensurePlayableAudioBlob(blob, json.fileName || '', expectVideo) : blob;
+          const safeBlob = blob ? await ensurePlayableAudioBlob(blob, json.fileName || '', expectVideo, expectImage) : blob;
           if (safeBlob && safeBlob.size > 0) {
             await writeBrowserCachedMedia(driveFileId, safeBlob);
             resolvedBlobCache[cacheSlot] = safeBlob;
@@ -425,6 +506,14 @@ window.StudySnapAudio = (function () {
     pause: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>',
     rewind: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>',
     video: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 8-6 4 6 4V8Z"></path><rect width="14" height="12" x="2" y="6" rx="2" ry="2"></rect></svg>',
+    image: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>',
+    zoomIn: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>',
+    rotateCw: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg>',
+    chevronLeft: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>',
+    chevronRight: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>',
+    history: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>',
+    restore: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>',
+    trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
     external: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>',
     close: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>'
   };
@@ -2613,24 +2702,704 @@ window.StudySnapAudio = (function () {
     }
   }
 
+  function getDriveImageThumbnailUrl(fileId) {
+    return fileId ? 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(fileId) + '&sz=w1600' : '';
+  }
+
+  function getImmediateImageSrc(rawUrl) {
+    const clean = String(rawUrl || '').trim();
+    if (!clean) return '';
+    if (clean.indexOf('data:') === 0 || clean.indexOf('blob:') === 0 || clean.indexOf('/api?') === 0) {
+      return clean;
+    }
+    const driveId = extractDriveFileId(clean);
+    if (driveId) {
+      if (resolvedMediaCache['image:' + driveId]) return resolvedMediaCache['image:' + driveId];
+      if (resolvedMediaCache[driveId]) return resolvedMediaCache[driveId];
+      if (canStreamViaEdgeMediaProxy()) {
+        return '/api?action=media&fileId=' + encodeURIComponent(driveId) + '&mime=image%2Fjpeg';
+      }
+      return getDriveImageThumbnailUrl(driveId);
+    }
+    return clean;
+  }
+
+  function optimizeImageFile(file, opts) {
+    const maxEdge = (opts && opts.maxEdge) || 1600;
+    const quality = (opts && opts.quality) || 0.86;
+    const maxRawBytes = (opts && opts.maxRawBytes) || 15 * 1024 * 1024;
+    return new Promise(function (resolve, reject) {
+      if (!file) {
+        reject(new Error('Chưa chọn tệp ảnh.'));
+        return;
+      }
+      const rawName = String(file.name || 'anh_bai_lam.jpg');
+      const extMatch = rawName.match(/\.([a-z0-9]+)$/i);
+      const ext = extMatch ? extMatch[1].toLowerCase() : '';
+      const rawType = String(file.type || '').trim().toLowerCase();
+      const isImg = rawType.indexOf('image/') === 0 || Boolean(ext && IMAGE_EXT_MIME_MAP[ext]);
+      if (!isImg) {
+        reject(new Error('Tệp "' + rawName + '" không phải định dạng ảnh hợp lệ (JPG, PNG, WebP...).'));
+        return;
+      }
+      if (typeof file.size === 'number' && file.size > maxRawBytes) {
+        reject(new Error('Ảnh "' + rawName + '" quá nặng (> 15 MB). Vui lòng chọn ảnh nhẹ hơn.'));
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onerror = function () {
+        reject(new Error('Không thể đọc tệp ảnh "' + rawName + '" từ thiết bị.'));
+      };
+      reader.onload = function (ev) {
+        const rawDataUrl = String((ev && ev.target && ev.target.result) || '');
+        if (!rawDataUrl || rawDataUrl.indexOf('data:') !== 0) {
+          reject(new Error('Dữ liệu ảnh "' + rawName + '" không hợp lệ.'));
+          return;
+        }
+        if (typeof Image === 'undefined' || typeof document === 'undefined') {
+          resolve({
+            mediaType: 'image',
+            dataUrl: rawDataUrl,
+            mimeType: rawType || IMAGE_EXT_MIME_MAP[ext] || 'image/jpeg',
+            fileName: rawName,
+            width: 0,
+            height: 0,
+            sizeKB: Math.max(1, Math.round((file.size || rawDataUrl.length) / 1024))
+          });
+          return;
+        }
+
+        let settled = false;
+        const img = new Image();
+        const timeoutId = setTimeout(function () {
+          if (settled) return;
+          settled = true;
+          resolve({
+            mediaType: 'image',
+            dataUrl: rawDataUrl,
+            mimeType: rawType || IMAGE_EXT_MIME_MAP[ext] || 'image/jpeg',
+            fileName: rawName,
+            width: 0,
+            height: 0,
+            sizeKB: Math.max(1, Math.round((file.size || rawDataUrl.length) / 1024))
+          });
+        }, 7000);
+
+        img.onload = function () {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
+          const w = img.naturalWidth || img.width || 0;
+          const h = img.naturalHeight || img.height || 0;
+          const keepOriginal =
+            w > 0 &&
+            h > 0 &&
+            Math.max(w, h) <= maxEdge &&
+            typeof file.size === 'number' &&
+            file.size <= 450 * 1024 &&
+            (rawType === 'image/jpeg' || rawType === 'image/png' || rawType === 'image/webp');
+          if (keepOriginal) {
+            resolve({
+              mediaType: 'image',
+              dataUrl: rawDataUrl,
+              mimeType: rawType,
+              fileName: rawName,
+              width: w,
+              height: h,
+              sizeKB: Math.max(1, Math.round(file.size / 1024))
+            });
+            return;
+          }
+          try {
+            let targetW = w || maxEdge;
+            let targetH = h || maxEdge;
+            if (Math.max(targetW, targetH) > maxEdge) {
+              const scale = maxEdge / Math.max(targetW, targetH);
+              targetW = Math.max(1, Math.round(targetW * scale));
+              targetH = Math.max(1, Math.round(targetH * scale));
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = targetW;
+            canvas.height = targetH;
+            const ctx2d = canvas.getContext('2d');
+            if (ctx2d) {
+              ctx2d.fillStyle = '#FFFFFF';
+              ctx2d.fillRect(0, 0, targetW, targetH);
+              ctx2d.drawImage(img, 0, 0, targetW, targetH);
+              const compressedUrl = canvas.toDataURL('image/jpeg', quality);
+              const estBytes = Math.round((compressedUrl.length * 3) / 4);
+              resolve({
+                mediaType: 'image',
+                dataUrl: compressedUrl,
+                mimeType: 'image/jpeg',
+                fileName: rawName.replace(/\.[a-z0-9]+$/i, '') + '.jpg',
+                width: targetW,
+                height: targetH,
+                sizeKB: Math.max(1, Math.round(estBytes / 1024))
+              });
+              return;
+            }
+          } catch (canvasErr) {}
+          resolve({
+            mediaType: 'image',
+            dataUrl: rawDataUrl,
+            mimeType: rawType || IMAGE_EXT_MIME_MAP[ext] || 'image/jpeg',
+            fileName: rawName,
+            width: w,
+            height: h,
+            sizeKB: Math.max(1, Math.round((file.size || rawDataUrl.length) / 1024))
+          });
+        };
+
+        img.onerror = function () {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
+          if (typeof file.size === 'number' && file.size > 4.5 * 1024 * 1024) {
+            reject(new Error('Trình duyệt không giải mã được ảnh "' + rawName + '" (> 4.5 MB). Em hãy chuyển sang ảnh JPG/PNG nhé.'));
+            return;
+          }
+          resolve({
+            mediaType: 'image',
+            dataUrl: rawDataUrl,
+            mimeType: rawType || IMAGE_EXT_MIME_MAP[ext] || 'image/jpeg',
+            fileName: rawName,
+            width: 0,
+            height: 0,
+            sizeKB: Math.max(1, Math.round((file.size || rawDataUrl.length) / 1024))
+          });
+        };
+
+        img.src = rawDataUrl;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function readUploadedImageFiles(fileList, callback, onError, opts) {
+    const files = Array.prototype.slice.call(fileList || []).filter(Boolean);
+    if (!files.length) return;
+    const maxCount = Math.max(1, Number(opts && opts.maxCount) || 5);
+    const selected = files.slice(0, maxCount);
+    const out = [];
+    for (let i = 0; i < selected.length; i++) {
+      try {
+        const processed = await optimizeImageFile(selected[i], opts);
+        out.push(processed);
+      } catch (err) {
+        if (typeof onError === 'function') {
+          onError(err && err.message ? err.message : 'Không thể đọc tệp ảnh.');
+        } else {
+          showGlobalAudioToast(err && err.message ? err.message : 'Không thể đọc tệp ảnh.');
+        }
+        return;
+      }
+    }
+    if (files.length > maxCount) {
+      showGlobalAudioToast('Đã chọn tối đa ' + maxCount + ' ảnh cho mỗi lần nộp.');
+    }
+    if (typeof callback === 'function') {
+      callback(out);
+    }
+  }
+
+  function renderImageViewer(opts) {
+    const urls = Array.isArray(opts && opts.urls)
+      ? opts.urls.map(function (u) { return String(u || '').trim(); }).filter(Boolean)
+      : parseImageSubmissionUrls(opts && opts.url);
+    const label = (opts && opts.label) || 'Ảnh BVN học sinh nộp';
+    const compact = Boolean(opts && opts.compact);
+    const editable = Boolean(opts && opts.editable);
+    const gradeKey = (opts && opts.gradeKey) || '';
+
+    if (!urls.length) return '';
+
+    const isDemo = urls.every(function (u) { return u.indexOf('demo:') === 0; });
+    if (compact) {
+      if (isDemo) {
+        return (
+          '<div class="video-compact-bar is-demo">' +
+            '<span class="video-compact-label">' + PLAYER_ICONS.image + '<span>' + escapeAttr(label) + ' (Dữ liệu mẫu)</span></span>' +
+          '</div>'
+        );
+      }
+      const firstDriveId = extractDriveFileId(urls[0]);
+      const driveViewUrl = getDriveExternalViewUrl(firstDriveId);
+      const countText = urls.length > 1 ? ('Xem ' + urls.length + ' ảnh') : 'Xem ảnh bài làm';
+      return (
+        '<div class="video-compact-bar">' +
+          '<button type="button" class="btn btn-secondary btn-sm image-compact-trigger" data-image-compact-open ' +
+            'data-image-urls="' + escapeAttr(JSON.stringify(urls)) + '" ' +
+            'data-image-label="' + escapeAttr(label) + '"' +
+            (gradeKey ? ' data-image-grade-key="' + escapeAttr(gradeKey) + '"' : '') + '>' +
+            PLAYER_ICONS.image +
+            '<span>' + escapeAttr(countText) + '</span>' +
+          '</button>' +
+          (driveViewUrl
+            ? '<a class="btn btn-outline btn-xs video-drive-ext-link" href="' + escapeAttr(driveViewUrl) + '" target="_blank" rel="noopener noreferrer" title="Mở ảnh gốc trên Google Drive">' + PLAYER_ICONS.external + '<span>Drive</span></a>'
+            : '') +
+        '</div>'
+      );
+    }
+
+    if (isDemo) {
+      return (
+        '<div class="ss-image-card is-demo">' +
+          '<div class="ss-image-card-header">' +
+            '<div class="ss-image-card-title-wrap">' + PLAYER_ICONS.image + '<span class="ss-image-card-title">' + escapeAttr(label) + '</span></div>' +
+          '</div>' +
+          '<div class="video-demo-notice">Đây là dữ liệu mẫu minh họa — chưa có ảnh bài làm thật do học sinh tải lên.</div>' +
+        '</div>'
+      );
+    }
+
+    const encodedUrls = escapeAttr(JSON.stringify(urls));
+    const singleCls = urls.length === 1 ? ' is-single' : '';
+    const thumbsHtml = urls.map(function (u, idx) {
+      const driveId = extractDriveFileId(u);
+      const imgSrc = getImmediateImageSrc(u);
+      const removeBtn = editable
+        ? '<button type="button" class="ss-image-remove-btn" data-remove-pending-img="' + idx + '" title="Xóa ảnh này" aria-label="Xóa ảnh ' + (idx + 1) + '">' + PLAYER_ICONS.close + '</button>'
+        : '';
+      return (
+        '<div class="ss-image-thumb-wrap">' +
+          '<button type="button" class="ss-image-thumb-btn" data-image-modal-open ' +
+            'data-image-urls="' + encodedUrls + '" ' +
+            'data-image-index="' + idx + '" ' +
+            'data-image-label="' + escapeAttr(label) + '"' +
+            (gradeKey ? ' data-image-grade-key="' + escapeAttr(gradeKey) + '"' : '') + ' ' +
+            'title="Bấm để phóng to và xoay ảnh">' +
+            '<img class="ss-submission-img" src="' + escapeAttr(imgSrc) + '" alt="' + escapeAttr(label + ' - Ảnh ' + (idx + 1)) + '" loading="lazy"' +
+              (driveId ? ' data-drive-img-id="' + escapeAttr(driveId) + '"' : '') + '>' +
+            '<span class="ss-image-zoom-hint">' + PLAYER_ICONS.zoomIn + '<span>Phóng to' + (urls.length > 1 ? ' (' + (idx + 1) + '/' + urls.length + ')' : '') + '</span></span>' +
+          '</button>' +
+          removeBtn +
+        '</div>'
+      );
+    }).join('');
+
+    const firstDriveId = extractDriveFileId(urls[0]);
+    const driveViewUrl = urls.length === 1 ? getDriveExternalViewUrl(firstDriveId) : '';
+    return (
+      '<div class="ss-image-card">' +
+        '<div class="ss-image-card-header">' +
+          '<div class="ss-image-card-title-wrap">' +
+            PLAYER_ICONS.image +
+            '<span class="ss-image-card-title">' + escapeAttr(label) + '</span>' +
+          '</div>' +
+          '<div class="ss-image-card-actions">' +
+            '<span class="voice-time-badge tabular-nums">' + urls.length + ' ảnh</span>' +
+            '<button type="button" class="voice-ctrl-btn voice-rewind-btn" data-image-modal-open data-image-urls="' + encodedUrls + '" data-image-index="0" data-image-label="' + escapeAttr(label) + '"' +
+              (gradeKey ? ' data-image-grade-key="' + escapeAttr(gradeKey) + '"' : '') + '>' +
+              PLAYER_ICONS.zoomIn + '<span>Xem lớn</span>' +
+            '</button>' +
+            (driveViewUrl
+              ? '<a class="voice-ctrl-btn voice-rewind-btn video-drive-link" href="' + escapeAttr(driveViewUrl) + '" target="_blank" rel="noopener noreferrer" title="Mở ảnh gốc trên Google Drive">' + PLAYER_ICONS.external + '<span>Drive</span></a>'
+              : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="ss-image-gallery' + singleCls + '">' + thumbsHtml + '</div>' +
+      '</div>'
+    );
+  }
+
+  function hydrateImageViewers(rootEl) {
+    if (typeof document === 'undefined') return;
+    const scope = rootEl && typeof rootEl.querySelectorAll === 'function' ? rootEl : document;
+    if (!scope || typeof scope.querySelectorAll !== 'function') return;
+    scope.querySelectorAll('img[data-drive-img-id]').forEach(function (imgEl) {
+      if (imgEl.dataset.imgHydrated === '1') return;
+      imgEl.dataset.imgHydrated = '1';
+      const driveId = imgEl.getAttribute('data-drive-img-id') || '';
+      if (!driveId) return;
+      imgEl.addEventListener('error', async function () {
+        const stage = imgEl.dataset.imgFallbackStage || '';
+        if (stage === 'done') return;
+        if (stage !== 'gas') {
+          imgEl.dataset.imgFallbackStage = 'gas';
+          const resolved = await resolveDriveMediaSource(driveId, { expectImage: true });
+          if (resolved && resolved !== imgEl.getAttribute('src')) {
+            imgEl.setAttribute('src', resolved);
+            return;
+          }
+        }
+        imgEl.dataset.imgFallbackStage = 'done';
+        const thumbUrl = getDriveImageThumbnailUrl(driveId);
+        if (thumbUrl && imgEl.getAttribute('src') !== thumbUrl) {
+          imgEl.setAttribute('src', thumbUrl);
+        }
+      });
+    });
+  }
+
+  let activeImageModalEl = null;
+  let imageModalState = { urls: [], index: 0, zoom: 1, rotation: 0, label: '' };
+
+  function closeImageModal() {
+    if (!activeImageModalEl) return;
+    activeImageModalEl.classList.remove('is-open');
+    const stageImg = activeImageModalEl.querySelector('[data-img-modal-pic]');
+    if (stageImg) stageImg.removeAttribute('src');
+  }
+
+  function syncImageModalView() {
+    if (!activeImageModalEl) return;
+    const urls = imageModalState.urls || [];
+    const total = urls.length;
+    if (!total) return;
+    const idx = Math.max(0, Math.min(total - 1, imageModalState.index));
+    imageModalState.index = idx;
+    const curUrl = urls[idx];
+    const driveId = extractDriveFileId(curUrl);
+    const picEl = activeImageModalEl.querySelector('[data-img-modal-pic]');
+    const counterEl = activeImageModalEl.querySelector('[data-img-modal-counter]');
+    const prevBtn = activeImageModalEl.querySelector('[data-img-modal-prev]');
+    const nextBtn = activeImageModalEl.querySelector('[data-img-modal-next]');
+    const zoomBtn = activeImageModalEl.querySelector('[data-img-modal-zoom]');
+    const driveLink = activeImageModalEl.querySelector('[data-img-modal-drive]');
+
+    if (picEl) {
+      picEl.dataset.imgHydrated = '0';
+      picEl.dataset.imgFallbackStage = '';
+      if (driveId) picEl.setAttribute('data-drive-img-id', driveId);
+      else picEl.removeAttribute('data-drive-img-id');
+      picEl.src = getImmediateImageSrc(curUrl);
+      picEl.style.transform = 'scale(' + imageModalState.zoom + ') rotate(' + imageModalState.rotation + 'deg)';
+      picEl.classList.toggle('is-zoomed', imageModalState.zoom > 1);
+      hydrateImageViewers(activeImageModalEl);
+    }
+    if (counterEl) {
+      counterEl.textContent = total > 1 ? ('Ảnh ' + (idx + 1) + ' / ' + total) : '1 ảnh';
+    }
+    if (prevBtn) prevBtn.style.display = total > 1 ? 'inline-flex' : 'none';
+    if (nextBtn) nextBtn.style.display = total > 1 ? 'inline-flex' : 'none';
+    if (zoomBtn) {
+      zoomBtn.textContent = imageModalState.zoom > 1 ? 'Thu 1x' : 'Phóng to 1.8x';
+    }
+    if (driveLink) {
+      const extUrl = getDriveExternalViewUrl(driveId);
+      if (extUrl) {
+        driveLink.href = extUrl;
+        driveLink.style.display = 'inline-flex';
+      } else {
+        driveLink.style.display = 'none';
+      }
+    }
+  }
+
+  function openImageModal(opts) {
+    if (typeof document === 'undefined' || !document.body) return;
+    const urls = Array.isArray(opts && opts.urls)
+      ? opts.urls.map(function (u) { return String(u || '').trim(); }).filter(Boolean)
+      : parseImageSubmissionUrls(opts && opts.url);
+    if (!urls.length) return;
+
+    let modal = document.getElementById('ss-image-preview-modal');
+    if (!modal && typeof document.createElement === 'function') {
+      modal = document.createElement('div');
+      modal.id = 'ss-image-preview-modal';
+      modal.className = 'modal-backdrop';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-labelledby', 'ss-image-modal-title');
+      modal.innerHTML =
+        '<div class="modal-dialog image-modal-dialog">' +
+          '<div class="modal-header">' +
+            '<h3 id="ss-image-modal-title" style="display:flex;align-items:center;gap:8px;min-width:0;">' +
+              PLAYER_ICONS.image +
+              '<span data-img-modal-heading style="overflow:hidden;text-overflow:ellipsis;">Ảnh bài làm BVN</span>' +
+            '</h3>' +
+            '<button type="button" class="btn btn-ghost btn-sm" data-img-modal-close aria-label="Đóng cửa sổ xem ảnh">' + PLAYER_ICONS.close + '</button>' +
+          '</div>' +
+          '<div class="ss-image-lightbox-toolbar">' +
+            '<span class="voice-time-badge tabular-nums" data-img-modal-counter>1 ảnh</span>' +
+            '<div class="ss-image-lightbox-controls">' +
+              '<button type="button" class="btn btn-outline btn-xs" data-img-modal-prev aria-label="Ảnh trước">' + PLAYER_ICONS.chevronLeft + '<span>Trước</span></button>' +
+              '<button type="button" class="btn btn-outline btn-xs" data-img-modal-next aria-label="Ảnh tiếp theo"><span>Sau</span>' + PLAYER_ICONS.chevronRight + '</button>' +
+              '<button type="button" class="btn btn-outline btn-xs" data-img-modal-zoom>Phóng to 1.8x</button>' +
+              '<button type="button" class="btn btn-outline btn-xs" data-img-modal-rotate title="Xoay ảnh 90 độ">' + PLAYER_ICONS.rotateCw + '<span>Xoay 90°</span></button>' +
+              '<a class="btn btn-outline btn-xs video-drive-link" data-img-modal-drive href="#" target="_blank" rel="noopener noreferrer" style="display:none;">' + PLAYER_ICONS.external + '<span>Mở Drive</span></a>' +
+            '</div>' +
+          '</div>' +
+          '<div class="ss-image-lightbox-stage">' +
+            '<img class="ss-image-lightbox-pic" data-img-modal-pic alt="Ảnh bài tập về nhà học sinh">' +
+          '</div>' +
+          '<div class="modal-footer" style="margin-top:14px;">' +
+            '<button type="button" class="btn btn-primary btn-sm" data-img-modal-grade style="display:none;">Chấm &amp; Chữa BVN bạn này</button>' +
+            '<button type="button" class="btn btn-outline btn-sm" data-img-modal-close>Đóng</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(modal);
+      modal.addEventListener('click', function (ev) {
+        if (ev.target === modal || ev.target.closest('[data-img-modal-close]')) {
+          closeImageModal();
+          return;
+        }
+        if (ev.target.closest('[data-img-modal-prev]')) {
+          imageModalState.index = (imageModalState.index - 1 + imageModalState.urls.length) % imageModalState.urls.length;
+          imageModalState.zoom = 1;
+          imageModalState.rotation = 0;
+          syncImageModalView();
+          return;
+        }
+        if (ev.target.closest('[data-img-modal-next]')) {
+          imageModalState.index = (imageModalState.index + 1) % imageModalState.urls.length;
+          imageModalState.zoom = 1;
+          imageModalState.rotation = 0;
+          syncImageModalView();
+          return;
+        }
+        if (ev.target.closest('[data-img-modal-zoom]')) {
+          imageModalState.zoom = imageModalState.zoom > 1 ? 1 : 1.8;
+          syncImageModalView();
+          return;
+        }
+        if (ev.target.closest('[data-img-modal-rotate]')) {
+          imageModalState.rotation = (imageModalState.rotation + 90) % 360;
+          syncImageModalView();
+        }
+      });
+      document.addEventListener('keydown', function (ev) {
+        if (!activeImageModalEl || !activeImageModalEl.classList.contains('is-open')) return;
+        if (ev.key === 'Escape') {
+          closeImageModal();
+        } else if (ev.key === 'ArrowLeft' && imageModalState.urls.length > 1) {
+          imageModalState.index = (imageModalState.index - 1 + imageModalState.urls.length) % imageModalState.urls.length;
+          imageModalState.zoom = 1;
+          imageModalState.rotation = 0;
+          syncImageModalView();
+        } else if (ev.key === 'ArrowRight' && imageModalState.urls.length > 1) {
+          imageModalState.index = (imageModalState.index + 1) % imageModalState.urls.length;
+          imageModalState.zoom = 1;
+          imageModalState.rotation = 0;
+          syncImageModalView();
+        }
+      });
+    }
+    if (!modal) return;
+    activeImageModalEl = modal;
+    imageModalState = {
+      urls: urls,
+      index: Math.max(0, Math.min(urls.length - 1, Number(opts && opts.index) || 0)),
+      zoom: 1,
+      rotation: 0,
+      label: (opts && opts.label) || 'Ảnh bài làm BVN'
+    };
+
+    const headingEl = modal.querySelector('[data-img-modal-heading]');
+    if (headingEl) headingEl.textContent = imageModalState.label;
+
+    const gradeBtn = modal.querySelector('[data-img-modal-grade]');
+    if (gradeBtn) {
+      if (opts && typeof opts.onGrade === 'function') {
+        gradeBtn.style.display = 'inline-flex';
+        gradeBtn.onclick = function () {
+          closeImageModal();
+          opts.onGrade();
+        };
+      } else {
+        gradeBtn.style.display = 'none';
+        gradeBtn.onclick = null;
+      }
+    }
+
+    syncImageModalView();
+    modal.classList.add('is-open');
+  }
+
+  // Lịch sử các bản thu Voice Feedback của Giáo viên (IndexedDB + bộ nhớ dự phòng)
+  const teacherVoiceHistoryStore = (function () {
+    const DB_NAME = 'studysnap_teacher_voice_history_v1';
+    const STORE_NAME = 'takes';
+    const MAX_ITEMS = 25;
+    let memList = [];
+    let loaded = false;
+    let dbPromise = null;
+
+    function openDb() {
+      if (dbPromise) return dbPromise;
+      if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+      dbPromise = new Promise(function (resolve) {
+        try {
+          const req = indexedDB.open(DB_NAME, 1);
+          req.onupgradeneeded = function (ev) {
+            const db = ev.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+              const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+              store.createIndex('createdAt', 'createdAt', { unique: false });
+            }
+          };
+          req.onsuccess = function (ev) { resolve(ev.target.result); };
+          req.onerror = function () { resolve(null); };
+          req.onblocked = function () { resolve(null); };
+        } catch (e) {
+          resolve(null);
+        }
+      });
+      return dbPromise;
+    }
+
+    async function loadAll() {
+      if (loaded) return memList.slice();
+      const db = await openDb();
+      if (!db) {
+        loaded = true;
+        return memList.slice();
+      }
+      return await new Promise(function (resolve) {
+        try {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const req = tx.objectStore(STORE_NAME).getAll();
+          req.onsuccess = function () {
+            const items = Array.isArray(req.result) ? req.result : [];
+            items.sort(function (a, b) { return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0); });
+            memList = items.slice(0, MAX_ITEMS);
+            loaded = true;
+            resolve(memList.slice());
+          };
+          req.onerror = function () {
+            loaded = true;
+            resolve(memList.slice());
+          };
+        } catch (e) {
+          loaded = true;
+          resolve(memList.slice());
+        }
+      });
+    }
+
+    async function persistItem(item) {
+      const db = await openDb();
+      if (!db || !item) return;
+      await new Promise(function (resolve) {
+        try {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          tx.objectStore(STORE_NAME).put(item);
+          tx.oncomplete = function () { resolve(); };
+          tx.onerror = function () { resolve(); };
+        } catch (e) {
+          resolve();
+        }
+      });
+    }
+
+    async function deleteIdsFromDb(ids) {
+      const db = await openDb();
+      if (!db || !ids || !ids.length) return;
+      await new Promise(function (resolve) {
+        try {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          ids.forEach(function (id) { store.delete(id); });
+          tx.oncomplete = function () { resolve(); };
+          tx.onerror = function () { resolve(); };
+        } catch (e) {
+          resolve();
+        }
+      });
+    }
+
+    async function addTake(rawEntry) {
+      if (!rawEntry || !rawEntry.dataUrl) return null;
+      await loadAll();
+      const nowMs = Date.now();
+      const d = new Date(nowMs);
+      const pad2 = function (n) { return String(n).padStart(2, '0'); };
+      const entry = {
+        id: String(rawEntry.id || ('VH_' + nowMs + '_' + Math.random().toString(36).slice(2, 6).toUpperCase())),
+        createdAt: nowMs,
+        createdLabel: pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ' · ' + pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1),
+        duration: String(rawEntry.duration || '00:01'),
+        mimeType: String(rawEntry.mimeType || 'audio/wav'),
+        sizeKB: Number(rawEntry.sizeKB || 0) || 0,
+        studentId: String(rawEntry.studentId || ''),
+        studentName: String(rawEntry.studentName || ''),
+        assignmentId: String(rawEntry.assignmentId || ''),
+        assignmentTitle: String(rawEntry.assignmentTitle || ''),
+        submissionId: String(rawEntry.submissionId || ''),
+        status: String(rawEntry.status || 'draft'),
+        dataUrl: String(rawEntry.dataUrl)
+      };
+      memList = [entry].concat(memList.filter(function (x) { return x && x.id !== entry.id; }));
+      const removed = memList.slice(MAX_ITEMS);
+      memList = memList.slice(0, MAX_ITEMS);
+      await persistItem(entry);
+      if (removed.length) {
+        await deleteIdsFromDb(removed.map(function (r) { return r.id; }));
+      }
+      return entry;
+    }
+
+    async function markStatus(id, nextStatus) {
+      if (!id || !nextStatus) return null;
+      await loadAll();
+      const found = memList.find(function (x) { return x.id === id; });
+      if (!found) return null;
+      found.status = String(nextStatus);
+      await persistItem(found);
+      return found;
+    }
+
+    async function removeTake(id) {
+      if (!id) return;
+      await loadAll();
+      memList = memList.filter(function (x) { return x.id !== id; });
+      await deleteIdsFromDb([id]);
+    }
+
+    async function clearAll() {
+      await loadAll();
+      const allIds = memList.map(function (x) { return x.id; });
+      memList = [];
+      await deleteIdsFromDb(allIds);
+    }
+
+    function listCached() {
+      return memList.slice();
+    }
+
+    return {
+      loadAll: loadAll,
+      listCached: listCached,
+      addTake: addTake,
+      markStatus: markStatus,
+      removeTake: removeTake,
+      clearAll: clearAll
+    };
+  })();
+
+  if (typeof window !== 'undefined') {
+    window.StudySnapVoiceHistory = teacherVoiceHistoryStore;
+  }
+
   return {
     startRecording: startRecording,
     stopRecording: stopRecording,
     readUploadedMediaFile: readUploadedMediaFile,
+    readUploadedImageFiles: readUploadedImageFiles,
+    optimizeImageFile: optimizeImageFile,
     speakText: speakText,
     stopSpeaking: stopSpeaking,
     normalizeSpeechText: normalizeSpeechText,
     playMediaOrDemo: playMediaOrDemo,
     renderVoicePlayer: renderVoicePlayer,
     renderVideoPlayer: renderVideoPlayer,
+    renderImageViewer: renderImageViewer,
     hydrateVideoPlayers: hydrateVideoPlayers,
+    hydrateImageViewers: hydrateImageViewers,
     openVideoModal: openVideoModal,
     closeVideoModal: closeVideoModal,
+    openImageModal: openImageModal,
+    closeImageModal: closeImageModal,
     isVideoSubmission: isVideoSubmission,
+    isImageSubmission: isImageSubmission,
+    parseImageSubmissionUrls: parseImageSubmissionUrls,
     cacheDriveMediaFromDataUrl: cacheDriveMediaFromDataUrl,
     extractDriveFileId: extractDriveFileId,
     cleanAndTrimMonoSamples: cleanAndTrimMonoSamples,
     encodeMonoWavBytes: encodeMonoWavBytes,
+    voiceHistory: teacherVoiceHistoryStore,
     pauseAll: function () {
       stopSpeaking();
       pauseAllExcept(null, null);

@@ -562,15 +562,33 @@ function isDriveUrl(url) {
   return Boolean(s && (s.indexOf('drive.google.com') >= 0 || s.indexOf('docs.google.com') >= 0));
 }
 
+function parseMediaUrlList(rawVal) {
+  if (Array.isArray(rawVal)) {
+    return rawVal.map(function (u) { return String(u || '').trim(); }).filter(Boolean);
+  }
+  const clean = String(rawVal || '').trim();
+  if (!clean) return [];
+  if (clean.charAt(0) === '[') {
+    try {
+      const parsed = JSON.parse(clean);
+      if (Array.isArray(parsed)) {
+        return parsed.map(function (u) { return String(u || '').trim(); }).filter(Boolean);
+      }
+    } catch (e) {}
+  }
+  return [clean];
+}
+
 function collectDriveUrls(candidates) {
   const seen = new Set();
   const list = [];
-  (candidates || []).forEach(function (u) {
-    const clean = String(u || '').trim();
-    if (isDriveUrl(clean) && !seen.has(clean)) {
-      seen.add(clean);
-      list.push(clean);
-    }
+  (candidates || []).forEach(function (entry) {
+    parseMediaUrlList(entry).forEach(function (clean) {
+      if (isDriveUrl(clean) && !seen.has(clean)) {
+        seen.add(clean);
+        list.push(clean);
+      }
+    });
   });
   return list;
 }
@@ -590,12 +608,13 @@ async function filterUnreferencedDriveUrls(db, candidates) {
   const stillUrls = new Set();
   const stillIds = new Set();
   (subUrlsRes && subUrlsRes.results ? subUrlsRes.results : []).forEach(function (r) {
-    [r.media_url, r.teacher_voice_url].forEach(function (u) {
-      const clean = String(u || '').trim();
-      if (!clean) return;
-      stillUrls.add(clean);
-      const fid = extractDriveIdSimple(clean);
-      if (fid) stillIds.add(fid);
+    [r.media_url, r.teacher_voice_url].forEach(function (rawField) {
+      parseMediaUrlList(rawField).forEach(function (clean) {
+        if (!clean) return;
+        stillUrls.add(clean);
+        const fid = extractDriveIdSimple(clean);
+        if (fid) stillIds.add(fid);
+      });
     });
   });
   return list.filter(function (u) {
@@ -2607,6 +2626,7 @@ export async function handleApiRequest(request, env, ctx) {
       'batchAddVocabulary',
       'deleteVocabulary',
       'addAssignment',
+      'updateAssignmentRequireMedia',
       'renameAssignmentSession',
       'assignExercisesToClass',
       'unassignAssignment',
@@ -2780,10 +2800,14 @@ export async function handleApiRequest(request, env, ctx) {
       const nowStr = formatViDateTime();
       const incomingUrl = String(payload.media_url || '').trim();
 
-      if (payload.media_base64 || (incomingUrl.indexOf('data:') === 0 && incomingUrl.length > 262144)) {
+      if (
+        payload.media_base64 ||
+        (Array.isArray(payload.media_images_base64) && payload.media_images_base64.length > 0) ||
+        (incomingUrl.indexOf('data:') === 0 && incomingUrl.length > 262144)
+      ) {
         return respond(jsonResponse({
           ok: false,
-          error: 'Tệp ghi âm/video phải được tải lên Google Drive trước khi lưu vào Cloudflare D1.'
+          error: 'Tệp bài làm (âm thanh/video/hình ảnh) phải được tải lên Google Drive trước khi lưu vào Cloudflare D1.'
         }, 400));
       }
 
@@ -2892,7 +2916,7 @@ export async function handleApiRequest(request, env, ctx) {
       if (isResubmitAttempt && !incomingUrl) {
         return respond(jsonResponse({
           ok: false,
-          error: 'Vui lòng thu âm hoặc tải lên file Audio/Video mới để nộp lại lần tiếp theo.'
+          error: 'Vui lòng thu âm hoặc tải lên tệp bài làm (Audio / Video / Ảnh) mới để nộp lại lần tiếp theo.'
         }, 400));
       }
 
@@ -3306,7 +3330,32 @@ export async function handleApiRequest(request, env, ctx) {
           String(payload.lesson_id || '')
         )
         .run();
-      return await mutate({ assignment: { assignment_id: asgId } });
+      return await mutate({ assignment: { assignment_id: asgId, require_media: reqMedia } });
+    }
+
+    if (action === 'updateAssignmentRequireMedia') {
+      const asgId = String(payload.assignment_id || '').trim();
+      const nextReq = String(payload.require_media || '').trim();
+      const ALLOWED_BVN_MEDIA = new Set(['audio_or_video', 'image', 'audio_video_image']);
+      if (!asgId || !ALLOWED_BVN_MEDIA.has(nextReq)) {
+        return respond(jsonResponse({ ok: false, error: 'Loại hình nộp bài không hợp lệ.' }, 400));
+      }
+      const existingAsg = await db
+        .prepare('SELECT assignment_id, require_media FROM assignments WHERE TRIM(assignment_id) = ? LIMIT 1')
+        .bind(asgId)
+        .first();
+      if (!existingAsg) {
+        return respond(jsonResponse({ ok: false, error: 'Không tìm thấy BVN cần cập nhật.' }, 404));
+      }
+      const curReq = String(existingAsg.require_media || '').trim().toLowerCase();
+      if (curReq === 'practice' || curReq === 'vocab') {
+        return respond(jsonResponse({ ok: false, error: 'Không thể đổi loại media của bài tập hệ thống.' }, 400));
+      }
+      await db
+        .prepare('UPDATE assignments SET require_media = ? WHERE TRIM(assignment_id) = ?')
+        .bind(nextReq, asgId)
+        .run();
+      return await mutate({ assignment: { assignment_id: asgId, require_media: nextReq } });
     }
 
     if (action === 'renameAssignmentSession') {

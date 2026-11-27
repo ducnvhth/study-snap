@@ -779,6 +779,53 @@
         }
       } else {
         if (practiceCallout) practiceCallout.style.display = 'none';
+        const reqMedia = String(currentAsg.require_media || 'audio_or_video').trim().toLowerCase();
+        const isImageOnlyAsg = reqMedia === 'image';
+        const allowsImageAsg = reqMedia === 'image' || reqMedia === 'audio_video_image' || reqMedia === 'any';
+        const allowsAudioVideoAsg = !isImageOnlyAsg;
+        const capturePromptNoun = isImageOnlyAsg
+          ? 'chụp hoặc chọn ảnh bài làm'
+          : (allowsImageAsg ? 'thu âm, tải file Audio/Video hoặc chọn ảnh' : 'thu âm hoặc tải file Audio/Video');
+
+        const captureZoneLabel = document.getElementById('student-capture-zone-label');
+        const btnStartRecEl = document.getElementById('btn-student-start-rec');
+        const btnStopRecEl = document.getElementById('btn-student-stop-rec');
+        const lblFileUploadEl = document.getElementById('lbl-student-file-upload');
+        const lblImageUploadEl = document.getElementById('lbl-student-image-upload');
+        const imageDropzoneEl = document.getElementById('student-image-dropzone');
+        const recWaveformEl = document.getElementById('student-recorder-waveform');
+        const recStatusEl = document.getElementById('student-rec-status-text');
+
+        if (captureZoneLabel) {
+          captureZoneLabel.textContent = isImageOnlyAsg
+            ? 'Chụp ảnh hoặc tải lên hình ảnh bài làm BVN (tối đa 5 ảnh)'
+            : (allowsImageAsg
+              ? 'Thu âm, tải file Audio / Video hoặc tải ảnh bài làm BVN'
+              : 'Ghi âm trực tiếp hoặc tải lên file Audio / Video làm BVN');
+        }
+        if (btnStartRecEl && btnStopRecEl) {
+          if (!allowsAudioVideoAsg) {
+            btnStartRecEl.style.display = 'none';
+            btnStopRecEl.style.display = 'none';
+          } else if (btnStopRecEl.style.display === 'none' || !btnStopRecEl.style.display) {
+            btnStartRecEl.style.display = 'inline-flex';
+          }
+        }
+        if (lblFileUploadEl) lblFileUploadEl.style.display = allowsAudioVideoAsg ? 'inline-flex' : 'none';
+        if (lblImageUploadEl) lblImageUploadEl.style.display = allowsImageAsg ? 'inline-flex' : 'none';
+        if (imageDropzoneEl) imageDropzoneEl.style.display = isImageOnlyAsg ? 'flex' : 'none';
+        if (recWaveformEl) recWaveformEl.style.display = allowsAudioVideoAsg ? 'inline-flex' : 'none';
+        if (recStatusEl && !ui.pendingMedia) {
+          recStatusEl.textContent = isImageOnlyAsg
+            ? 'Chưa chọn ảnh bài làm nào'
+            : (allowsImageAsg ? 'Sẵn sàng thu âm, chọn file hoặc tải ảnh' : 'Sẵn sàng thu âm hoặc chọn file');
+        }
+        if (noteArea) {
+          noteArea.placeholder = isImageOnlyAsg
+            ? 'Ví dụ: Em đã viết xong bài tập chữ Hán và chụp rõ trang vở gửi cô sửa giúp em ạ...'
+            : 'Ví dụ: Em đã luyện kỹ biến điệu thanh 3 và các âm uốn lưỡi zh, ch, sh, nhờ cô nghe và sửa giúp em ạ...';
+        }
+
         const requiresResubmit = Boolean(currentLatestSub && currentLatestSub.status === 'resubmit_required');
         const autoOpenForResubmit = Boolean(requiresResubmit && ui.dismissedAutoResubmitAsgId !== currentAsg.assignment_id);
         const isResubmitReady = Boolean(
@@ -805,7 +852,7 @@
                       '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>' +
                       '<span>Cô yêu cầu nộp lại BVN (Lần ' + nextAttemptNum + ')</span>' +
                     '</div>' +
-                    '<p class="bvn-resubmit-banner-desc">Hãy xem kỹ phản hồi của cô ở cột bên phải rồi thu âm hoặc tải file mới cho Lần ' + nextAttemptNum + '.</p>' +
+                    '<p class="bvn-resubmit-banner-desc">Hãy xem kỹ phản hồi của cô ở cột bên phải rồi ' + capturePromptNoun + ' mới cho Lần ' + nextAttemptNum + '.</p>' +
                     reasonQuoteHtml +
                   '</div>' +
                   '<button type="button" class="btn btn-primary btn-sm" id="btn-student-resubmit-hw">' +
@@ -848,7 +895,7 @@
                       '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>' +
                       '<span>Cô yêu cầu em nộp lại bài này — Sẵn sàng nộp Lần ' + nextAttemptNum + '</span>' +
                     '</div>' +
-                    '<p class="bvn-resubmit-banner-desc">Hãy nghe lại góp ý của cô ở cột bên phải, sau đó thu âm hoặc tải file mới bên dưới. Bài Lần ' + currentLatestAtt + ' vẫn được lưu nguyên.</p>' +
+                    '<p class="bvn-resubmit-banner-desc">Hãy xem lại góp ý của cô ở cột bên phải, sau đó ' + capturePromptNoun + ' mới bên dưới. Bài Lần ' + currentLatestAtt + ' vẫn được lưu nguyên.</p>' +
                     reasonQuoteHtml +
                   '</div>' +
                   '<button type="button" class="btn btn-outline btn-sm" id="btn-cancel-student-resubmit">Thu gọn</button>' +
@@ -858,7 +905,7 @@
                 '<div class="bvn-resubmit-banner is-preparing">' +
                   '<div>' +
                     '<div class="bvn-resubmit-banner-title">Đang chuẩn bị bài nộp Lần ' + nextAttemptNum + '</div>' +
-                    '<p class="bvn-resubmit-banner-desc">Thu âm hoặc chọn file Audio/Video mới bên dưới. Bài Lần ' + currentLatestAtt + ' vẫn được giữ nguyên vẹn.</p>' +
+                    '<p class="bvn-resubmit-banner-desc">Hãy ' + capturePromptNoun + ' mới bên dưới. Bài Lần ' + currentLatestAtt + ' vẫn được giữ nguyên vẹn.</p>' +
                   '</div>' +
                   '<button type="button" class="btn btn-outline btn-sm" id="btn-cancel-student-resubmit">Hủy nộp lại</button>' +
                 '</div>';
@@ -878,10 +925,14 @@
               if (noteArea) noteArea.value = '';
               const statusText = document.getElementById('student-rec-status-text');
               if (statusText) {
-                statusText.textContent = 'Sẵn sàng thu âm hoặc tải file mới cho Lần ' + nextAttemptNum;
+                statusText.textContent = isImageOnlyAsg
+                  ? ('Chưa chọn ảnh bài làm cho Lần ' + nextAttemptNum)
+                  : ('Sẵn sàng ' + capturePromptNoun + ' mới cho Lần ' + nextAttemptNum);
               }
               const fileInputEl = document.getElementById('student-file-upload');
               if (fileInputEl) fileInputEl.value = '';
+              const imgInputEl = document.getElementById('student-image-upload');
+              if (imgInputEl) imgInputEl.value = '';
               renderPendingMediaPreview();
               renderHomeworkSection();
             });
@@ -897,6 +948,8 @@
               if (noteArea) noteArea.value = '';
               const fileInputEl = document.getElementById('student-file-upload');
               if (fileInputEl) fileInputEl.value = '';
+              const imgInputEl = document.getElementById('student-image-upload');
+              if (imgInputEl) imgInputEl.value = '';
               renderPendingMediaPreview();
               renderHomeworkSection();
             });
@@ -1021,10 +1074,17 @@
         '</div>';
     }
 
-    const mediaLabel =
-      submission.media_type === 'video'
+    const isImage = typeof window.StudySnapAudio.isImageSubmission === 'function'
+      ? window.StudySnapAudio.isImageSubmission(submission.media_url, submission.media_type)
+      : submission.media_type === 'image';
+    const isVideo = !isImage && (typeof window.StudySnapAudio.isVideoSubmission === 'function'
+      ? window.StudySnapAudio.isVideoSubmission(submission.media_url, submission.media_type)
+      : submission.media_type === 'video');
+    const mediaLabel = isImage
+      ? ('Ảnh BVN Lần ' + activeAttemptNum + ' em đã nộp')
+      : (isVideo
         ? ('Video BVN Lần ' + activeAttemptNum + ' em đã nộp')
-        : ('Ghi âm BVN Lần ' + activeAttemptNum + ' em đã nộp');
+        : ('Ghi âm BVN Lần ' + activeAttemptNum + ' em đã nộp'));
 
     const hasRealTeacherVoice = isRealTeacherVoiceUrl(submission.teacher_voice_url);
     let teacherReviewHtml = '';
@@ -1090,25 +1150,27 @@
         '</div>';
     }
 
-    const isVideo = typeof window.StudySnapAudio.isVideoSubmission === 'function'
-      ? window.StudySnapAudio.isVideoSubmission(submission.media_url, submission.media_type)
-      : submission.media_type === 'video';
-    const ownMediaHtml = isVideo && typeof window.StudySnapAudio.renderVideoPlayer === 'function'
-      ? window.StudySnapAudio.renderVideoPlayer({
-          id: 'student-own-sub-' + submission.submission_id,
+    const ownMediaHtml = isImage && typeof window.StudySnapAudio.renderImageViewer === 'function'
+      ? window.StudySnapAudio.renderImageViewer({
           url: submission.media_url,
-          duration: submission.media_duration || '01:15',
           label: mediaLabel
         })
-      : window.StudySnapAudio.renderVoicePlayer({
-          id: 'student-own-sub-' + submission.submission_id,
-          url: submission.media_url,
-          duration: submission.media_duration || '01:15',
-          label: mediaLabel,
-          fallbackText: '老师好，我是越南学生，这是我的汉语作业录音。',
-          lang: 'zh-CN',
-          variant: 'student'
-        });
+      : (isVideo && typeof window.StudySnapAudio.renderVideoPlayer === 'function'
+        ? window.StudySnapAudio.renderVideoPlayer({
+            id: 'student-own-sub-' + submission.submission_id,
+            url: submission.media_url,
+            duration: submission.media_duration || '01:15',
+            label: mediaLabel
+          })
+        : window.StudySnapAudio.renderVoicePlayer({
+            id: 'student-own-sub-' + submission.submission_id,
+            url: submission.media_url,
+            duration: submission.media_duration || '01:15',
+            label: mediaLabel,
+            fallbackText: '老师好，我是越南学生，这是我的汉语作业录音。',
+            lang: 'zh-CN',
+            variant: 'student'
+          }));
 
     const boxTitle = attempts.length > 1
       ? ('Bài nộp Lần ' + activeAttemptNum + (isLatestAttempt ? ' (Mới nhất)' : '') + ' • ' + (submission.submitted_at || 'Vừa nộp'))
@@ -1121,9 +1183,9 @@
       '<p class="assignment-brief-desc">Ghi chú của em: "' +
       escapeHtml(submission.student_note || 'Em gửi bài tập về nhà (BVN) ạ.') +
       '"</p>' +
-      '<div class="media-player-box' + (isVideo ? ' media-player-video-box' : '') + '">' +
-      ownMediaHtml +
-      '</div>' +
+      (isImage
+        ? ownMediaHtml
+        : ('<div class="media-player-box' + (isVideo ? ' media-player-video-box' : '') + '">' + ownMediaHtml + '</div>')) +
       '</div>' +
       teacherReviewHtml;
 
@@ -1137,7 +1199,9 @@
       });
     });
 
-    if (isVideo && typeof window.StudySnapAudio.hydrateVideoPlayers === 'function') {
+    if (isImage && typeof window.StudySnapAudio.hydrateImageViewers === 'function') {
+      window.StudySnapAudio.hydrateImageViewers(bodyEl);
+    } else if (isVideo && typeof window.StudySnapAudio.hydrateVideoPlayers === 'function') {
       window.StudySnapAudio.hydrateVideoPlayers(bodyEl);
     }
   }
@@ -1212,6 +1276,18 @@
 
         if (sub) {
           completed++;
+          const isRowImage = Boolean(
+            sub.media_url &&
+            typeof window.StudySnapAudio.isImageSubmission === 'function' &&
+            window.StudySnapAudio.isImageSubmission(sub.media_url, sub.media_type)
+          );
+          const rowImageChipHtml = isRowImage && typeof window.StudySnapAudio.renderImageViewer === 'function'
+            ? window.StudySnapAudio.renderImageViewer({
+                url: sub.media_url,
+                label: asg.title + ' (Lần ' + attNum + ')',
+                compact: true
+              })
+            : '';
           if (sub.status === 'resubmit_required') {
             const hasRealVoice = isRealTeacherVoiceUrl(sub.teacher_voice_url);
             statusHtml = attBadgeHtml + '<span class="status-badge status-resubmit">Cô yêu cầu nộp lại</span>';
@@ -1223,6 +1299,7 @@
               '<p class="matrix-teacher-note">' +
               escapeHtml(sub.teacher_comment || (hasRealVoice ? 'Nghe hướng dẫn bằng Voice của cô để nộp lại.' : 'Cô yêu cầu em luyện và nộp lại bài này.')) +
               '</p>' +
+              rowImageChipHtml +
               (hasRealVoice
                 ? window.StudySnapAudio.renderVoicePlayer({
                     id: 'student-matrix-voice-' + sub.submission_id,
@@ -1249,6 +1326,7 @@
               '<p class="matrix-teacher-note">' +
               escapeHtml(sub.teacher_comment || (hasRealVoice ? 'Giáo viên đã gửi phản hồi bằng Voice.' : 'Đã chấm điểm.')) +
               '</p>' +
+              rowImageChipHtml +
               (hasRealVoice
                 ? window.StudySnapAudio.renderVoicePlayer({
                     id: 'student-matrix-voice-' + sub.submission_id,
@@ -1277,9 +1355,13 @@
             statusHtml = attBadgeHtml + '<span class="status-badge status-submitted">Đã nộp BVN • Chờ phản hồi</span>';
             scoreHtml = '<span class="mono-text tabular-nums">Chờ chấm</span>';
             feedbackHtml =
+              '<div class="matrix-cell-content">' +
               '<p class="matrix-teacher-note">Đã nộp Lần ' + attNum + ' lúc ' +
               escapeHtml(sub.submitted_at) +
-              '. Đang chờ giáo viên chấm và ghi âm phản hồi.</p>' + prevHintHtml;
+              '. Đang chờ giáo viên chấm và ghi âm phản hồi.</p>' +
+              rowImageChipHtml +
+              prevHintHtml +
+              '</div>';
             btnText = 'Xem / Nộp lại';
           }
         }
@@ -1350,8 +1432,44 @@
   function renderPendingMediaPreview() {
     const previewEl = document.getElementById('student-pending-voice-preview');
     if (!previewEl) return;
-    if (!ui.pendingMedia || !ui.pendingMedia.media_url) {
+    if (!ui.pendingMedia || (!ui.pendingMedia.media_url && !(ui.pendingMedia.images && ui.pendingMedia.images.length))) {
       previewEl.innerHTML = '';
+      const imgInputEl = document.getElementById('student-image-upload');
+      if (imgInputEl) imgInputEl.value = '';
+      return;
+    }
+    if (ui.pendingMedia.media_type === 'image' && Array.isArray(ui.pendingMedia.images) && ui.pendingMedia.images.length > 0) {
+      const imgUrls = ui.pendingMedia.images.map(function (im) { return im.dataUrl; });
+      previewEl.innerHTML = typeof window.StudySnapAudio.renderImageViewer === 'function'
+        ? window.StudySnapAudio.renderImageViewer({
+            urls: imgUrls,
+            label: 'Xem trước ảnh bài làm trước khi nộp',
+            editable: true
+          })
+        : '';
+      if (typeof window.StudySnapAudio.hydrateImageViewers === 'function') {
+        window.StudySnapAudio.hydrateImageViewers(previewEl);
+      }
+      previewEl.querySelectorAll('[data-remove-pending-img]').forEach(function (rmBtn) {
+        rmBtn.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          const idx = parseInt(rmBtn.getAttribute('data-remove-pending-img'), 10);
+          if (!Number.isFinite(idx) || !ui.pendingMedia || !Array.isArray(ui.pendingMedia.images)) return;
+          ui.pendingMedia.images.splice(idx, 1);
+          const statusText = document.getElementById('student-rec-status-text');
+          if (ui.pendingMedia.images.length === 0) {
+            ui.pendingMedia = null;
+            if (statusText) statusText.textContent = 'Chưa chọn ảnh bài làm nào';
+          } else {
+            ui.pendingMedia.media_url = ui.pendingMedia.images.length === 1
+              ? ui.pendingMedia.images[0].dataUrl
+              : JSON.stringify(ui.pendingMedia.images.map(function (x) { return x.dataUrl; }));
+            ui.pendingMedia.media_duration = ui.pendingMedia.images.length + ' ảnh';
+            if (statusText) statusText.textContent = 'Đã chọn ' + ui.pendingMedia.images.length + ' ảnh bài làm';
+          }
+          renderPendingMediaPreview();
+        });
+      });
       return;
     }
     const isVideo = typeof window.StudySnapAudio.isVideoSubmission === 'function'
@@ -1413,6 +1531,57 @@
     const recZone = document.getElementById('student-recorder-zone');
     const recStatusText = document.getElementById('student-rec-status-text');
     const fileInput = document.getElementById('student-file-upload');
+    const imageInput = document.getElementById('student-image-upload');
+    const imageDropzone = document.getElementById('student-image-dropzone');
+
+    function handleStudentImageFiles(fileList) {
+      if (!fileList || !fileList.length) return;
+      if (typeof window.StudySnapAudio.readUploadedImageFiles !== 'function') {
+        showToast('Trình duyệt chưa tải xong bộ xử lý ảnh, em vui lòng tải lại trang.');
+        return;
+      }
+      const existingImgs =
+        ui.pendingMedia && ui.pendingMedia.media_type === 'image' && Array.isArray(ui.pendingMedia.images)
+          ? ui.pendingMedia.images.slice()
+          : [];
+      const remainingSlots = Math.max(0, 5 - existingImgs.length);
+      if (remainingSlots <= 0) {
+        showToast('Mỗi lần nộp tối đa 5 ảnh. Em có thể bấm dấu X trên ảnh để bỏ bớt trước nhé.');
+        return;
+      }
+      if (recStatusText) recStatusText.textContent = 'Đang nén & xử lý ảnh...';
+      window.StudySnapAudio.readUploadedImageFiles(
+        fileList,
+        function (newImgs) {
+          const merged = existingImgs.concat(newImgs).slice(0, 5);
+          const totalKB = merged.reduce(function (sum, it) { return sum + (Number(it.sizeKB) || 0); }, 0);
+          ui.pendingMedia = {
+            media_type: 'image',
+            images: merged,
+            media_url: merged.length === 1
+              ? merged[0].dataUrl
+              : JSON.stringify(merged.map(function (x) { return x.dataUrl; })),
+            mimeType: merged[0].mimeType || 'image/jpeg',
+            fileName: merged[0].fileName || 'anh_bai_lam.jpg',
+            media_duration: merged.length + ' ảnh'
+          };
+          if (recStatusText) {
+            recStatusText.textContent = 'Đã chọn ' + merged.length + ' ảnh bài làm (~' + totalKB + ' KB)';
+          }
+          renderPendingMediaPreview();
+          showToast('Đã sẵn sàng ' + merged.length + ' ảnh bài làm. Nhấn "Nộp BVN Ngay" để gửi!');
+        },
+        function (errMsg) {
+          if (recStatusText) {
+            recStatusText.textContent = existingImgs.length
+              ? ('Đang giữ ' + existingImgs.length + ' ảnh đã chọn')
+              : 'Chưa chọn ảnh hợp lệ';
+          }
+          showToast(errMsg || 'Không thể tải ảnh lên.');
+        },
+        { maxCount: remainingSlots }
+      );
+    }
 
     if (btnStartRec && btnStopRec) {
       btnStartRec.addEventListener('click', function () {
@@ -1489,11 +1658,96 @@
       });
     }
 
+    if (imageInput) {
+      imageInput.addEventListener('change', function () {
+        if (imageInput.files && imageInput.files.length) {
+          handleStudentImageFiles(imageInput.files);
+          imageInput.value = '';
+        }
+      });
+    }
+
+    if (imageDropzone) {
+      ['dragenter', 'dragover'].forEach(function (evtName) {
+        imageDropzone.addEventListener(evtName, function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          imageDropzone.classList.add('is-dragover');
+        });
+      });
+      ['dragleave', 'drop'].forEach(function (evtName) {
+        imageDropzone.addEventListener(evtName, function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          imageDropzone.classList.remove('is-dragover');
+          if (evtName === 'drop' && ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files.length) {
+            handleStudentImageFiles(ev.dataTransfer.files);
+          }
+        });
+      });
+    }
+
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.addEventListener('click', function (ev) {
+        const imgCompactBtn = ev.target && ev.target.closest ? ev.target.closest('[data-image-compact-open]') : null;
+        if (imgCompactBtn && typeof window.StudySnapAudio.openImageModal === 'function') {
+          let urls = [];
+          try {
+            urls = JSON.parse(imgCompactBtn.getAttribute('data-image-urls') || '[]');
+          } catch (e) {}
+          if (!Array.isArray(urls) || !urls.length) {
+            const rawSingle = imgCompactBtn.getAttribute('data-image-url') || '';
+            if (rawSingle) urls = [rawSingle];
+          }
+          window.StudySnapAudio.openImageModal({
+            urls: urls,
+            index: 0,
+            label: imgCompactBtn.getAttribute('data-image-label') || 'Ảnh bài làm BVN'
+          });
+          return;
+        }
+        const imgThumbBtn = ev.target && ev.target.closest ? ev.target.closest('[data-image-modal-open]') : null;
+        if (imgThumbBtn && typeof window.StudySnapAudio.openImageModal === 'function') {
+          let urls = [];
+          try {
+            urls = JSON.parse(imgThumbBtn.getAttribute('data-image-urls') || '[]');
+          } catch (e) {}
+          const idx = parseInt(imgThumbBtn.getAttribute('data-image-index') || '0', 10) || 0;
+          window.StudySnapAudio.openImageModal({
+            urls: urls,
+            index: idx,
+            label: imgThumbBtn.getAttribute('data-image-label') || 'Ảnh bài làm BVN'
+          });
+        }
+      });
+    }
+
     const formEl = document.getElementById('student-submit-hw-form');
     if (formEl) {
+      formEl.addEventListener('paste', function (ev) {
+        const activeAsg = (state.assignments || []).find(function (a) {
+          return a.assignment_id === ui.selectedAssignmentId;
+        });
+        const reqType = activeAsg ? String(activeAsg.require_media || '').trim().toLowerCase() : '';
+        if (reqType !== 'image' && reqType !== 'audio_video_image' && reqType !== 'any') return;
+        const items = ev.clipboardData && ev.clipboardData.items ? Array.prototype.slice.call(ev.clipboardData.items) : [];
+        const imgFiles = items
+          .filter(function (it) { return it && it.kind === 'file' && String(it.type || '').indexOf('image/') === 0; })
+          .map(function (it) { return it.getAsFile(); })
+          .filter(Boolean);
+        if (imgFiles.length > 0) {
+          ev.preventDefault();
+          handleStudentImageFiles(imgFiles);
+        }
+      });
+
       formEl.addEventListener('submit', async function (e) {
         e.preventDefault();
         const student = getActiveStudent();
+        const activeAsg = (state.assignments || []).find(function (a) {
+          return a.assignment_id === ui.selectedAssignmentId;
+        });
+        const activeReqMedia = activeAsg ? String(activeAsg.require_media || 'audio_or_video').trim().toLowerCase() : 'audio_or_video';
         const noteArea = document.getElementById('student-note-textarea');
         const noteText = noteArea ? noteArea.value.trim() : '';
         const attempts = getSubmissionAttempts(ui.selectedAssignmentId, student.student_id);
@@ -1504,16 +1758,23 @@
         const submitBtn = formEl.querySelector('button[type="submit"]');
         const loading = window.StudySnapLoading;
 
-        if (existingSub && (!ui.pendingMedia || !ui.pendingMedia.media_url)) {
+        if (existingSub && (!ui.pendingMedia || (!ui.pendingMedia.media_url && !(ui.pendingMedia.images && ui.pendingMedia.images.length)))) {
           ui.resubmitExpandedAsgId = ui.selectedAssignmentId;
           renderHomeworkSection();
           showToast(
             'Em đã nộp Lần ' +
             Math.max(1, Number(existingSub.attempt_number || attempts.length) || 1) +
-            ' rồi. Hãy thu âm hoặc chọn file Audio/Video mới để nộp Lần ' +
+            ' rồi. Hãy ' +
+            (activeReqMedia === 'image' ? 'chụp hoặc chọn ảnh bài làm mới' : 'thu âm hoặc chọn tệp bài làm mới') +
+            ' để nộp Lần ' +
             nextAttemptNum +
             ' nhé!'
           );
+          return;
+        }
+
+        if (!ui.pendingMedia && activeReqMedia === 'image') {
+          showToast('Em vui lòng chụp hoặc chọn ít nhất 1 ảnh bài làm trước khi bấm Nộp BVN nhé!');
           return;
         }
 
@@ -1533,10 +1794,18 @@
           media_duration: '01:15'
         };
 
+        const isImageSubmission = mediaData.media_type === 'image';
+        const pendingImages = isImageSubmission && Array.isArray(mediaData.images) ? mediaData.images : [];
+        if (isImageSubmission && pendingImages.length === 0) {
+          showToast('Chưa có ảnh bài làm hợp lệ. Em hãy chọn lại ảnh nhé!');
+          return;
+        }
+
         const hasBinaryMedia = Boolean(
-          mediaData.media_url && String(mediaData.media_url).indexOf('data:') === 0
+          (isImageSubmission && pendingImages.length > 0) ||
+          (mediaData.media_url && String(mediaData.media_url).indexOf('data:') === 0)
         );
-        if (hasBinaryMedia) {
+        if (hasBinaryMedia && !isImageSubmission) {
           const commaPos = String(mediaData.media_url).indexOf(',');
           const b64Part = commaPos >= 0 ? String(mediaData.media_url).slice(commaPos + 1).replace(/\s+/g, '') : '';
           if (!b64Part || b64Part.length < 4) {
@@ -1545,16 +1814,20 @@
           }
         }
 
+        const defaultStudentNote = isImageSubmission
+          ? ('Em nộp ' + pendingImages.length + ' ảnh bài làm BVN ạ.')
+          : (mediaData.media_type === 'video' ? 'Em nộp video BVN ạ.' : 'Em nộp bản thu âm BVN ạ.');
+
         const submissionRecord = {
           submission_id: 'SUB_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6).toUpperCase(),
           assignment_id: ui.selectedAssignmentId,
           student_id: student.student_id,
           attempt_number: nextAttemptNum,
           submitted_at: timestamp,
-          student_note: noteText || (mediaData.media_type === 'video' ? 'Em nộp video BVN ạ.' : 'Em nộp bản thu âm BVN ạ.'),
+          student_note: noteText || defaultStudentNote,
           media_type: mediaData.media_type,
           media_url: mediaData.media_url,
-          media_duration: mediaData.media_duration,
+          media_duration: isImageSubmission ? (pendingImages.length + ' ảnh') : mediaData.media_duration,
           status: 'submitted',
           score: '',
           teacher_comment: '',
@@ -1565,23 +1838,37 @@
 
         const runSubmit = async function () {
           const runSync = async function () {
-            return await window.StudySnapStore.syncPostToGas(state, {
+            const postPayload = {
               action: 'submitHomework',
               assignment_id: submissionRecord.assignment_id,
               student_id: submissionRecord.student_id,
               student_note: submissionRecord.student_note,
               media_type: submissionRecord.media_type,
               media_url: submissionRecord.media_url,
-              media_duration: submissionRecord.media_duration,
-              media_base64: hasBinaryMedia ? mediaData.media_url : '',
-              media_mime_type: mediaData.mimeType || (mediaData.media_type === 'video' ? 'video/mp4' : 'audio/webm'),
-              media_filename: mediaData.fileName || ''
-            });
+              media_duration: submissionRecord.media_duration
+            };
+            if (isImageSubmission) {
+              postPayload.media_images_base64 = pendingImages.map(function (img) {
+                return {
+                  dataUrl: img.dataUrl,
+                  mimeType: img.mimeType || 'image/jpeg',
+                  fileName: img.fileName || 'anh_bai_lam.jpg'
+                };
+              });
+              postPayload.media_url = '';
+            } else {
+              postPayload.media_base64 = hasBinaryMedia ? mediaData.media_url : '';
+              postPayload.media_mime_type = mediaData.mimeType || (mediaData.media_type === 'video' ? 'video/mp4' : 'audio/webm');
+              postPayload.media_filename = mediaData.fileName || '';
+            }
+            return await window.StudySnapStore.syncPostToGas(state, postPayload);
           };
 
           const remoteRes = loading
             ? await loading.withOverlay(
-                hasBinaryMedia ? 'Đang tải tệp BVN lên hệ thống...' : 'Đang nộp BVN...',
+                isImageSubmission
+                  ? ('Đang tải ' + pendingImages.length + ' ảnh BVN lên hệ thống...')
+                  : (hasBinaryMedia ? 'Đang tải tệp BVN lên hệ thống...' : 'Đang nộp BVN...'),
                 'Vui lòng giữ nguyên trang cho đến khi hệ thống xác nhận đã nhận BVN.',
                 runSync
               )
@@ -1627,6 +1914,7 @@
           ui.selectedAttemptSubId = submissionRecord.submission_id;
           if (noteArea) noteArea.value = '';
           if (fileInput) fileInput.value = '';
+          if (imageInput) imageInput.value = '';
           renderPendingMediaPreview();
           if (recStatusText) {
             recStatusText.textContent = 'Đã nộp BVN Lần ' + submissionRecord.attempt_number + ' lúc ' + (submissionRecord.submitted_at || timestamp);
@@ -1644,7 +1932,7 @@
         if (loading && submitBtn) {
           await loading.withButtonLoading(
             submitBtn,
-            hasBinaryMedia ? 'Đang tải tệp BVN...' : 'Đang gửi BVN...',
+            isImageSubmission ? 'Đang tải ảnh BVN...' : (hasBinaryMedia ? 'Đang tải tệp BVN...' : 'Đang gửi BVN...'),
             runSubmit
           );
         } else {
