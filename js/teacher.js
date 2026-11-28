@@ -706,7 +706,6 @@
     }
     const scoreInp = document.getElementById('teacher-score-input');
     const commentInp = document.getElementById('teacher-comment-input');
-    const resubmitChk = document.getElementById('teacher-require-resubmit-chk');
     if (scoreInp && scoreInp.dataset) {
       scoreInp.dataset.userEdited = '0';
       scoreInp.dataset.loadedSubKey = '';
@@ -714,10 +713,6 @@
     if (commentInp && commentInp.dataset) {
       commentInp.dataset.userEdited = '0';
       commentInp.dataset.loadedSubKey = '';
-    }
-    if (resubmitChk && resubmitChk.dataset) {
-      resubmitChk.dataset.userEdited = '0';
-      resubmitChk.dataset.loadedSubKey = '';
     }
     const timerEl = document.getElementById('teacher-record-timer');
     if (timerEl) timerEl.textContent = '00:00';
@@ -827,7 +822,7 @@
         '<button type="button" class="teacher-voice-history-toggle" id="btn-toggle-teacher-voice-history" aria-expanded="' + (isOpen ? 'true' : 'false') + '">' +
           '<span class="teacher-voice-history-title">' +
             historySvg +
-            '<span>Lịch sử Voice đã thu (lấy lại bản lỡ xóa)</span>' +
+            '<span>Lịch sử Voice đã thu</span>' +
             '<span class="teacher-voice-history-count tabular-nums">' + allItems.length + ' bản</span>' +
           '</span>' +
           '<span style="font-size:0.8125rem;color:var(--color-muted-foreground);">' + (isOpen ? 'Thu gọn' : 'Mở danh sách') + '</span>' +
@@ -1589,22 +1584,11 @@
         }
       }
     }
-    const resubmitChk = document.getElementById('teacher-require-resubmit-chk');
-    if (resubmitChk) {
-      const sameResubSub = resubmitChk.dataset && resubmitChk.dataset.loadedSubKey === loadedKey;
-      if (!sameResubSub || resubmitChk.dataset.userEdited !== '1') {
-        resubmitChk.checked = Boolean(sub && sub.status === 'resubmit_required');
-        if (resubmitChk.dataset) {
-          resubmitChk.dataset.loadedSubKey = loadedKey;
-          resubmitChk.dataset.userEdited = '0';
-        }
-      }
-    }
 
     if (voicePreview) {
       const discardedUndoHtml = (!ui.teacherDraftVoice && ui.lastDiscardedVoiceId)
         ? ('<div class="teacher-voice-undo-bar">' +
-            '<span>Đã đưa bản thu vừa hủy vào Lịch sử Voice — lỡ xóa có thể lấy lại ngay.</span>' +
+            '<span>Đã lưu bản thu vừa hủy vào Lịch sử Voice.</span>' +
             '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
               '<button type="button" class="btn btn-secondary btn-xs" id="btn-undo-discard-teacher-voice">Khôi phục vừa hủy</button>' +
               '<button type="button" class="btn btn-outline btn-xs" id="btn-open-voice-history-inline">Xem Lịch sử</button>' +
@@ -4854,7 +4838,7 @@
           ex.total_score = total;
           savePracticeDraftLocally(ex);
           renderTeacherPracticeTab();
-          showToast('Đã xóa phần bài tập! Nhớ bấm "Lưu đề nhanh" để đồng bộ lên máy chủ.');
+          showToast('Đã xóa phần bài tập! Nhớ bấm "Lưu đề nhanh" để lưu thay đổi.');
         }
       });
     });
@@ -5424,7 +5408,7 @@
         resolved.targetObj.audio_url = '';
         savePracticeDraftLocally(ex);
         renderTeacherPracticeTab();
-        showToast('Đã gỡ file âm thanh (hãy bấm "Lưu đề nhanh" để cập nhật lên máy chủ).');
+        showToast('Đã gỡ file âm thanh. Nhớ bấm "Lưu đề nhanh" để lưu thay đổi.');
       });
     });
 
@@ -5531,7 +5515,7 @@
           sec.data.image_url = String(reader.result || '');
           savePracticeDraftLocally(ex);
           renderTeacherPracticeTab();
-          showToast('Đã gắn ảnh vào phần câu hỏi (bấm "Lưu đề nhanh" để đồng bộ).');
+          showToast('Đã gắn ảnh vào phần câu hỏi. Nhớ bấm "Lưu đề nhanh" để lưu thay đổi.');
         };
         reader.readAsDataURL(file);
       });
@@ -7945,12 +7929,6 @@
         if (commentInputEl.dataset) commentInputEl.dataset.userEdited = '1';
       });
     }
-    const resubmitChkEl = document.getElementById('teacher-require-resubmit-chk');
-    if (resubmitChkEl) {
-      resubmitChkEl.addEventListener('change', function () {
-        if (resubmitChkEl.dataset) resubmitChkEl.dataset.userEdited = '1';
-      });
-    }
 
     const voicePreviewEl = document.getElementById('teacher-voice-preview');
     if (voicePreviewEl) {
@@ -8123,7 +8101,6 @@
       const st = findStudent(ui.gradingStudentId);
       const scoreInput = document.getElementById('teacher-score-input');
       const commentInput = document.getElementById('teacher-comment-input');
-      const resubmitChk = document.getElementById('teacher-require-resubmit-chk');
       const scoreVal = scoreInput ? scoreInput.value.trim() : '';
       const rawCommentVal = commentInput ? commentInput.value.trim() : '';
 
@@ -8139,7 +8116,6 @@
         : (userEditedThisComment ? '' : existingComment);
       const allowClearComment = Boolean(existingComment && userEditedThisComment && rawCommentVal === '');
       const resolvedScore = scoreVal !== '' ? scoreVal : existingScore;
-      const requireResubmit = Boolean(resubmitChk && resubmitChk.checked);
 
       const existingRealVoiceUrl = isRealTeacherVoiceUrl(sub && sub.teacher_voice_url)
         ? String(sub.teacher_voice_url).trim()
@@ -8164,7 +8140,6 @@
         rawCommentVal: rawCommentVal,
         resolvedComment: resolvedComment,
         allowClearComment: allowClearComment,
-        requireResubmit: requireResubmit,
         existingRealVoiceUrl: existingRealVoiceUrl,
         existingRealVoiceDur: existingRealVoiceDur,
         draftVoice: draftVoice,
@@ -8178,7 +8153,7 @@
       const snap = getActiveGradingSourceSnapshot();
       const nowStr = new Date().toLocaleString('vi-VN');
       let sub = snap.sub;
-      const isResubmitReq = Boolean(forceResubmitRequired || snap.requireResubmit);
+      const isResubmitReq = Boolean(forceResubmitRequired);
       const targetStatus = isResubmitReq ? 'resubmit_required' : 'graded';
       const allowClearComment = snap.allowClearComment;
       const resolvedScore = snap.resolvedScore;
@@ -8200,11 +8175,6 @@
       if (!ui.gradingAssignmentId || !ui.gradingStudentId) {
         showToast('Vui lòng chọn học sinh và BVN trước khi gửi!');
         return;
-      }
-
-      const resubmitChk = document.getElementById('teacher-require-resubmit-chk');
-      if (forceResubmitRequired && resubmitChk) {
-        resubmitChk.checked = true;
       }
 
       const prevSubSnapshot = sub ? JSON.parse(JSON.stringify(sub)) : null;

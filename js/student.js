@@ -758,10 +758,10 @@
           practiceCallout.innerHTML =
             '<div style="background:var(--color-primary-soft);border:1.5px solid var(--color-primary);border-radius:var(--radius-xl);padding:18px 20px;margin-bottom:16px;">' +
               '<div style="font-weight:800;color:var(--color-primary-deep);font-size:1rem;margin-bottom:4px;">' +
-                'Đây là Bài luyện tập cuối buổi (Làm trực tiếp trên Web)' +
+                'Bài luyện tập cuối buổi' +
               '</div>' +
               '<p style="font-size:0.875rem;color:var(--color-muted-foreground);margin-bottom:14px;line-height:1.5;">' +
-                'Bài tập bao gồm các phần câu hỏi tương tác (Nối từ, Trắc nghiệm, Điền từ, Sửa câu sai, Dịch câu, Nghe hiểu). Hệ thống sẽ tự chấm điểm và xếp loại kết quả ngay sau khi nộp bài.' +
+                'Bài tập gồm các phần Nối từ, Trắc nghiệm, Điền từ, Sửa câu sai, Dịch câu và Nghe hiểu. Hệ thống sẽ chấm điểm và xếp loại ngay sau khi nộp bài.' +
               '</p>' +
               '<button type="button" class="btn btn-primary" id="btn-student-do-practice-now" data-ex-id="' + escapeHtml(currentAsg.exercise_id || '') + '" style="font-weight:700;width:100%;">' +
                 '<span>Bắt đầu làm bài luyện tập cuối buổi ngay →</span>' +

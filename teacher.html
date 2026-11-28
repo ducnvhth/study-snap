@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#FF99BE">
   <title>Cổng Giáo Viên — StudySnap (Luyện Tập Cuối Buổi, Chữa BVN Voice &amp; Quản Lý Học Sinh)</title>
-  <meta name="description" content="Không gian làm việc dành riêng cho Giáo viên: soạn bài luyện tập cuối buổi, chấm chữa BVN ghi âm/video bằng giọng nói, theo dõi bảng tự động tổng hợp tiến độ, tạo tài khoản cho học sinh và quản lý kho từ vựng.">
+  <meta name="description" content="Không gian làm việc dành riêng cho Giáo viên: soạn bài luyện tập cuối buổi, chấm chữa BVN, theo dõi bảng tổng hợp tiến độ, quản lý học sinh và kho từ vựng.">
   <link rel="icon" href="favicon.ico?v=20261117a" sizes="32x32">
   <link rel="icon" href="favicon.svg?v=20261117a" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=20261117a">
@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css?v=20261127a">
+  <link rel="stylesheet" href="styles/main.css?v=20261128b">
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -33,7 +33,7 @@
         </div>
         <div>
           <div class="brand-title">StudySnap • Cổng Giáo Viên</div>
-          <p class="brand-subtitle" id="teacher-header-subtitle">Quản lý lớp học, bài luyện tập cuối buổi &amp; chữa BVN Voice Feedback</p>
+          <p class="brand-subtitle" id="teacher-header-subtitle">Quản lý lớp học, bài luyện tập cuối buổi và chữa BVN</p>
         </div>
       </div>
 
@@ -237,7 +237,7 @@
             <!-- Nút Lưu Cuối Trang -->
             <div class="banner-actions" style="margin-top: 24px; justify-content: center; gap: 14px;">
               <button type="submit" class="btn btn-primary" id="btn-save-exercise-meta" style="min-width: min(240px, 100%); font-size: 1rem; font-weight: 700; padding: 12px 24px;">
-                <span>💾 Lưu Toàn Bộ Bài Tập</span>
+                <span>Lưu Toàn Bộ Bài Tập</span>
               </button>
             </div>
           </form>
@@ -337,7 +337,7 @@
                   <line x1="3" x2="21" y1="9" y2="9"></line>
                   <line x1="9" x2="9" y1="21" y2="9"></line>
                 </svg>
-                <h2>Bảng tự động tổng hợp tiến độ Học sinh × Bài luyện tập</h2>
+                <h2>Bảng tổng hợp tiến độ Học sinh × Bài luyện tập</h2>
               </div>
               <span class="status-badge status-graded tabular-nums" id="prac-progress-matrix-badge">0 HS × 0 bài</span>
             </div>
@@ -386,7 +386,7 @@
             </div>
 
             <div class="matrix-scroll-wrapper">
-              <table class="progress-matrix-table is-matrix-grid" aria-label="Bảng tự động tổng hợp tiến độ làm bài luyện tập cuối buổi">
+              <table class="progress-matrix-table is-matrix-grid" aria-label="Bảng tổng hợp tiến độ làm bài luyện tập cuối buổi">
                 <thead id="practice-matrix-thead"></thead>
                 <tbody id="practice-matrix-tbody"></tbody>
               </table>
@@ -404,7 +404,7 @@
           <div>
             <h1>Bảng điều khiển giảng dạy &amp; chữa BVN</h1>
             <p>
-              Theo dõi toàn diện tiến độ làm bài tập về nhà (BVN) của học sinh theo từng lớp học, nghe bài thu âm/video và phản hồi bằng giọng nói (Voice Feedback).
+              Theo dõi tiến độ làm bài tập về nhà (BVN) theo lớp, nghe/xem bài nộp và gửi phản hồi cho học sinh.
             </p>
             <div class="banner-actions">
               <button type="button" class="btn btn-primary" id="btn-jump-create-student">
@@ -431,7 +431,7 @@
             </div>
             <div class="stat-tile">
               <div class="stat-value tabular-nums" id="stat-graded-count">4</div>
-              <div class="stat-label">BVN đã chữa &amp; phản hồi Voice</div>
+              <div class="stat-label">BVN đã chữa</div>
             </div>
           </div>
         </div>
@@ -456,7 +456,7 @@
             </select>
           </div>
           <div style="font-size:0.8125rem;color:var(--color-muted-foreground);">
-            Bảng tổng hợp &amp; danh sách BVN sẽ tự động lọc theo lớp học và buổi học được chọn
+            Lọc theo lớp học và buổi học đang chọn
           </div>
         </div>
 
@@ -470,7 +470,7 @@
                   <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
                   <line x1="12" x2="12" y1="19" y2="22"></line>
                 </svg>
-                <h2>Chữa BVN trực tiếp &amp; Phản hồi Voice</h2>
+                <h2>Chữa BVN &amp; Phản hồi</h2>
               </div>
               <span class="status-badge status-submitted" id="grading-target-badge">Nguyễn Minh Anh • Bài 1</span>
             </div>
@@ -506,7 +506,7 @@
                   <input type="text" id="teacher-score-input" class="form-control tabular-nums" placeholder="Ví dụ: 9.5">
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="btn-teacher-record-voice">Thu âm phản hồi (Voice Feedback)</label>
+                  <label class="form-label" for="btn-teacher-record-voice">Thu âm phản hồi</label>
                   <button type="button" class="btn btn-secondary" id="btn-teacher-record-voice" style="width:100%;">
                     <span>Thu âm phản hồi Voice</span>
                   </button>
@@ -522,7 +522,7 @@
                   <span class="waveform-bar"></span>
                   <span class="waveform-bar"></span>
                 </div>
-                <span style="font-size:0.875rem;color:var(--color-muted-foreground);">Thời lượng Voice Feedback:</span>
+                <span style="font-size:0.875rem;color:var(--color-muted-foreground);">Thời lượng bản thu:</span>
                 <span class="tabular-nums" id="teacher-record-timer">00:00</span>
               </div>
 
@@ -530,25 +530,17 @@
               <div id="teacher-voice-history-slot"></div>
 
               <div class="form-group">
-                <label class="form-label" for="teacher-comment-input">Ý kiến nhận xét BVN của Giáo viên (hiển thị luôn trong Bảng tổng hợp)</label>
-                <textarea id="teacher-comment-input" class="form-control" placeholder="Nhập nhận xét chi tiết về thanh điệu (thanh 1, 2, 3, 4), âm bật hơi, chữ Hán..."></textarea>
-              </div>
-
-              <div class="grade-resubmit-toggle-row">
-                <label class="grade-resubmit-checkbox-label" for="teacher-require-resubmit-chk">
-                  <input type="checkbox" id="teacher-require-resubmit-chk">
-                  <span>Yêu cầu học sinh nộp lại BVN này (Cần nộp lại)</span>
-                </label>
-                <span class="grade-resubmit-toggle-hint">Học sinh sẽ thấy thông báo nổi bật để thu lại lần mới</span>
+                <label class="form-label" for="teacher-comment-input">Nhận xét BVN của Giáo viên</label>
+                <textarea id="teacher-comment-input" class="form-control" placeholder="Nhập nhận xét chi tiết về bài làm của học sinh..."></textarea>
               </div>
 
               <div class="grade-submit-actions">
                 <button type="submit" class="btn btn-primary">
-                  <span>Lưu chữa BVN &amp; Cập nhật Bảng tổng hợp</span>
+                  <span>Lưu chữa BVN</span>
                 </button>
-                <button type="button" class="btn btn-resubmit-action" id="btn-teacher-request-resubmit" title="Gửi ngay yêu cầu học sinh luyện và nộp lại bài BVN này">
+                <button type="button" class="btn btn-resubmit-action" id="btn-teacher-request-resubmit" title="Lưu phản hồi hiện tại và gửi yêu cầu học sinh luyện, nộp lại BVN này">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                  <span>Yêu cầu nộp lại BVN</span>
+                  <span>Yêu cầu học sinh nộp lại BVN</span>
                 </button>
                 <button type="button" class="btn btn-outline" id="btn-open-copy-feedback" title="Sao chép file Voice Feedback và ý kiến nhận xét sang các bạn khác cùng lớp">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
@@ -570,7 +562,7 @@
                 </svg>
                 <h2>Quản lý &amp; Giao BVN theo Buổi học</h2>
               </div>
-              <span class="status-badge status-graded">Phần chọn &amp; Phần nhập BVN cho lớp</span>
+              <span class="status-badge status-graded">Giao bài &amp; Tạo BVN</span>
             </div>
 
             <div class="session-manage-box">
@@ -679,9 +671,9 @@
                     <div class="form-group" style="margin-bottom: 8px;">
                       <label class="form-label" for="new-asg-require-media" style="font-size: 0.8125rem;">Loại bài học sinh nộp</label>
                       <select id="new-asg-require-media" class="form-control" style="font-size: 0.8125rem;">
-                        <option value="audio_or_video">Audio hoặc Video (Thu âm / Quay video)</option>
-                        <option value="image">Hình ảnh bài làm (Chụp / Tải ảnh vở viết)</option>
-                        <option value="audio_video_image">Linh hoạt (Audio, Video hoặc Hình ảnh)</option>
+                        <option value="audio_or_video">Audio hoặc Video</option>
+                        <option value="image">Hình ảnh bài làm</option>
+                        <option value="audio_video_image">Audio, Video hoặc Hình ảnh</option>
                       </select>
                     </div>
                   </div>
@@ -714,9 +706,9 @@
                 <line x1="3" x2="21" y1="9" y2="9"></line>
                 <line x1="9" x2="9" y1="21" y2="9"></line>
               </svg>
-              <h2>Bảng tự động tổng hợp tiến độ BVN &amp; ý kiến giáo viên</h2>
+              <h2>Bảng tổng hợp tiến độ BVN &amp; nhận xét</h2>
             </div>
-            <span class="status-badge status-graded" id="matrix-summary-badge">Hiển thị đầy đủ nhận xét từng BVN</span>
+            <span class="status-badge status-graded" id="matrix-summary-badge">Theo dõi theo lớp</span>
           </div>
 
           <div class="matrix-toolbar">
@@ -798,7 +790,7 @@
           </div>
 
           <p style="margin-top: 0; margin-bottom: 14px; color: var(--color-muted-foreground);">
-            Quản lý và ôn luyện kho từ vựng HSK 1, HSK 2, HSK 3 (Giáo trình 3.0) theo từng bài học (hoặc bộ từ tùy chỉnh nhập thêm) qua 4 chế độ tương tác. Bấm <strong>Giao bài ôn từ cho lớp</strong> để giao nhiệm vụ ôn từ và theo dõi kết quả hoàn thành của từng học sinh.
+            Quản lý và ôn luyện kho từ vựng HSK 1, HSK 2, HSK 3 theo từng bài học hoặc bộ từ tự tạo. Bấm <strong>Giao bài ôn từ cho lớp</strong> để giao bài và theo dõi tiến độ học sinh.
           </p>
 
           <!-- Trạng thái giao bài ôn từ của bài/bộ từ đang chọn -->
@@ -1008,7 +1000,7 @@
               <div class="fc-action-buttons">
                 <button type="button" class="btn btn-outline btn-sm" id="btn-fc-speak-word" title="Nghe phát âm chuẩn giọng Bắc Kinh">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-                  <span>Phát âm (Speech)</span>
+                  <span>Nghe phát âm</span>
                 </button>
                 <button type="button" class="btn btn-outline btn-sm" id="btn-fc-go-stroke" title="Xem thứ tự từng nét viết chữ này">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
@@ -1371,7 +1363,7 @@
         </div>
 
         <div id="create-ex-modal-hint" style="background: var(--color-surface-muted); padding: 12px 14px; border-radius: var(--radius-md); margin-bottom: 18px; font-size: 0.8125rem; color: var(--color-muted-foreground);">
-          Hệ thống sẽ tự động tạo sẵn các phần câu hỏi mẫu để giáo viên chỉ việc bấm vào sửa lại nội dung bài học.
+          Tự động tạo sẵn khung câu hỏi mẫu để giáo viên chỉnh sửa nhanh.
         </div>
 
         <div class="banner-actions" style="justify-content: flex-end; gap: 10px;">
@@ -1417,12 +1409,12 @@
         </div>
 
         <div style="background:var(--color-surface-muted);padding:10px 14px;border-radius:var(--radius-md);margin-bottom:18px;font-size:0.8125rem;color:var(--color-muted-foreground);">
-          📢 Sau khi bấm giao bài, toàn bộ học sinh trong lớp được chọn sẽ nhìn thấy bài tập này trên Cổng Học Sinh để làm bài.
+          Sau khi giao bài, học sinh trong lớp đã chọn sẽ thấy bài tập này để làm bài.
         </div>
 
         <div class="banner-actions" style="justify-content: flex-end; gap: 10px;">
           <button type="button" class="btn btn-outline" id="btn-cancel-assign-modal">Hủy</button>
-          <button type="submit" class="btn btn-primary" style="font-weight: 700;">🚀 Xác nhận giao bài cho lớp</button>
+          <button type="submit" class="btn btn-primary" style="font-weight: 700;">Xác nhận giao bài cho lớp</button>
         </div>
       </form>
     </div>
@@ -2136,6 +2128,6 @@
   <script src="js/audio.js?v=20261127a"></script>
   <script src="js/google_form_import.js?v=20261116w"></script>
   <script src="js/pptx_import.js?v=20261116x"></script>
-  <script src="js/teacher.js?v=20261128a"></script>
+  <script src="js/teacher.js?v=20261128c"></script>
 </body>
 </html>
