@@ -164,9 +164,20 @@ window.StudySnapAuth = (function () {
     };
   }
 
+  function runBeforeSessionLeaveHook() {
+    try {
+      if (typeof window !== 'undefined' && typeof window.__ssBeforeSessionExpire === 'function') {
+        window.__ssBeforeSessionExpire();
+      }
+    } catch (e) {
+      // Ignore draft flush errors before redirect
+    }
+  }
+
   function handleSessionExpired() {
     if (window.__ssHandlingSessionExpiry) return;
     window.__ssHandlingSessionExpiry = true;
+    runBeforeSessionLeaveHook();
     try {
       localStorage.removeItem(SESSION_KEY);
       localStorage.removeItem(STATE_STORAGE_KEY);
@@ -247,7 +258,8 @@ window.StudySnapAuth = (function () {
     return user;
   }
 
-  async function syncSessionFromServer(requiredRole) {
+  async function syncSessionFromServer(requiredRole, opts) {
+    const noRedirect = Boolean(opts && opts.noRedirect);
     if (!isHttpRuntime() || typeof fetch !== 'function') {
       return { checked: false, authenticated: Boolean(getCurrentUser()), user: getCurrentUser() };
     }
@@ -270,21 +282,35 @@ window.StudySnapAuth = (function () {
             expires_at: Number(json.expiresAt || 0) || (Date.now() + SESSION_TTL_MS)
           })
         );
-        setCurrentUser(syncedUser);
         if (requiredRole && syncedUser.role !== requiredRole) {
+          runBeforeSessionLeaveHook();
+          if (noRedirect) {
+            return {
+              checked: true,
+              authenticated: false,
+              roleMismatch: true,
+              sessionExpired: true,
+              user: syncedUser
+            };
+          }
+          setCurrentUser(syncedUser);
           window.location.replace(getPortalUrl(syncedUser.role) || 'index.html');
           return { checked: true, authenticated: true, roleMismatch: true, user: syncedUser };
         }
+        setCurrentUser(syncedUser);
         return { checked: true, authenticated: true, user: syncedUser };
       }
-      setCurrentUser(null);
-      if (requiredRole) {
-        handleSessionExpired();
+      runBeforeSessionLeaveHook();
+      if (!noRedirect) {
+        setCurrentUser(null);
+        if (requiredRole) {
+          handleSessionExpired();
+        }
       }
       return {
         checked: true,
         authenticated: false,
-        sessionExpired: Boolean(json.sessionExpired),
+        sessionExpired: Boolean(json.sessionExpired) || Boolean(requiredRole),
         user: null
       };
     } catch (e) {
@@ -300,10 +326,26 @@ window.StudySnapAuth = (function () {
       if (isPreviewAllowed()) return;
       const current = getCurrentUser();
       if (!current) {
+        if (typeof window.__ssHasUnsavedDraftProtection === 'function' && window.__ssHasUnsavedDraftProtection()) {
+          runBeforeSessionLeaveHook();
+          if (typeof window.__ssNotifySessionExpiredSilent === 'function') {
+            window.__ssNotifySessionExpiredSilent();
+            return;
+          }
+        }
+        runBeforeSessionLeaveHook();
         window.location.replace('index.html');
         return;
       }
       if (requiredRole && current.role !== requiredRole) {
+        if (typeof window.__ssHasUnsavedDraftProtection === 'function' && window.__ssHasUnsavedDraftProtection()) {
+          runBeforeSessionLeaveHook();
+          if (typeof window.__ssNotifySessionExpiredSilent === 'function') {
+            window.__ssNotifySessionExpiredSilent();
+            return;
+          }
+        }
+        runBeforeSessionLeaveHook();
         const target = getPortalUrl(current.role) || 'index.html';
         window.location.replace(target);
       }
@@ -311,7 +353,16 @@ window.StudySnapAuth = (function () {
 
     window.addEventListener('pageshow', function (ev) {
       if (ev && ev.persisted) checkPortalSession();
-      if (isHttpRuntime()) syncSessionFromServer(requiredRole);
+      if (isHttpRuntime()) {
+        const hasDrafts = typeof window.__ssHasUnsavedDraftProtection === 'function' && window.__ssHasUnsavedDraftProtection();
+        syncSessionFromServer(requiredRole, hasDrafts ? { noRedirect: true } : undefined).then(function (ses) {
+          if (hasDrafts && ses && ses.checked && (!ses.authenticated || ses.roleMismatch)) {
+            if (typeof window.__ssNotifySessionExpiredSilent === 'function') {
+              window.__ssNotifySessionExpiredSilent();
+            }
+          }
+        });
+      }
     });
     window.addEventListener('storage', function (ev) {
       if (!ev || ev.key === SESSION_KEY || ev.key === null) {

@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS students (
   avatar_initials TEXT NOT NULL DEFAULT '',
   username TEXT NOT NULL,
   password TEXT NOT NULL,
+  password_enc TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT ''
 );
 

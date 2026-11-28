@@ -1018,6 +1018,111 @@ select.form-control {
   flex-shrink: 0;
 }
 
+.practice-autosave-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: var(--radius-pill);
+  font-size: 0.78125rem;
+  font-weight: 700;
+  border: 1px solid var(--color-border-neutral);
+  background-color: var(--color-surface-muted);
+  color: var(--color-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.practice-autosave-pill.is-pending {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border-color: var(--color-warning-border);
+}
+
+.practice-autosave-pill.is-saving {
+  background-color: var(--sky-lt);
+  color: var(--ink);
+  border-color: var(--sky-md);
+}
+
+.practice-autosave-pill.is-saved {
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+  border-color: var(--color-success-border);
+}
+
+.practice-autosave-pill.is-error {
+  background-color: var(--color-destructive-bg);
+  color: var(--color-destructive-text);
+  border-color: var(--color-destructive-border);
+}
+
+.practice-session-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-warning-bg);
+  color: var(--color-foreground);
+  border: 1.5px solid var(--color-warning-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.practice-session-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  flex: 1 1 280px;
+}
+
+.practice-session-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.listening-backup-box {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-subtle);
+  border: 1px solid var(--color-border-soft);
+}
+
+.listening-backup-box summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
+.listening-backup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.listening-backup-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-neutral);
+  font-size: 0.8125rem;
+}
+
 .btn-secondary {
   background-color: #B8F5E3;
   background-image: linear-gradient(135deg, #D5FBF0 0%, #CBEFFF 100%);
@@ -2184,6 +2289,57 @@ html.is-auth-redirecting .login-shell {
   flex-wrap: wrap;
   padding: 12px 0;
   border-bottom: 1px solid var(--color-surface-muted);
+}
+
+.student-account-meta-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--color-muted-foreground);
+  margin-top: 3px;
+}
+
+.student-pwd-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.45;
+  vertical-align: middle;
+}
+
+.student-pwd-chip.is-masked {
+  background-color: var(--color-surface-muted);
+  color: var(--color-foreground);
+  letter-spacing: 0.14em;
+}
+
+.student-pwd-chip.is-revealed {
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+  border: 1px solid var(--color-success-border);
+  letter-spacing: 0.04em;
+  user-select: all;
+}
+
+.student-pwd-chip.is-legacy {
+  font-family: var(--font-body);
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border: 1px solid var(--color-warning-border);
+  font-weight: 600;
+  letter-spacing: normal;
+}
+
+.btn-toggle-pwd[aria-pressed="true"] {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-text-contrast);
+  border-color: var(--color-border-strong);
 }
 
 .class-manage-card {

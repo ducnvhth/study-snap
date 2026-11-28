@@ -10,7 +10,7 @@ const SCHEMA_TABLE_STATEMENTS = [
   'CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
   "CREATE TABLE IF NOT EXISTS teachers (teacher_id TEXT PRIMARY KEY, full_name TEXT NOT NULL, username TEXT NOT NULL, password TEXT NOT NULL, subject TEXT NOT NULL DEFAULT '')",
   "CREATE TABLE IF NOT EXISTS classes (class_id TEXT PRIMARY KEY, class_name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT '')",
-  "CREATE TABLE IF NOT EXISTS students (student_id TEXT PRIMARY KEY, full_name TEXT NOT NULL, class_name TEXT NOT NULL DEFAULT '', avatar_initials TEXT NOT NULL DEFAULT '', username TEXT NOT NULL, password TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT '')",
+  "CREATE TABLE IF NOT EXISTS students (student_id TEXT PRIMARY KEY, full_name TEXT NOT NULL, class_name TEXT NOT NULL DEFAULT '', avatar_initials TEXT NOT NULL DEFAULT '', username TEXT NOT NULL, password TEXT NOT NULL, password_enc TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT '')",
   "CREATE TABLE IF NOT EXISTS assignments (assignment_id TEXT PRIMARY KEY, title TEXT NOT NULL, lesson_tag TEXT NOT NULL DEFAULT '', due_date TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', require_media TEXT NOT NULL DEFAULT 'audio_or_video', session_tag TEXT NOT NULL DEFAULT 'Buổi 1', class_name TEXT NOT NULL DEFAULT 'all', exercise_id TEXT NOT NULL DEFAULT '', lesson_id TEXT NOT NULL DEFAULT '')",
   "CREATE TABLE IF NOT EXISTS submissions (submission_id TEXT PRIMARY KEY, assignment_id TEXT NOT NULL, student_id TEXT NOT NULL, submitted_at TEXT NOT NULL DEFAULT '', student_note TEXT NOT NULL DEFAULT '', media_type TEXT NOT NULL DEFAULT 'audio', media_url TEXT NOT NULL DEFAULT '', media_duration TEXT NOT NULL DEFAULT '01:00', status TEXT NOT NULL DEFAULT 'submitted', score TEXT NOT NULL DEFAULT '', teacher_comment TEXT NOT NULL DEFAULT '', teacher_voice_url TEXT NOT NULL DEFAULT '', teacher_voice_duration TEXT NOT NULL DEFAULT '', graded_at TEXT NOT NULL DEFAULT '', practice_count INTEGER NOT NULL DEFAULT 0, attempt_number INTEGER NOT NULL DEFAULT 1)",
   "CREATE TABLE IF NOT EXISTS exit_tickets (record_id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL, student_id TEXT NOT NULL, student_name TEXT NOT NULL DEFAULT '', score REAL NOT NULL DEFAULT 0, total REAL NOT NULL DEFAULT 0, submitted_at TEXT NOT NULL DEFAULT '', answers_json TEXT NOT NULL DEFAULT '[]')",
@@ -43,12 +43,13 @@ const DEFAULT_TEACHER = {
 
 const ACCESS_COOKIE_NAME = 'ss_access';
 const REFRESH_COOKIE_NAME = 'ss_refresh';
-const ACCESS_TTL_SEC = 900; // 15 minutes
+const ACCESS_TTL_SEC = 4 * 60 * 60; // 4 hours so long editing/recording sessions stay seamless
 const REFRESH_TTL_SEC = 7 * 24 * 60 * 60; // 7 days
 const LOGIN_MAX_FAILS = 8;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
 const PBKDF2_PREFIX = 'pbkdf2_v1$';
+const STUDENT_PWD_ENC_PREFIX = 'enc_v1$';
 
 const initializedDatabases = new WeakSet();
 
@@ -289,6 +290,69 @@ async function importHmacKey(secretText) {
   );
 }
 
+async function getStudentPwdEncKey(db, env) {
+  let rawSecret = '';
+  const envSecret = env && (env.STUDENT_PWD_SECRET || env.PASSWORD_ENC_SECRET);
+  if (envSecret && String(envSecret).trim().length >= 16) {
+    rawSecret = String(envSecret).trim();
+  } else {
+    const row = await db.prepare("SELECT value FROM app_meta WHERE key = 'student_pwd_enc_secret' LIMIT 1").first();
+    if (row && row.value && String(row.value).length >= 32) {
+      rawSecret = String(row.value);
+    } else {
+      const generated = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
+      await db
+        .prepare("INSERT OR IGNORE INTO app_meta (key, value) VALUES ('student_pwd_enc_secret', ?)")
+        .bind(generated)
+        .run();
+      const stored = await db.prepare("SELECT value FROM app_meta WHERE key = 'student_pwd_enc_secret' LIMIT 1").first();
+      rawSecret = stored && stored.value ? String(stored.value) : generated;
+    }
+  }
+  const keyBytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(rawSecret));
+  return await crypto.subtle.importKey(
+    'raw',
+    keyBytes,
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptStudentPassword(db, env, plainPassword) {
+  const plain = String(plainPassword || '').trim();
+  if (!plain || isPasswordHashed(plain)) return '';
+  const key = await getStudentPwdEncKey(db, env);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const cipherBuf = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: iv },
+    key,
+    new TextEncoder().encode(plain)
+  );
+  return STUDENT_PWD_ENC_PREFIX + toBase64Url(iv) + '$' + toBase64Url(new Uint8Array(cipherBuf));
+}
+
+async function decryptStudentPassword(db, env, encValue) {
+  const raw = String(encValue || '').trim();
+  if (!raw || raw.indexOf(STUDENT_PWD_ENC_PREFIX) !== 0) return '';
+  try {
+    const parts = raw.split('$');
+    if (parts.length !== 3 || !parts[1] || !parts[2]) return '';
+    const key = await getStudentPwdEncKey(db, env);
+    const iv = fromBase64Url(parts[1]);
+    const cipherBytes = fromBase64Url(parts[2]);
+    if (iv.length !== 12 || cipherBytes.length === 0) return '';
+    const plainBuf = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: iv },
+      key,
+      cipherBytes
+    );
+    return new TextDecoder().decode(plainBuf);
+  } catch (e) {
+    return '';
+  }
+}
+
 async function signAccessToken(secretText, payloadObj) {
   const payloadB64 = toBase64Url(new TextEncoder().encode(JSON.stringify(payloadObj)));
   const key = await importHmacKey(secretText);
@@ -447,7 +511,7 @@ async function resolveRequestSession(request, db, env, url) {
                 const nextRefreshSecret = randomTokenUrl(32);
                 const nextRefreshHash = await sha256Hex(nextRefreshSecret);
                 const nextExpiresAt = now + REFRESH_TTL_SEC * 1000;
-                const graceUntil = now + 20000;
+                const graceUntil = now + 5 * 60 * 1000; // 5-minute grace window avoids false logouts across tabs/slow uploads
                 await db
                   .prepare('UPDATE auth_sessions SET refresh_hash = ?, prev_refresh_hash = ?, prev_refresh_until = ?, expires_at = ?, last_used_at = ? WHERE session_id = ?')
                   .bind(nextRefreshHash, sesRow.refresh_hash, graceUntil, nextExpiresAt, now, sid)
@@ -491,10 +555,8 @@ async function resolveRequestSession(request, db, env, url) {
                 hadInvalidCookies: false
               };
             }
-          } else {
-            // Possible stolen refresh token replay after grace window: revoke session
-            await db.prepare('UPDATE auth_sessions SET revoked = 1 WHERE session_id = ?').bind(sid).run();
           }
+          // Reject stale refresh token without revoking active DB session across other tabs
         }
       }
     }
@@ -696,6 +758,11 @@ async function ensureSchema(db) {
   } catch (e) {
     // Column prev_refresh_until already exists
   }
+  try {
+    await db.prepare("ALTER TABLE students ADD COLUMN password_enc TEXT NOT NULL DEFAULT ''").run();
+  } catch (e) {
+    // Column password_enc already exists
+  }
   initializedDatabases.add(db);
 }
 
@@ -779,7 +846,9 @@ async function getBootstrapData(db, metaOverride, session) {
   const batchRes = await db.batch([
     db.prepare('SELECT teacher_id, full_name, username, subject FROM teachers ORDER BY rowid ASC'),
     db.prepare('SELECT class_id, class_name, created_at FROM classes ORDER BY rowid ASC'),
-    db.prepare('SELECT student_id, full_name, class_name, avatar_initials, username, created_at FROM students ORDER BY rowid ASC'),
+    db.prepare(
+      "SELECT student_id, full_name, class_name, avatar_initials, username, created_at, CASE WHEN TRIM(COALESCE(password_enc, '')) != '' THEN 1 ELSE 0 END AS has_viewable_password FROM students ORDER BY rowid ASC"
+    ),
     db.prepare('SELECT assignment_id, title, lesson_tag, due_date, description, require_media, session_tag, class_name, exercise_id, lesson_id FROM assignments ORDER BY rowid ASC'),
     db.prepare('SELECT submission_id, assignment_id, student_id, submitted_at, student_note, media_type, media_url, media_duration, status, score, teacher_comment, teacher_voice_url, teacher_voice_duration, graded_at, practice_count, COALESCE(attempt_number, 1) AS attempt_number FROM submissions ORDER BY COALESCE(attempt_number, 1) ASC, rowid ASC'),
     db.prepare('SELECT record_id, ticket_id, student_id, student_name, score, total, submitted_at, answers_json FROM exit_tickets ORDER BY rowid ASC'),
@@ -836,7 +905,18 @@ async function getBootstrapData(db, metaOverride, session) {
       classes: allClasses.filter(function (c) {
         return !myClassLower || String(c.class_name || '').trim().toLowerCase() === myClassLower;
       }),
-      students: myStudent ? [myStudent] : [],
+      students: myStudent
+        ? [
+            {
+              student_id: myStudent.student_id,
+              full_name: myStudent.full_name,
+              class_name: myStudent.class_name,
+              avatar_initials: myStudent.avatar_initials,
+              username: myStudent.username,
+              created_at: myStudent.created_at
+            }
+          ]
+        : [],
       assignments: myAssignments,
       submissions: mySubs,
       exitTicketLogs: myExitLogs,
@@ -850,7 +930,17 @@ async function getBootstrapData(db, metaOverride, session) {
     isProduction: meta.is_production === 'true',
     teachers: rows(0),
     classes: allClasses,
-    students: rows(2),
+    students: rows(2).map(function (s) {
+      return {
+        student_id: s.student_id,
+        full_name: s.full_name,
+        class_name: s.class_name,
+        avatar_initials: s.avatar_initials,
+        username: s.username,
+        created_at: s.created_at,
+        has_viewable_password: Number(s.has_viewable_password || 0) === 1
+      };
+    }),
     assignments: rows(3),
     submissions: rows(4),
     exitTicketLogs: rows(5),
@@ -1047,10 +1137,11 @@ async function handleImportFromBootstrapData(db, payload, session, env) {
     const cname = String(s.class_name || '');
     const rawStuPwd = String(s.password !== undefined && s.password !== null ? s.password : '123456');
     const hashedStuPwd = await hashPassword(rawStuPwd, studentIter);
+    const encStuPwd = isPasswordHashed(rawStuPwd) ? '' : await encryptStudentPassword(db, env, rawStuPwd);
     queueClass({ class_name: cname, created_at: s.created_at });
     statements.push(
       db
-        .prepare('INSERT OR REPLACE INTO students (student_id, full_name, class_name, avatar_initials, username, password, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .prepare('INSERT OR REPLACE INTO students (student_id, full_name, class_name, avatar_initials, username, password, password_enc, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(
           stId,
           String(s.full_name || 'Học sinh'),
@@ -1058,6 +1149,7 @@ async function handleImportFromBootstrapData(db, payload, session, env) {
           String(s.avatar_initials || getInitials(s.full_name)),
           String(s.username || stId.toLowerCase()),
           hashedStuPwd,
+          encStuPwd,
           String(s.created_at || formatViDate())
         )
     );
@@ -1332,7 +1424,7 @@ async function handleLogin(db, payload, request, env, url) {
   }
 
   const student = await db
-    .prepare('SELECT student_id, full_name, class_name, avatar_initials, username, password FROM students WHERE (LOWER(TRIM(username)) = ? OR LOWER(TRIM(student_id)) = ?) LIMIT 1')
+    .prepare('SELECT student_id, full_name, class_name, avatar_initials, username, password, password_enc FROM students WHERE (LOWER(TRIM(username)) = ? OR LOWER(TRIM(student_id)) = ?) LIMIT 1')
     .bind(username, username)
     .first();
 
@@ -1340,9 +1432,19 @@ async function handleLogin(db, payload, request, env, url) {
     const sCheck = await verifyPassword(password, student.password);
     if (sCheck.valid) {
       await clearLoginFailure(db, attemptKey);
-      if (sCheck.needsUpgrade) {
+      const needsPwdEnc = !String(student.password_enc || '').trim();
+      if (sCheck.needsUpgrade && needsPwdEnc) {
+        const upgradedStu = await hashPassword(password, 100000);
+        const backfilledEnc = await encryptStudentPassword(db, env, password);
+        await db.prepare('UPDATE students SET password = ?, password_enc = ? WHERE student_id = ?').bind(upgradedStu, backfilledEnc, student.student_id).run();
+      } else if (sCheck.needsUpgrade) {
         const upgradedStu = await hashPassword(password, 100000);
         await db.prepare('UPDATE students SET password = ? WHERE student_id = ?').bind(upgradedStu, student.student_id).run();
+      } else if (needsPwdEnc) {
+        const backfilledEnc = await encryptStudentPassword(db, env, password);
+        if (backfilledEnc) {
+          await db.prepare('UPDATE students SET password_enc = ? WHERE student_id = ?').bind(backfilledEnc, student.student_id).run();
+        }
       }
       const userObj = {
         role: 'student',
@@ -2596,7 +2698,8 @@ export async function handleApiRequest(request, env, ctx) {
           return respond(jsonResponse({ ok: false, error: 'Mật khẩu hiện tại không chính xác.' }, 403));
         }
         const hashedS = await hashPassword(newPwd, 100000);
-        await db.prepare('UPDATE students SET password = ? WHERE student_id = ?').bind(hashedS, session.uid).run();
+        const encS = await encryptStudentPassword(db, env, newPwd);
+        await db.prepare('UPDATE students SET password = ?, password_enc = ? WHERE student_id = ?').bind(hashedS, encS, session.uid).run();
       }
       await db
         .prepare('UPDATE auth_sessions SET revoked = 1 WHERE user_id = ? AND role = ? AND session_id != ?')
@@ -2619,6 +2722,7 @@ export async function handleApiRequest(request, env, ctx) {
       'changeStudentClass',
       'createStudentAccount',
       'resetStudentPassword',
+      'revealStudentPassword',
       'deleteStudentAccount',
       'saveTeacherFeedback',
       'copyTeacherFeedback',
@@ -2710,12 +2814,13 @@ export async function handleApiRequest(request, env, ctx) {
       const username = String(payload.username || studentId.toLowerCase()).trim().toLowerCase();
       const password = String(payload.password || '123456').trim();
       const hashedPassword = await hashPassword(password, 100000);
+      const encPassword = await encryptStudentPassword(db, env, password);
       const createdAt = formatViDate();
 
       await ensureClassRecord(db, className);
       await db
-        .prepare('INSERT OR REPLACE INTO students (student_id, full_name, class_name, avatar_initials, username, password, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .bind(studentId, fullName, className, initials, username, hashedPassword, createdAt)
+        .prepare('INSERT OR REPLACE INTO students (student_id, full_name, class_name, avatar_initials, username, password, password_enc, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(studentId, fullName, className, initials, username, hashedPassword, encPassword, createdAt)
         .run();
 
       return await mutate({
@@ -2726,6 +2831,7 @@ export async function handleApiRequest(request, env, ctx) {
           avatar_initials: initials,
           username: username,
           password: password,
+          has_viewable_password: Boolean(encPassword),
           created_at: createdAt
         }
       });
@@ -2735,9 +2841,10 @@ export async function handleApiRequest(request, env, ctx) {
       const studentId = String(payload.student_id || '').trim();
       const newPwd = String(payload.new_password || '123456').trim();
       const hashedNewPwd = await hashPassword(newPwd, 100000);
+      const encNewPwd = await encryptStudentPassword(db, env, newPwd);
       const info = await db
-        .prepare('UPDATE students SET password = ? WHERE student_id = ?')
-        .bind(hashedNewPwd, studentId)
+        .prepare('UPDATE students SET password = ?, password_enc = ? WHERE student_id = ?')
+        .bind(hashedNewPwd, encNewPwd, studentId)
         .run();
       await db
         .prepare("UPDATE auth_sessions SET revoked = 1 WHERE user_id = ? AND role = 'student'")
@@ -2745,8 +2852,37 @@ export async function handleApiRequest(request, env, ctx) {
         .run();
       const updatedCount = info && info.meta ? Number(info.meta.changes || 0) : 1;
       return await mutate({
-        student: updatedCount > 0 ? { student_id: studentId, password: newPwd } : null
+        student: updatedCount > 0 ? { student_id: studentId, password: newPwd, has_viewable_password: Boolean(encNewPwd) } : null
       });
+    }
+
+    if (action === 'revealStudentPassword') {
+      const studentId = String(payload.student_id || '').trim();
+      if (!studentId) {
+        return respond(jsonResponse({ ok: false, error: 'Thiếu mã học sinh.' }, 400));
+      }
+      const row = await db
+        .prepare('SELECT student_id, full_name, username, password_enc FROM students WHERE student_id = ? LIMIT 1')
+        .bind(studentId)
+        .first();
+      if (!row) {
+        return respond(jsonResponse({ ok: false, error: 'Không tìm thấy tài khoản học sinh.' }, 404));
+      }
+      const rawEnc = String(row.password_enc || '').trim();
+      const plainPwd = rawEnc ? await decryptStudentPassword(db, env, rawEnc) : '';
+      const hasViewable = Boolean(plainPwd);
+      return respond(
+        jsonResponse({
+          ok: true,
+          backend: 'cloudflare-d1',
+          student_id: row.student_id,
+          full_name: row.full_name,
+          username: row.username || String(row.student_id || '').toLowerCase(),
+          password: plainPwd,
+          has_viewable_password: hasViewable,
+          reason: hasViewable ? '' : (rawEnc ? 'decrypt_failed' : 'legacy_no_enc')
+        })
+      );
     }
 
     if (action === 'deleteStudentAccount') {

@@ -859,6 +859,7 @@ window.StudySnapLoading = (function () {
     changeStudentClass: 'Đang chuyển lớp cho học sinh...',
     createStudentAccount: 'Đang tạo tài khoản học sinh...',
     resetStudentPassword: 'Đang cập nhật mật khẩu học sinh...',
+    revealStudentPassword: 'Đang giải mã mật khẩu học sinh...',
     deleteStudentAccount: 'Đang xóa tài khoản học sinh...',
     addVocabulary: 'Đang thêm từ vựng mới...',
     batchAddVocabulary: 'Đang nhập danh sách từ vựng...',
@@ -1875,6 +1876,18 @@ window.StudySnapStore = (function () {
       });
       if (foundStu) {
         foundStu.student_id = stu.student_id || foundStu.student_id;
+        if (stu.has_viewable_password !== undefined) {
+          foundStu.has_viewable_password = Boolean(stu.has_viewable_password);
+        }
+      }
+    } else if (action === 'resetStudentPassword' && json.student) {
+      const stu = json.student;
+      const students = Array.isArray(stateObj.students) ? stateObj.students : [];
+      const foundStu = students.find(function (s) {
+        return String(s.student_id || '').trim() === String(stu.student_id || '').trim();
+      });
+      if (foundStu && stu.has_viewable_password !== undefined) {
+        foundStu.has_viewable_password = Boolean(stu.has_viewable_password);
       }
     }
 
@@ -1952,6 +1965,8 @@ window.StudySnapStore = (function () {
           class_name: !cls || cls === 'Lớp Giao Tiếp B1' ? 'Lớp Tiếng Trung HSK 2' : cls,
           avatar_initials: st.avatar_initials || getInitials(st.full_name),
           username: String(st.username || String(st.student_id || '').toLowerCase()),
+          has_viewable_password:
+            st.has_viewable_password !== undefined ? Boolean(st.has_viewable_password) : undefined,
           created_at: formatCleanDate(st.created_at) || '01/11/2026'
         };
       });
@@ -2263,10 +2278,24 @@ window.StudySnapStore = (function () {
     );
   }
 
-  function notifySessionExpiredIfNeeded(status, json, actionName) {
+  function notifySessionExpiredIfNeeded(status, json, actionName, opts) {
     const act = String(actionName || '').trim();
     if (act === 'login' || act === 'logout' || act === 'session' || act === 'refresh') return;
     if (status === 401 || (json && json.sessionExpired === true)) {
+      const hasDraftProt =
+        typeof window !== 'undefined' &&
+        typeof window.__ssHasUnsavedDraftProtection === 'function' &&
+        window.__ssHasUnsavedDraftProtection();
+      const preferSilent = Boolean((opts && opts.silent) || (act === 'savePracticeExercise' && hasDraftProt));
+      if (preferSilent && typeof window !== 'undefined') {
+        if (typeof window.__ssBeforeSessionExpire === 'function') {
+          try { window.__ssBeforeSessionExpire(); } catch (e) {}
+        }
+        if (typeof window.__ssNotifySessionExpiredSilent === 'function') {
+          window.__ssNotifySessionExpiredSilent(json);
+          return;
+        }
+      }
       if (
         typeof window !== 'undefined' &&
         window.StudySnapAuth &&
@@ -2277,14 +2306,19 @@ window.StudySnapStore = (function () {
     }
   }
 
-  async function postD1Json(bodyObj, timeoutMs) {
+  async function postD1Json(bodyObj, timeoutMs, opts) {
+    const wireObj = Object.assign({}, bodyObj || {});
+    const isSilentReq = Boolean((opts && opts.silent) || wireObj._silent);
+    delete wireObj._silent;
+    delete wireObj._skipStateOverwrite;
+    delete wireObj._loadingLabel;
     const response = await fetchWithTimeout(
       D1_API_ENDPOINT,
       {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyObj)
+        body: JSON.stringify(wireObj)
       },
       timeoutMs || 20000
     );
@@ -2294,7 +2328,7 @@ window.StudySnapStore = (function () {
     } catch (e) {
       json = null;
     }
-    notifySessionExpiredIfNeeded(response.status, json, bodyObj && bodyObj.action);
+    notifySessionExpiredIfNeeded(response.status, json, wireObj && wireObj.action, { silent: isSilentReq });
     return { response: response, json: json || {} };
   }
 
@@ -2717,7 +2751,7 @@ window.StudySnapStore = (function () {
         if (exSource && exSource !== stateObj && Array.isArray(exSource.sections)) {
           exSource.sections = JSON.parse(JSON.stringify(exClone.sections));
         }
-        if (stateObj && Array.isArray(stateObj.practiceExercises)) {
+        if (!payloadCopy._skipStateOverwrite && stateObj && Array.isArray(stateObj.practiceExercises)) {
           const idx = stateObj.practiceExercises.findIndex(function (e) {
             return e.exercise_id === exClone.exercise_id;
           });
@@ -2744,6 +2778,8 @@ window.StudySnapStore = (function () {
     const url = getGasUrl();
     if (mode === 'gas' && !url) return null;
     const loadingCtrl = typeof window !== 'undefined' ? window.StudySnapLoading : null;
+    const isSilent = Boolean(payload && payload._silent);
+    const skipStateOverwrite = Boolean(payload && payload._skipStateOverwrite);
     const actionName = payload && payload.action ? payload.action : 'sync';
     const customLabel = (payload && payload._loadingLabel) || actionName;
     const hasHeavyBody = Boolean(
@@ -2753,8 +2789,8 @@ window.StudySnapStore = (function () {
           payload.teacher_voice_base64 ||
           (Array.isArray(payload.vocabulary) && payload.vocabulary.length > 10))
     );
-    const reqId = loadingCtrl ? loadingCtrl.beginRequest(customLabel) : null;
-    const lockId = loadingCtrl && loadingCtrl.beginBlockingSync
+    const reqId = loadingCtrl && !isSilent ? loadingCtrl.beginRequest(customLabel) : null;
+    const lockId = loadingCtrl && !isSilent && loadingCtrl.beginBlockingSync
       ? loadingCtrl.beginBlockingSync(customLabel, null, { isQueued: true })
       : null;
 
@@ -2782,7 +2818,7 @@ window.StudySnapStore = (function () {
                     : ''
               });
 
-        const d1Res = await postD1Json(wirePayload, hasHeavyBody ? 45000 : 20000);
+        const d1Res = await postD1Json(wirePayload, hasHeavyBody ? 45000 : 20000, { silent: isSilent });
         let json = d1Res.json;
         if (act === 'login' && json && json.needsMigration) {
           await ensureD1Migrated(stateObj);
@@ -2798,8 +2834,12 @@ window.StudySnapStore = (function () {
             if (json.version && stateObj) {
               stateObj.syncVersion = String(json.version);
             }
-            mergeRemoteData(stateObj, json.data);
-          } else if (act !== 'login' && act !== 'logout' && act !== 'changePassword') {
+            if (!skipStateOverwrite) {
+              mergeRemoteData(stateObj, json.data);
+            } else {
+              saveState(stateObj);
+            }
+          } else if (!skipStateOverwrite && act !== 'login' && act !== 'logout' && act !== 'changePassword') {
             applyDeltaResponseToState(stateObj, cleanedPayload, json);
           }
         }
@@ -3053,21 +3093,28 @@ window.StudySnapStore = (function () {
     });
   }
 
-  async function savePracticeExercise(stateObj, exercise) {
-    if (!stateObj.practiceExercises) stateObj.practiceExercises = [];
-    const idx = stateObj.practiceExercises.findIndex(function (e) {
-      return e.exercise_id === exercise.exercise_id;
-    });
-    if (idx >= 0) {
-      stateObj.practiceExercises[idx] = exercise;
-    } else {
-      stateObj.practiceExercises.push(exercise);
+  async function savePracticeExercise(stateObj, exercise, options) {
+    const opts = options || {};
+    const isSilent = Boolean(opts.silent);
+    const skipOverwrite = opts.skipStateOverwrite !== undefined ? Boolean(opts.skipStateOverwrite) : isSilent;
+    if (!isSilent) {
+      if (!stateObj.practiceExercises) stateObj.practiceExercises = [];
+      const idx = stateObj.practiceExercises.findIndex(function (e) {
+        return e.exercise_id === exercise.exercise_id;
+      });
+      if (idx >= 0) {
+        stateObj.practiceExercises[idx] = exercise;
+      } else {
+        stateObj.practiceExercises.push(exercise);
+      }
+      syncLinkedPracticeAssignments(stateObj, exercise);
+      saveState(stateObj);
     }
-    syncLinkedPracticeAssignments(stateObj, exercise);
-    saveState(stateObj);
     return await syncPostToGas(stateObj, {
       action: 'savePracticeExercise',
-      exercise: exercise
+      exercise: exercise,
+      _silent: isSilent,
+      _skipStateOverwrite: skipOverwrite
     });
   }
 
@@ -3129,6 +3176,76 @@ window.StudySnapStore = (function () {
       action: 'deleteAssignment',
       assignment_id: assignmentId
     });
+  }
+
+  async function revealStudentPassword(stateObj, studentId) {
+    const targetId = String(studentId || '').trim();
+    if (!targetId) {
+      return { ok: false, error: 'Thiếu mã học sinh.' };
+    }
+
+    if (!canProbeD1Endpoint()) {
+      const seed = typeof window !== 'undefined' ? window.STUDYSNAP_INITIAL_DATA : null;
+      const seedStu =
+        seed && Array.isArray(seed.students)
+          ? seed.students.find(function (s) {
+              return String(s.student_id || '').trim() === targetId;
+            })
+          : null;
+      if (seedStu && seedStu.password) {
+        return {
+          ok: true,
+          student_id: targetId,
+          password: String(seedStu.password),
+          has_viewable_password: true
+        };
+      }
+      return {
+        ok: false,
+        error: 'Tính năng xem mật khẩu cần kết nối máy chủ Cloudflare D1.'
+      };
+    }
+
+    const mode = await probeD1Mode();
+    if (mode !== 'd1') {
+      return {
+        ok: false,
+        error: 'Tính năng xem mật khẩu chỉ hỗ trợ trên hệ thống Cloudflare D1.'
+      };
+    }
+
+    const loadingCtrl = typeof window !== 'undefined' ? window.StudySnapLoading : null;
+    const execReveal = async function () {
+      return await postD1Json(
+        {
+          action: 'revealStudentPassword',
+          student_id: targetId
+        },
+        15000
+      );
+    };
+
+    try {
+      const d1Res = loadingCtrl && loadingCtrl.trackPromise
+        ? await loadingCtrl.trackPromise('revealStudentPassword', execReveal)
+        : await execReveal();
+      const json = (d1Res && d1Res.json) || {};
+      if (json.ok && stateObj && Array.isArray(stateObj.students)) {
+        const matched = stateObj.students.find(function (s) {
+          return String(s.student_id || '').trim() === targetId;
+        });
+        if (matched && json.has_viewable_password !== undefined) {
+          matched.has_viewable_password = Boolean(json.has_viewable_password);
+          saveState(stateObj);
+        }
+      }
+      return json;
+    } catch (e) {
+      return {
+        ok: false,
+        error: 'Không thể kết nối máy chủ để lấy mật khẩu học sinh. Vui lòng thử lại!'
+      };
+    }
   }
 
   async function deleteStudentAccount(stateObj, studentId) {
@@ -3708,6 +3825,7 @@ window.StudySnapStore = (function () {
     deletePracticeExercise: deletePracticeExercise,
     deleteAssignment: deleteAssignment,
     deleteStudentAccount: deleteStudentAccount,
+    revealStudentPassword: revealStudentPassword,
     assignExercisesToClass: assignExercisesToClass,
     unassignExercises: unassignExercises,
     updateAssignmentRequireMedia: updateAssignmentRequireMedia,

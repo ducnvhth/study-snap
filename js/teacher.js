@@ -20,12 +20,43 @@
     sortNone: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>',
     sortAsc: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg>',
     sortDesc: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>',
-    refresh: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>'
+    refresh: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>',
+    eye: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
+    eyeOff: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" x2="22" y1="2" y2="22"></line></svg>'
   };
 
   let state = window.StudySnapStore.loadState();
-  // Lưu tạm mật khẩu vừa cấp/vừa đặt lại chỉ trong bộ nhớ phiên hiện tại (không lưu vào localStorage)
+  // Lưu tạm mật khẩu vừa cấp/vừa xem chỉ trong bộ nhớ phiên hiện tại (không lưu vào localStorage)
   const sessionIssuedPasswords = new Map();
+  const visibleStudentPasswordIds = new Set();
+
+  async function copyTextWithFallback(text) {
+    const val = String(text || '');
+    if (!val) return false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(val);
+        return true;
+      }
+    } catch (e) {
+      // Fallback to execCommand below when clipboard async activation expires
+    }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = val;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '-9999px';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return Boolean(copied);
+    } catch (err) {
+      return false;
+    }
+  }
 
   const CUSTOM_SESSIONS_STORAGE_KEY = 'studysnap_custom_bvn_sessions';
 
@@ -88,48 +119,521 @@
     practiceDirtyMap: {}
   };
 
+  const PRACTICE_DRAFT_BACKUP_KEY = 'studysnap_practice_draft_backup_v1';
+  const PRACTICE_AUTOSAVE_DEBOUNCE_MS = 2500;
+  const PRACTICE_AUTOSAVE_MAX_WAIT_MS = 15000;
+  const practiceRevisionMap = {};
+  const practiceAutoSaveState = {
+    timers: {},
+    firstDirtyAt: {},
+    inFlight: {},
+    reschedule: {},
+    statusByExId: {}
+  };
+  let practiceLocalBackupTimer = null;
+  let practiceSessionExpiredFlag = false;
+
+  function formatClockTimeShort(ts) {
+    try {
+      return new Intl.DateTimeFormat('vi-VN', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).format(ts ? new Date(ts) : new Date());
+    } catch (e) {
+      const d = ts ? new Date(ts) : new Date();
+      return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    }
+  }
+
+  function loadPracticeBackupMap() {
+    try {
+      if (typeof localStorage === 'undefined') return {};
+      const raw = localStorage.getItem(PRACTICE_DRAFT_BACKUP_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function savePracticeBackupMap(mapObj) {
+    try {
+      if (typeof localStorage === 'undefined') return;
+      const clean = mapObj && typeof mapObj === 'object' ? mapObj : {};
+      if (Object.keys(clean).length === 0) {
+        localStorage.removeItem(PRACTICE_DRAFT_BACKUP_KEY);
+      } else {
+        localStorage.setItem(PRACTICE_DRAFT_BACKUP_KEY, JSON.stringify(clean));
+      }
+    } catch (e) {
+      // Ignore quota errors cleanly
+    }
+  }
+
+  function stripHugeDataUrlsForBackup(ex) {
+    if (!ex) return null;
+    const clone = JSON.parse(JSON.stringify(ex));
+    if (Array.isArray(clone.sections)) {
+      clone.sections.forEach(function (sec) {
+        if (!sec || !sec.data) return;
+        if (typeof sec.data.audio_url === 'string' && sec.data.audio_url.indexOf('data:') === 0 && sec.data.audio_url.length > 260000) {
+          sec.data.audio_url = '';
+        }
+        if (typeof sec.data.image_url === 'string' && sec.data.image_url.indexOf('data:') === 0 && sec.data.image_url.length > 260000) {
+          sec.data.image_url = '';
+        }
+        if (Array.isArray(sec.data.items)) {
+          sec.data.items.forEach(function (it) {
+            if (!it) return;
+            if (typeof it.audio_url === 'string' && it.audio_url.indexOf('data:') === 0 && it.audio_url.length > 260000) {
+              it.audio_url = '';
+            }
+            if (typeof it.image_url === 'string' && it.image_url.indexOf('data:') === 0 && it.image_url.length > 260000) {
+              it.image_url = '';
+            }
+          });
+        }
+      });
+    }
+    return clone;
+  }
+
+  function persistPracticeBackupToLocal(ex) {
+    if (!ex || !ex.exercise_id) return;
+    const map = loadPracticeBackupMap();
+    map[ex.exercise_id] = {
+      exercise: stripHugeDataUrlsForBackup(ex),
+      savedAt: Date.now(),
+      dirty: true
+    };
+    savePracticeBackupMap(map);
+  }
+
+  function clearPracticeBackupFromLocal(exId) {
+    if (!exId) return;
+    const map = loadPracticeBackupMap();
+    if (map[exId]) {
+      delete map[exId];
+      savePracticeBackupMap(map);
+    }
+  }
+
+  function cancelPracticeAutoSaveTimer(exId) {
+    if (!exId) return;
+    if (practiceAutoSaveState.timers[exId]) {
+      clearTimeout(practiceAutoSaveState.timers[exId]);
+      delete practiceAutoSaveState.timers[exId];
+    }
+    delete practiceAutoSaveState.firstDirtyAt[exId];
+  }
+
+  function mergeResolvedMediaUrlsIntoLiveExercise(liveEx, uploadedEx) {
+    if (!liveEx || !uploadedEx || !Array.isArray(liveEx.sections) || !Array.isArray(uploadedEx.sections)) return;
+    const upSecMap = {};
+    uploadedEx.sections.forEach(function (sec) {
+      if (sec && sec.section_id) upSecMap[sec.section_id] = sec;
+    });
+
+    liveEx.sections.forEach(function (sec) {
+      if (!sec || !sec.data) return;
+      const upSec = upSecMap[sec.section_id];
+      if (!upSec || !upSec.data) return;
+
+      ['audio_url', 'image_url'].forEach(function (field) {
+        const upVal = String(upSec.data[field] || '').trim();
+        const curVal = String(sec.data[field] || '').trim();
+        if (upVal && upVal.indexOf('data:') !== 0 && curVal.indexOf('data:') === 0) {
+          sec.data[field] = upVal;
+          if (field === 'audio_url') {
+            delete sec.data._audio_backup_id;
+            const urlInp = document.querySelector('[data-ls-audio-url="' + sec.section_id + '"]');
+            if (urlInp && document.activeElement !== urlInp) {
+              urlInp.value = upVal;
+            }
+          }
+        }
+      });
+
+      if (Array.isArray(sec.data.items) && Array.isArray(upSec.data.items)) {
+        const upItemMap = {};
+        upSec.data.items.forEach(function (it) {
+          if (it && it.id) upItemMap[it.id] = it;
+        });
+        sec.data.items.forEach(function (it) {
+          if (!it) return;
+          const upIt = upItemMap[it.id];
+          if (!upIt) return;
+          ['audio_url', 'image_url'].forEach(function (field) {
+            const upVal = String(upIt[field] || '').trim();
+            const curVal = String(it[field] || '').trim();
+            if (upVal && upVal.indexOf('data:') !== 0 && curVal.indexOf('data:') === 0) {
+              it[field] = upVal;
+              if (field === 'audio_url') {
+                delete it._audio_backup_id;
+                const urlInp = document.querySelector('[data-ls-audio-url="' + sec.section_id + ':' + it.id + '"]');
+                if (urlInp && document.activeElement !== urlInp) {
+                  urlInp.value = upVal;
+                }
+              }
+            }
+          });
+        });
+      }
+    });
+  }
+
+  function renderPracticeSessionBanner() {
+    const bannerEl = document.getElementById('teacher-practice-session-banner');
+    if (!bannerEl) return;
+    if (!practiceSessionExpiredFlag) {
+      bannerEl.style.display = 'none';
+      bannerEl.innerHTML = '';
+      return;
+    }
+    bannerEl.style.display = 'flex';
+    bannerEl.innerHTML =
+      '<div class="practice-session-banner-text">' +
+        ICONS.alert +
+        '<span>Phiên đăng nhập Giáo viên vừa hết hạn hoặc bị đổi ở tab khác. Bài soạn và file ghi âm của bạn vẫn đang được giữ an toàn trên máy! Hãy mở đăng nhập ở tab mới rồi bấm Lưu lại.</span>' +
+      '</div>' +
+      '<div class="practice-session-banner-actions">' +
+        '<button type="button" class="btn btn-outline btn-sm" id="btn-open-relogin-new-tab">Mở đăng nhập (Tab mới)</button>' +
+        '<button type="button" class="btn btn-primary btn-sm" id="btn-retry-practice-sync">Thử lưu lại lên máy chủ</button>' +
+      '</div>';
+  }
+
   function isPracticeExerciseDirty(exId) {
     return Boolean(exId && ui.practiceDirtyMap && ui.practiceDirtyMap[exId]);
   }
 
   function updatePracticeDraftStatusUi(ex) {
     const targetEx = ex || getActivePracticeExercise();
-    const isDirty = Boolean(targetEx && isPracticeExerciseDirty(targetEx.exercise_id));
+    const exId = targetEx ? targetEx.exercise_id : '';
+    const isDirty = Boolean(exId && isPracticeExerciseDirty(exId));
     const stickySummary = document.getElementById('gform-sticky-summary');
     const maxScoreBadge = document.getElementById('teacher-practice-maxscore-badge');
     const btnSaveSticky = document.getElementById('btn-save-sticky-bar');
     const btnSaveTop = document.getElementById('btn-save-top-bar');
+    const autoPill = document.getElementById('practice-autosave-status');
 
     if (stickySummary && targetEx) {
       const baseSummary = (targetEx.sections || []).length + ' phần • Tổng ' + (targetEx.total_score || 0) + ' điểm';
-      stickySummary.textContent = isDirty ? baseSummary + ' • Chưa lưu lên máy chủ' : baseSummary;
+      stickySummary.textContent = isDirty ? baseSummary + ' • Chưa đồng bộ xong' : baseSummary;
     }
     if (maxScoreBadge && targetEx) {
       maxScoreBadge.textContent = isDirty
-        ? 'Tổng ' + (targetEx.total_score || 0) + ' điểm (nháp chưa lưu)'
+        ? 'Tổng ' + (targetEx.total_score || 0) + ' điểm (nháp)'
         : 'Tổng ' + (targetEx.total_score || 0) + ' điểm';
     }
     [btnSaveSticky, btnSaveTop].forEach(function (btn) {
       if (!btn) return;
       btn.classList.toggle('has-unsaved-draft', isDirty);
     });
+
+    if (autoPill) {
+      const stInfo = exId ? practiceAutoSaveState.statusByExId[exId] : null;
+      autoPill.classList.remove('is-pending', 'is-saving', 'is-saved', 'is-error', 'is-idle');
+      if (!targetEx) {
+        autoPill.classList.add('is-idle');
+        autoPill.innerHTML = '<span>Tự động lưu sẵn sàng</span>';
+      } else if (practiceSessionExpiredFlag || (stInfo && stInfo.state === 'session_expired')) {
+        autoPill.classList.add('is-error');
+        autoPill.innerHTML = ICONS.alert + '<span>Hết phiên • Đã lưu nháp trên máy</span>';
+      } else if (stInfo && stInfo.state === 'saving') {
+        autoPill.classList.add('is-saving');
+        autoPill.innerHTML = ICONS.refresh + '<span>Đang tự động lưu...</span>';
+      } else if (stInfo && stInfo.state === 'error') {
+        autoPill.classList.add('is-error');
+        autoPill.innerHTML = ICONS.alert + '<span>Lỗi mạng • Đã giữ nháp trên máy</span>';
+      } else if (isDirty || (stInfo && stInfo.state === 'pending')) {
+        autoPill.classList.add('is-pending');
+        autoPill.innerHTML = ICONS.clock + '<span>Đang chờ tự động lưu...</span>';
+      } else if (stInfo && stInfo.state === 'saved' && stInfo.timeLabel) {
+        autoPill.classList.add('is-saved');
+        autoPill.innerHTML = ICONS.check + '<span>Đã tự động lưu ' + escapeHtml(stInfo.timeLabel) + '</span>';
+      } else {
+        autoPill.classList.add('is-saved');
+        autoPill.innerHTML = ICONS.check + '<span>Đã đồng bộ máy chủ</span>';
+      }
+    }
+
+    renderPracticeSessionBanner();
+  }
+
+  async function runPracticeAutoSave(targetExId) {
+    const exId = String(targetExId || '').trim();
+    if (!exId) return { ok: true, skipped: true };
+    cancelPracticeAutoSaveTimer(exId);
+
+    const ex = (state.practiceExercises || []).find(function (e) {
+      return e && e.exercise_id === exId;
+    });
+    if (!ex) return { ok: true, skipped: true };
+
+    const hasRemoteBackend = Boolean(
+      (window.StudySnapStore && window.StudySnapStore.getGasUrl && window.StudySnapStore.getGasUrl()) ||
+      (window.StudySnapAuth && typeof window.StudySnapAuth.isHttpRuntime === 'function' && window.StudySnapAuth.isHttpRuntime())
+    );
+    if (!hasRemoteBackend) return { ok: true, offline: true };
+
+    if (practiceAutoSaveState.inFlight[exId]) {
+      practiceAutoSaveState.reschedule[exId] = true;
+      return { ok: true, queued: true };
+    }
+
+    const activeEx = getActivePracticeExercise();
+    if (activeEx && activeEx.exercise_id === exId && typeof collectExerciseFromDom === 'function') {
+      collectExerciseFromDom();
+    }
+
+    if (!String(ex.title || '').trim()) {
+      ex.title = 'Bài luyện tập đang soạn';
+    }
+    if (!String(ex.lesson_tag || '').trim()) {
+      ex.lesson_tag = 'Bài mới';
+    }
+    let totalScore = 0;
+    (ex.sections || []).forEach(function (s) {
+      totalScore += Number((s && s.max_score) || 0);
+    });
+    ex.total_score = totalScore;
+
+    persistPracticeBackupToLocal(ex);
+
+    const sentRev = practiceRevisionMap[exId] || 0;
+    const snapshot = JSON.parse(JSON.stringify(ex));
+    practiceAutoSaveState.inFlight[exId] = true;
+    practiceAutoSaveState.statusByExId[exId] = { state: 'saving', timeLabel: '' };
+    updatePracticeDraftStatusUi(getActivePracticeExercise());
+
+    let res = null;
+    try {
+      res = await window.StudySnapStore.savePracticeExercise(state, snapshot, {
+        silent: true,
+        skipStateOverwrite: true
+      });
+    } catch (err) {
+      res = { ok: false, error: 'Lỗi mạng khi tự động lưu.' };
+    } finally {
+      practiceAutoSaveState.inFlight[exId] = false;
+    }
+
+    const stillExists = (state.practiceExercises || []).find(function (e) {
+      return e && e.exercise_id === exId;
+    });
+    if (!stillExists) {
+      clearPracticeBackupFromLocal(exId);
+      return { ok: true, deletedDuringSave: true };
+    }
+
+    if (res && res.ok) {
+      practiceSessionExpiredFlag = false;
+      mergeResolvedMediaUrlsIntoLiveExercise(stillExists, snapshot);
+      if (res.practiceExercise) {
+        mergeResolvedMediaUrlsIntoLiveExercise(stillExists, res.practiceExercise);
+      }
+      if (window.StudySnapStore.syncLinkedPracticeAssignments) {
+        window.StudySnapStore.syncLinkedPracticeAssignments(state, stillExists);
+      }
+      window.StudySnapStore.saveState(state);
+
+      if ((practiceRevisionMap[exId] || 0) === sentRev) {
+        clearPracticeExerciseDirty(exId);
+      } else {
+        practiceAutoSaveState.statusByExId[exId] = { state: 'pending', timeLabel: '' };
+        updatePracticeDraftStatusUi(getActivePracticeExercise());
+        schedulePracticeAutoSave(stillExists);
+      }
+    } else if (res && res.sessionExpired) {
+      practiceSessionExpiredFlag = true;
+      practiceAutoSaveState.statusByExId[exId] = { state: 'session_expired', timeLabel: '' };
+      updatePracticeDraftStatusUi(getActivePracticeExercise());
+    } else {
+      practiceAutoSaveState.statusByExId[exId] = { state: 'error', timeLabel: '' };
+      updatePracticeDraftStatusUi(getActivePracticeExercise());
+    }
+
+    if (practiceAutoSaveState.reschedule[exId]) {
+      delete practiceAutoSaveState.reschedule[exId];
+      if (isPracticeExerciseDirty(exId) && !practiceSessionExpiredFlag) {
+        schedulePracticeAutoSave(stillExists, 400);
+      }
+    }
+    return res;
+  }
+
+  function schedulePracticeAutoSave(ex, customDelayMs) {
+    if (!ex || !ex.exercise_id) return;
+    const exId = ex.exercise_id;
+    const now = Date.now();
+    if (!practiceAutoSaveState.firstDirtyAt[exId]) {
+      practiceAutoSaveState.firstDirtyAt[exId] = now;
+    }
+    const elapsed = now - practiceAutoSaveState.firstDirtyAt[exId];
+    const baseDelay = typeof customDelayMs === 'number' ? customDelayMs : PRACTICE_AUTOSAVE_DEBOUNCE_MS;
+    const delay = elapsed >= PRACTICE_AUTOSAVE_MAX_WAIT_MS ? 200 : baseDelay;
+
+    if (practiceAutoSaveState.timers[exId]) {
+      clearTimeout(practiceAutoSaveState.timers[exId]);
+    }
+    practiceAutoSaveState.statusByExId[exId] = {
+      state: practiceAutoSaveState.inFlight[exId] ? 'saving' : 'pending',
+      timeLabel: ''
+    };
+    practiceAutoSaveState.timers[exId] = setTimeout(function () {
+      runPracticeAutoSave(exId);
+    }, delay);
+  }
+
+  function scheduleLocalDraftSnapshot(ex) {
+    if (!ex || !ex.exercise_id) return;
+    clearTimeout(practiceLocalBackupTimer);
+    practiceLocalBackupTimer = setTimeout(function () {
+      const activeEx = getActivePracticeExercise();
+      if (activeEx && activeEx.exercise_id === ex.exercise_id && typeof collectExerciseFromDom === 'function') {
+        collectExerciseFromDom();
+      }
+      persistPracticeBackupToLocal(ex);
+      window.StudySnapStore.saveState(state);
+    }, 350);
   }
 
   function markPracticeExerciseDirty(ex, saveToLocal) {
     if (!ex || !ex.exercise_id) return;
+    const exId = ex.exercise_id;
     if (!ui.practiceDirtyMap) ui.practiceDirtyMap = {};
-    ui.practiceDirtyMap[ex.exercise_id] = true;
+    ui.practiceDirtyMap[exId] = true;
+    practiceRevisionMap[exId] = (practiceRevisionMap[exId] || 0) + 1;
     if (saveToLocal !== false) {
+      persistPracticeBackupToLocal(ex);
       window.StudySnapStore.saveState(state);
+    } else {
+      scheduleLocalDraftSnapshot(ex);
     }
+    schedulePracticeAutoSave(ex);
     updatePracticeDraftStatusUi(ex);
   }
 
   function clearPracticeExerciseDirty(exId) {
-    if (!exId || !ui.practiceDirtyMap) return;
-    delete ui.practiceDirtyMap[exId];
+    if (!exId) return;
+    if (ui.practiceDirtyMap) delete ui.practiceDirtyMap[exId];
+    cancelPracticeAutoSaveTimer(exId);
+    clearPracticeBackupFromLocal(exId);
+    practiceSessionExpiredFlag = false;
+    practiceAutoSaveState.statusByExId[exId] = {
+      state: 'saved',
+      timeLabel: formatClockTimeShort()
+    };
     updatePracticeDraftStatusUi(getActivePracticeExercise());
   }
+
+  async function restorePendingPracticeBackupsOnStartup() {
+    const backupMap = loadPracticeBackupMap();
+    const keys = Object.keys(backupMap).filter(function (id) {
+      return backupMap[id] && backupMap[id].dirty && backupMap[id].exercise;
+    });
+    if (keys.length === 0) return false;
+
+    if (window.StudySnapPracticeAudioBackup && typeof window.StudySnapPracticeAudioBackup.loadAll === 'function') {
+      await window.StudySnapPracticeAudioBackup.loadAll();
+    }
+
+    if (!Array.isArray(state.practiceExercises)) state.practiceExercises = [];
+    const hydratedIds = [];
+    let newestId = '';
+    let newestTime = 0;
+
+    keys.forEach(function (exId) {
+      const rec = backupMap[exId];
+      const draftEx = JSON.parse(JSON.stringify(rec.exercise));
+      if (window.StudySnapPracticeAudioBackup && Array.isArray(draftEx.sections)) {
+        draftEx.sections.forEach(function (sec) {
+          if (!sec || !sec.data) return;
+          if (!sec.data.audio_url && sec.data._audio_backup_id) {
+            const clip = window.StudySnapPracticeAudioBackup.getById(sec.data._audio_backup_id);
+            if (clip && clip.dataUrl) {
+              sec.data.audio_url = clip.dataUrl;
+              sec.data.audio_duration = clip.duration || sec.data.audio_duration || '00:45';
+            }
+          }
+          if (Array.isArray(sec.data.items)) {
+            sec.data.items.forEach(function (it) {
+              if (it && !it.audio_url && it._audio_backup_id) {
+                const clip = window.StudySnapPracticeAudioBackup.getById(it._audio_backup_id);
+                if (clip && clip.dataUrl) {
+                  it.audio_url = clip.dataUrl;
+                  it.audio_duration = clip.duration || it.audio_duration || '00:25';
+                }
+              }
+            });
+          }
+        });
+      }
+
+      const existingIdx = state.practiceExercises.findIndex(function (e) {
+        return e && e.exercise_id === exId;
+      });
+      if (existingIdx >= 0) {
+        state.practiceExercises[existingIdx] = draftEx;
+      } else {
+        state.practiceExercises.push(draftEx);
+      }
+      if (!ui.practiceDirtyMap) ui.practiceDirtyMap = {};
+      ui.practiceDirtyMap[exId] = true;
+      practiceRevisionMap[exId] = (practiceRevisionMap[exId] || 0) + 1;
+      hydratedIds.push(draftEx.title || exId);
+      if ((Number(rec.savedAt) || 0) > newestTime) {
+        newestTime = Number(rec.savedAt) || 0;
+        newestId = exId;
+      }
+    });
+
+    if (newestId) {
+      ui.selectedPracticeExId = newestId;
+    }
+    window.StudySnapStore.saveState(state);
+    renderTeacherPracticeTab();
+    showToast('Đã khôi phục bản nháp chưa lưu của "' + hydratedIds[0] + '" và đang tự động đồng bộ...');
+
+    keys.forEach(function (exId) {
+      runPracticeAutoSave(exId);
+    });
+    return true;
+  }
+
+  window.__ssHasUnsavedDraftProtection = function () {
+    const dirtyMap = ui.practiceDirtyMap || {};
+    const hasDirty = Object.keys(dirtyMap).some(function (id) { return Boolean(dirtyMap[id]); });
+    const activeListeningRec = Boolean(document.querySelector('[data-ls-audio-rec][data-recording="1"]'));
+    return Boolean(hasDirty || ui.isTeacherRecording || activeListeningRec || ui.activeTab === 'practice');
+  };
+
+  window.__ssBeforeSessionExpire = function () {
+    const activeEx = getActivePracticeExercise();
+    if (activeEx && ui.activeTab === 'practice' && typeof collectExerciseFromDom === 'function') {
+      collectExerciseFromDom();
+      persistPracticeBackupToLocal(activeEx);
+    }
+    (state.practiceExercises || []).forEach(function (ex) {
+      if (ex && isPracticeExerciseDirty(ex.exercise_id)) {
+        persistPracticeBackupToLocal(ex);
+      }
+    });
+  };
+
+  window.__ssNotifySessionExpiredSilent = function () {
+    window.__ssBeforeSessionExpire();
+    practiceSessionExpiredFlag = true;
+    const activeEx = getActivePracticeExercise();
+    if (activeEx) {
+      practiceAutoSaveState.statusByExId[activeEx.exercise_id] = { state: 'session_expired', timeLabel: '' };
+    }
+    updatePracticeDraftStatusUi(activeEx);
+    showToast('Phiên Giáo viên đã hết hạn — bản soạn & file nghe vẫn đang giữ an toàn trên máy!');
+  };
 
   function savePracticeDraftLocally(ex) {
     if (!ex) return;
@@ -157,6 +661,7 @@
     if (!ex || !isPracticeExerciseDirty(ex.exercise_id)) {
       return { ok: true, skipped: true };
     }
+    cancelPracticeAutoSaveTimer(ex.exercise_id);
     const activeEx = getActivePracticeExercise();
     if (activeEx && activeEx.exercise_id === ex.exercise_id) {
       collectExerciseFromDom();
@@ -174,6 +679,8 @@
     );
     if (!res || res.ok !== false) {
       clearPracticeExerciseDirty(ex.exercise_id);
+    } else if (res && res.sessionExpired && typeof window.__ssNotifySessionExpiredSilent === 'function') {
+      window.__ssNotifySessionExpiredSilent();
     }
     return res;
   }
@@ -2173,9 +2680,22 @@
     listEl.innerHTML = filteredStudents.map(function (st) {
       const uname = st.username || st.student_id.toLowerCase();
       const issuedPwd = sessionIssuedPasswords.get(st.student_id) || '';
-      const pwdHtml = issuedPwd
-        ? 'Mật khẩu vừa cấp: <strong>' + escapeHtml(issuedPwd) + '</strong>'
-        : 'Mật khẩu: <strong>Đã mã hóa (an toàn)</strong>';
+      const isPwdVisible = Boolean(issuedPwd) && visibleStudentPasswordIds.has(st.student_id);
+      const isLegacyUnviewable = !issuedPwd && st.has_viewable_password === false;
+      const pwdHtml = isPwdVisible
+        ? 'Mật khẩu: <span class="student-pwd-chip is-revealed" title="Mật khẩu hiện tại của học sinh">' + escapeHtml(issuedPwd) + '</span>'
+        : isLegacyUnviewable
+          ? 'Mật khẩu: <span class="student-pwd-chip is-legacy" title="Tài khoản tạo trước khi bật lưu xem mật khẩu — bấm Đổi mật khẩu để cấp mới, hoặc khi học sinh đăng nhập hệ thống sẽ tự lưu">Chưa lưu bản xem (bấm Đổi MK để cấp lại)</span>'
+          : 'Mật khẩu: <span class="student-pwd-chip is-masked" title="Nhấn Xem MK để hiển thị mật khẩu hiện tại">••••••</span>';
+      const toggleBtnHtml = isPwdVisible
+        ? '<button type="button" class="btn btn-outline btn-sm btn-toggle-pwd" data-toggle-password="' + escapeHtml(st.student_id) + '" aria-pressed="true" title="Ẩn mật khẩu học sinh">' +
+            ICONS.eyeOff +
+            '<span>Ẩn MK</span>' +
+          '</button>'
+        : '<button type="button" class="btn btn-outline btn-sm btn-toggle-pwd" data-toggle-password="' + escapeHtml(st.student_id) + '" aria-pressed="false" title="' + (isLegacyUnviewable ? 'Kiểm tra hoặc cấp lại mật khẩu mới' : 'Xem mật khẩu hiện tại của học sinh') + '">' +
+            ICONS.eye +
+            '<span>Xem MK</span>' +
+          '</button>';
       return '<div class="quick-account-row">' +
         '<div class="student-cell-info">' +
           '<span class="student-avatar">' + escapeHtml(st.avatar_initials) + '</span>' +
@@ -2184,8 +2704,10 @@
               '<span>' + escapeHtml(st.full_name) + ' (' + escapeHtml(st.student_id) + ')</span>' +
               '<span class="status-badge status-submitted" style="font-size:0.75rem;">' + escapeHtml(st.class_name || 'Chưa xếp lớp') + '</span>' +
             '</div>' +
-            '<div class="tabular-nums" style="font-size:0.8125rem;color:var(--color-muted-foreground);margin-top:2px;">' +
-              'Tên đăng nhập: <strong>' + escapeHtml(uname) + '</strong> • ' + pwdHtml +
+            '<div class="tabular-nums student-account-meta-line">' +
+              '<span>Tên đăng nhập: <strong>' + escapeHtml(uname) + '</strong></span>' +
+              '<span aria-hidden="true">•</span>' +
+              '<span>' + pwdHtml + '</span>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -2193,6 +2715,7 @@
           '<button type="button" class="btn btn-outline btn-sm" data-change-student-class="' + escapeHtml(st.student_id) + '" title="Chuyển lớp cho học sinh này">' +
             '<span>Đổi lớp</span>' +
           '</button>' +
+          toggleBtnHtml +
           '<button type="button" class="btn btn-outline btn-sm" data-copy-credentials="' + escapeHtml(st.student_id) + '|' + escapeHtml(st.full_name) + '|' + escapeHtml(uname) + '">' +
             '<span>Sao chép TK</span>' +
           '</button>' +
@@ -3646,6 +4169,7 @@
       if (maxScoreBadge) maxScoreBadge.textContent = 'Tổng 0 điểm';
       if (stickySummaryBadge) stickySummaryBadge.textContent = '0 phần • Tổng 0 điểm';
       if (subCountPill) subCountPill.textContent = '0';
+      updatePracticeDraftStatusUi(null);
       renderPracticeDeliveryBar(null);
 
       const listEl = document.getElementById('teacher-builder-sections-list');
@@ -4418,6 +4942,7 @@
 
       function renderListeningAudioEditorHtml(opts) {
         const targetKey = opts.targetKey;
+        const exId = opts.exerciseId || '';
         const aLabel = (opts.audioLabel || '').trim();
         const aUrl = (opts.audioUrl || '').trim();
         const hasPreview = Boolean(aUrl && aUrl.indexOf('demo:') !== 0);
@@ -4436,6 +4961,42 @@
               }) +
             '</div>'
           : '<div style="font-size:0.8125rem;color:var(--muted);">Chưa có file âm thanh — bấm <strong>Tải file Audio</strong> (.mp3/.m4a/.wav...), <strong>Ghi âm trực tiếp</strong> hoặc dán đường dẫn audio vào ô bên dưới.</div>';
+
+        const backupClips = window.StudySnapPracticeAudioBackup
+          ? window.StudySnapPracticeAudioBackup.listCached().filter(function (c) {
+              if (!c || !c.dataUrl) return false;
+              if (exId && c.exerciseId === exId) {
+                return c.targetKey === targetKey || c.status === 'backup_only';
+              }
+              return false;
+            }).slice(0, 6)
+          : [];
+        const hasPendingBackup = backupClips.some(function (c) { return c.status === 'backup_only' || c.status === 'pending_upload'; });
+        const backupDrawerHtml = backupClips.length > 0
+          ? '<details class="listening-backup-box"' + (hasPendingBackup ? ' open' : '') + '>' +
+              '<summary>Bản thu dự phòng trên máy (' + backupClips.length + (hasPendingBackup ? ' · Có bản chưa lên máy chủ' : '') + ')</summary>' +
+              '<div class="listening-backup-list">' +
+                backupClips.map(function (c) {
+                  const statusTxt = c.status === 'uploaded'
+                    ? 'Đã lên Drive'
+                    : 'Giữ tạm trên máy';
+                  const statusClass = c.status === 'uploaded' ? 'status-graded' : 'status-missing';
+                  return '<div class="listening-backup-row">' +
+                    '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+                      '<strong>' + escapeHtml(c.label || 'Bản ghi âm') + '</strong>' +
+                      '<span class="tabular-nums" style="color:var(--color-muted-foreground);">' + escapeHtml(c.duration || '00:30') + ' · ' + escapeHtml(c.createdLabel || '') + '</span>' +
+                      '<span class="status-badge ' + statusClass + '" style="font-size:0.75rem;">' + statusTxt + '</span>' +
+                    '</div>' +
+                    '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+                      '<button type="button" class="btn btn-outline btn-sm" data-pa-play="' + escapeHtml(c.id) + '">Nghe thử</button>' +
+                      '<button type="button" class="btn btn-secondary btn-sm" data-pa-restore="' + escapeHtml(c.id) + '|' + escapeHtml(exId) + '|' + escapeHtml(targetKey) + '">Khôi phục vào ô này</button>' +
+                      '<button type="button" class="btn-danger-outline btn-sm" data-pa-delete="' + escapeHtml(c.id) + '">Xóa</button>' +
+                    '</div>' +
+                  '</div>';
+                }).join('') +
+              '</div>' +
+            '</details>'
+          : '';
 
         const urlAndLabelRowHtml = opts.includeLabelField
           ? '<div class="form-row-2">' +
@@ -4469,7 +5030,8 @@
               : '') +
           '</div>' +
           urlAndLabelRowHtml +
-          previewHtml
+          previewHtml +
+          backupDrawerHtml
         );
       }
 
@@ -4544,6 +5106,7 @@
             ? '<div class="listening-question-audio-box">' +
                 '<div style="font-size:0.8125rem;font-weight:700;color:var(--color-primary-deep);">File nghe riêng cho Câu ' + (idx + 1) + '</div>' +
                 renderListeningAudioEditorHtml({
+                  exerciseId: ex.exercise_id,
                   targetKey: sec.section_id + ':' + item.id,
                   playerId: 'ls-builder-' + sec.section_id + '-' + item.id,
                   audioLabel: item.audio_label || '',
@@ -4623,6 +5186,7 @@
         (renderBuilderSectionMediaHtml(sec, false)) +
         (listeningMode === 'shared'
           ? renderListeningAudioEditorHtml({
+              exerciseId: ex.exercise_id,
               targetKey: sec.section_id,
               playerId: 'ls-builder-' + sec.section_id,
               audioLabel: data.audio_label || '',
@@ -5178,11 +5742,52 @@
         resolved.targetObj.audio_label = resolved.defaultLabelPrefix || opts.suggestedLabel;
       }
 
+      let backupClip = null;
+      if (dataUrl.indexOf('data:') === 0 && window.StudySnapPracticeAudioBackup) {
+        try {
+          backupClip = await window.StudySnapPracticeAudioBackup.addTake({
+            exerciseId: liveEx.exercise_id,
+            exerciseTitle: liveEx.title || '',
+            targetKey: targetKey,
+            label: resolved.targetObj.audio_label || resolved.defaultLabelPrefix || 'Audio bài nghe',
+            duration: resolved.targetObj.audio_duration,
+            dataUrl: dataUrl,
+            status: 'pending_upload'
+          });
+          if (backupClip && backupClip.id) {
+            resolved.targetObj._audio_backup_id = backupClip.id;
+          }
+        } catch (bkErr) {
+          // Non-fatal backup error
+        }
+      }
+
       const urlInputEl = document.querySelector('[data-ls-audio-url="' + targetKey + '"]');
       if (urlInputEl) {
         urlInputEl.value = dataUrl;
       }
       savePracticeDraftLocally(liveEx);
+      cancelPracticeAutoSaveTimer(liveEx.exercise_id);
+
+      if (
+        window.StudySnapAuth &&
+        typeof window.StudySnapAuth.isHttpRuntime === 'function' &&
+        window.StudySnapAuth.isHttpRuntime() &&
+        typeof window.StudySnapAuth.syncSessionFromServer === 'function'
+      ) {
+        const sesChk = await window.StudySnapAuth.syncSessionFromServer('teacher', { noRedirect: true });
+        if (sesChk && sesChk.checked && (!sesChk.authenticated || sesChk.roleMismatch)) {
+          if (backupClip && window.StudySnapPracticeAudioBackup) {
+            await window.StudySnapPracticeAudioBackup.markStatus(backupClip.id, 'backup_only');
+          }
+          if (typeof window.__ssNotifySessionExpiredSilent === 'function') {
+            window.__ssNotifySessionExpiredSilent();
+          }
+          renderTeacherPracticeTab();
+          showToast('Phiên Giáo viên đã hết hạn — bản thu đã lưu an toàn trên máy! Hãy mở đăng nhập tab mới rồi bấm "Lưu đề nhanh".');
+          return;
+        }
+      }
 
       const saveRes = await runWithLoading(
         (opts && opts.triggerBtn) || null,
@@ -5201,21 +5806,34 @@
           return e.exercise_id === liveEx.exercise_id;
         }) || liveEx;
       const verifiedTarget = resolveListeningAudioTarget(targetKey, latestEx);
-      const hasSavedAudio = Boolean(
-        verifiedTarget && verifiedTarget.targetObj && String(verifiedTarget.targetObj.audio_url || '').trim()
-      );
+      const savedUrl = verifiedTarget && verifiedTarget.targetObj ? String(verifiedTarget.targetObj.audio_url || '').trim() : '';
+      const hasSavedAudio = Boolean(savedUrl && savedUrl.indexOf('data:') !== 0);
 
-      if (saveRes && saveRes.ok === true && hasSavedAudio) {
+      if (saveRes && saveRes.ok === true && (hasSavedAudio || savedUrl)) {
+        if (verifiedTarget && verifiedTarget.targetObj && savedUrl.indexOf('data:') !== 0) {
+          delete verifiedTarget.targetObj._audio_backup_id;
+        }
+        if (backupClip && window.StudySnapPracticeAudioBackup) {
+          await window.StudySnapPracticeAudioBackup.markStatus(backupClip.id, 'uploaded', {
+            remoteUrl: savedUrl.indexOf('data:') !== 0 ? savedUrl : ''
+          });
+        }
         clearPracticeExerciseDirty(liveEx.exercise_id);
         renderTeacherPracticeTab();
         showToast((opts && opts.successToast) || 'Đã tải lên và lưu file nghe!');
       } else {
+        if (backupClip && window.StudySnapPracticeAudioBackup) {
+          await window.StudySnapPracticeAudioBackup.markStatus(backupClip.id, 'backup_only');
+        }
         markPracticeExerciseDirty(latestEx, true);
+        if (saveRes && saveRes.sessionExpired && typeof window.__ssNotifySessionExpiredSilent === 'function') {
+          window.__ssNotifySessionExpiredSilent();
+        }
         renderTeacherPracticeTab();
         const errMsg =
           (saveRes && saveRes.error) ||
           (opts && opts.fallbackError) ||
-          'Chưa thể tải file nghe lên Google Drive / máy chủ (tệp đang giữ tạm để nghe thử trên máy này — hãy thử bấm "Lưu đề nhanh").';
+          'Chưa thể tải file nghe lên Google Drive / máy chủ (bản thu đã lưu dự phòng trên máy — hãy thử bấm "Lưu đề nhanh").';
         showToast(errMsg);
       }
     }
@@ -6819,6 +7437,12 @@
     const selectEl = document.getElementById('teacher-practice-select');
     if (selectEl) {
       selectEl.addEventListener('change', function () {
+        const prevEx = getActivePracticeExercise();
+        if (prevEx && isPracticeExerciseDirty(prevEx.exercise_id)) {
+          collectExerciseFromDom();
+          persistPracticeBackupToLocal(prevEx);
+          runPracticeAutoSave(prevEx.exercise_id);
+        }
         ui.selectedPracticeExId = selectEl.value;
         renderTeacherPracticeTab();
       });
@@ -7027,19 +7651,19 @@
       });
     }
 
-    // Title & Tag live-sync locally to active exercise and dropdown (no network sync per keystroke)
+    // Title & Tag live-sync locally to active exercise and auto-save on pause
     const metaTitleInput = document.getElementById('ex-meta-title');
     const metaTagInput = document.getElementById('ex-meta-tag');
     function syncMetaInputsToActiveEx() {
       const ex = getActivePracticeExercise();
       if (!ex) return;
-      if (metaTitleInput && metaTitleInput.value.trim()) {
-        ex.title = metaTitleInput.value.trim();
+      if (metaTitleInput) {
+        ex.title = metaTitleInput.value.trim() || ex.title;
       }
-      if (metaTagInput && metaTagInput.value.trim()) {
-        ex.lesson_tag = metaTagInput.value.trim();
+      if (metaTagInput) {
+        ex.lesson_tag = metaTagInput.value.trim() || ex.lesson_tag;
       }
-      markPracticeExerciseDirty(ex, true);
+      markPracticeExerciseDirty(ex, false);
       const sel = document.getElementById('teacher-practice-select');
       if (sel) {
         const opt = sel.querySelector('option[value="' + ex.exercise_id + '"]');
@@ -7173,6 +7797,7 @@
         });
         ex.total_score = total;
 
+        cancelPracticeAutoSaveTimer(ex.exercise_id);
         const saveBtns = [
           document.getElementById('btn-save-top-bar'),
           document.getElementById('btn-save-sticky-bar'),
@@ -7182,6 +7807,10 @@
           return await window.StudySnapStore.savePracticeExercise(state, ex);
         });
         if (res && res.ok === false) {
+          if (res.sessionExpired) {
+            markPracticeExerciseDirty(ex, true);
+            return;
+          }
           alert(res.error || 'Không thể lưu bài tập lên máy chủ. Vui lòng thử lại.');
           return;
         }
@@ -7204,9 +7833,11 @@
               '" không? Toàn bộ câu hỏi và bài nộp sẽ bị xóa.'
           )
         ) {
+          cancelPracticeAutoSaveTimer(ex.exercise_id);
           await runWithLoading(btnDeleteEx, 'Đang xóa...', async function () {
             await window.StudySnapStore.deletePracticeExercise(state, ex.exercise_id);
           });
+          delete practiceAutoSaveState.statusByExId[ex.exercise_id];
           clearPracticeExerciseDirty(ex.exercise_id);
           ui.selectedPracticeExId =
             state.practiceExercises && state.practiceExercises[0]
@@ -7535,6 +8166,14 @@
   }
 
   function switchTeacherTab(tabId) {
+    if (ui.activeTab === 'practice' && tabId !== 'practice') {
+      const prevEx = getActivePracticeExercise();
+      if (prevEx && isPracticeExerciseDirty(prevEx.exercise_id)) {
+        collectExerciseFromDom();
+        persistPracticeBackupToLocal(prevEx);
+        runPracticeAutoSave(prevEx.exercise_id);
+      }
+    }
     ui.activeTab = tabId;
     document.querySelectorAll('[data-teacher-tab]').forEach(function (b) {
       b.classList.toggle('is-active', b.getAttribute('data-teacher-tab') === tabId);
@@ -7583,6 +8222,7 @@
     if (logoutBtn) {
       logoutBtn.addEventListener('click', function () {
         sessionIssuedPasswords.clear();
+        visibleStudentPasswordIds.clear();
         window.StudySnapAuth.logout();
       });
     }
@@ -9099,11 +9739,13 @@
           class_name: className,
           avatar_initials: initials,
           username: username,
+          has_viewable_password: true,
           created_at: new Date().toLocaleDateString('vi-VN')
         };
 
         state.students.push(newStudent);
         sessionIssuedPasswords.set(nextId, password);
+        visibleStudentPasswordIds.add(nextId);
         window.StudySnapStore.saveState(state);
 
         let createRes = null;
@@ -9122,8 +9764,12 @@
         if (createRes && createRes.student) {
           const finalId = createRes.student.student_id || newStudent.student_id;
           newStudent.student_id = finalId;
+          if (createRes.student.has_viewable_password !== undefined) {
+            newStudent.has_viewable_password = Boolean(createRes.student.has_viewable_password);
+          }
           if (createRes.student.password) {
             sessionIssuedPasswords.set(finalId, String(createRes.student.password));
+            visibleStudentPasswordIds.add(finalId);
           }
         }
 
@@ -11675,6 +12321,8 @@
           ui.activeGradingSubId = null;
         }
 
+        sessionIssuedPasswords.delete(targetStudent.student_id);
+        visibleStudentPasswordIds.delete(targetStudent.student_id);
         closeDeleteStudentModal(true);
         renderAll();
         showToast('Đã xóa học sinh ' + targetStudent.full_name + ' (' + targetStudent.student_id + ') khỏi hệ thống!');
@@ -11790,6 +12438,51 @@
         return;
       }
 
+      const togglePwdBtn = ev.target.closest('[data-toggle-password]');
+      if (togglePwdBtn) {
+        const stId = togglePwdBtn.getAttribute('data-toggle-password');
+        const st = findStudent(stId);
+        if (!st) return;
+
+        if (visibleStudentPasswordIds.has(st.student_id) && sessionIssuedPasswords.has(st.student_id)) {
+          visibleStudentPasswordIds.delete(st.student_id);
+          renderStudentAccountsTab();
+          return;
+        }
+
+        if (sessionIssuedPasswords.has(st.student_id)) {
+          visibleStudentPasswordIds.add(st.student_id);
+          renderStudentAccountsTab();
+          return;
+        }
+
+        let revealRes = null;
+        await runWithLoading(togglePwdBtn, 'Đang lấy...', async function () {
+          revealRes = await window.StudySnapStore.revealStudentPassword(state, st.student_id);
+        });
+
+        if (!revealRes || !revealRes.ok) {
+          showToast((revealRes && revealRes.error) || 'Không thể lấy mật khẩu lúc này. Vui lòng thử lại!');
+          return;
+        }
+
+        if (revealRes.password) {
+          sessionIssuedPasswords.set(st.student_id, String(revealRes.password));
+          visibleStudentPasswordIds.add(st.student_id);
+          st.has_viewable_password = true;
+          renderStudentAccountsTab();
+          showToast('Đã hiển thị mật khẩu của ' + st.full_name + '.');
+        } else {
+          st.has_viewable_password = false;
+          visibleStudentPasswordIds.delete(st.student_id);
+          renderStudentAccountsTab();
+          showToast(
+            'Tài khoản "' + (st.username || st.student_id) + '" tạo trước khi bật tính năng xem mật khẩu. Hãy bấm "Đổi mật khẩu" để cấp mới (hoặc sau khi học sinh đăng nhập hệ thống sẽ tự lưu).'
+          );
+        }
+        return;
+      }
+
       const copyBtn = ev.target.closest('[data-copy-credentials]');
       if (copyBtn) {
         const parts = copyBtn.getAttribute('data-copy-credentials').split('|');
@@ -11804,14 +12497,33 @@
           fullNameTxt = parts[0] || '';
           unameTxt = parts[1] || '';
         }
-        const issuedPwd = sessionIssuedPasswords.get(stuIdKey) || '';
+
+        let issuedPwd = sessionIssuedPasswords.get(stuIdKey) || '';
+        const stObj = stuIdKey ? findStudent(stuIdKey) : null;
+        if (!issuedPwd && stuIdKey) {
+          let revealRes = null;
+          await runWithLoading(copyBtn, 'Đang lấy...', async function () {
+            revealRes = await window.StudySnapStore.revealStudentPassword(state, stuIdKey);
+          });
+          if (revealRes && revealRes.ok && revealRes.password) {
+            issuedPwd = String(revealRes.password);
+            sessionIssuedPasswords.set(stuIdKey, issuedPwd);
+            if (stObj) stObj.has_viewable_password = true;
+          } else if (revealRes && revealRes.ok && !revealRes.password) {
+            if (stObj) stObj.has_viewable_password = false;
+            renderStudentAccountsTab();
+          }
+        }
+
         const copyText = issuedPwd
           ? ('Tài khoản StudySnap của ' + fullNameTxt + ' — Tên đăng nhập: ' + unameTxt + ' | Mật khẩu: ' + issuedPwd)
-          : ('Tài khoản StudySnap của ' + fullNameTxt + ' — Tên đăng nhập: ' + unameTxt + ' (mật khẩu đang được mã hóa bảo mật; nếu quên vui lòng bấm Đổi mật khẩu để cấp lại)');
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(copyText);
+          : ('Tài khoản StudySnap của ' + fullNameTxt + ' — Tên đăng nhập: ' + unameTxt + ' (tài khoản tạo trước bản cập nhật nên chưa lưu mật khẩu cũ; vui lòng bấm Đổi mật khẩu để cấp mới)');
+        const copiedOk = await copyTextWithFallback(copyText);
+        if (!copiedOk && issuedPwd && stuIdKey) {
+          visibleStudentPasswordIds.add(stuIdKey);
+          renderStudentAccountsTab();
         }
-        showToast('Đã sao chép: ' + copyText);
+        showToast(copiedOk ? ('Đã sao chép: ' + copyText) : copyText);
         return;
       }
 
@@ -11842,6 +12554,8 @@
           }
           const finalPwd = (resetRes && resetRes.student && resetRes.student.password) || cleanPwd;
           sessionIssuedPasswords.set(st.student_id, String(finalPwd));
+          visibleStudentPasswordIds.add(st.student_id);
+          st.has_viewable_password = true;
           renderStudentAccountsTab();
           showToast('Đã cập nhật mật khẩu mới cho ' + st.full_name + ': ' + finalPwd);
         }
@@ -12040,6 +12754,122 @@
         }
         return;
       }
+
+      // Mở trang đăng nhập ở tab mới khi hết phiên giữa lúc đang soạn bài
+      const reloginBtn = ev.target.closest('#btn-open-relogin-new-tab');
+      if (reloginBtn) {
+        window.open('index.html?session=expired', '_blank', 'noopener');
+        return;
+      }
+
+      // Thử kiểm tra phiên và đồng bộ lại toàn bộ bản nháp chưa lưu
+      const retrySyncBtn = ev.target.closest('#btn-retry-practice-sync');
+      if (retrySyncBtn) {
+        await runWithLoading(retrySyncBtn, 'Đang đồng bộ...', async function () {
+          if (
+            window.StudySnapAuth &&
+            typeof window.StudySnapAuth.isHttpRuntime === 'function' &&
+            window.StudySnapAuth.isHttpRuntime() &&
+            typeof window.StudySnapAuth.syncSessionFromServer === 'function'
+          ) {
+            const ses = await window.StudySnapAuth.syncSessionFromServer('teacher', { noRedirect: true });
+            if (ses && ses.checked && (!ses.authenticated || ses.roleMismatch)) {
+              showToast('Chưa có phiên Giáo viên hợp lệ. Hãy đăng nhập Giáo viên ở tab mới rồi bấm Thử lưu lại!');
+              return;
+            }
+          }
+          practiceSessionExpiredFlag = false;
+          const activeEx = getActivePracticeExercise();
+          if (activeEx && typeof collectExerciseFromDom === 'function') {
+            collectExerciseFromDom();
+          }
+          const dirtyIds = Object.keys(ui.practiceDirtyMap || {}).filter(function (id) {
+            return Boolean(ui.practiceDirtyMap[id]);
+          });
+          const targets = dirtyIds.length > 0 ? dirtyIds : (activeEx ? [activeEx.exercise_id] : []);
+          let allOk = true;
+          for (let i = 0; i < targets.length; i++) {
+            const r = await runPracticeAutoSave(targets[i]);
+            if (r && r.ok === false) allOk = false;
+          }
+          renderTeacherPracticeTab();
+          if (allOk) {
+            showToast('Đã đồng bộ lại toàn bộ bài soạn & file nghe lên máy chủ!');
+          }
+        });
+        return;
+      }
+
+      // Nghe thử bản thu bài nghe dự phòng từ IndexedDB
+      const paPlayBtn = ev.target.closest('[data-pa-play]');
+      if (paPlayBtn && window.StudySnapPracticeAudioBackup) {
+        const clipId = paPlayBtn.getAttribute('data-pa-play');
+        const clip = window.StudySnapPracticeAudioBackup.getById(clipId);
+        if (clip && clip.dataUrl && window.StudySnapAudio) {
+          window.StudySnapAudio.playMediaOrDemo(clip.dataUrl, '', 'zh-CN');
+          showToast('Đang phát bản thu dự phòng (' + (clip.duration || '00:30') + ')...');
+        } else {
+          showToast('Không tìm thấy dữ liệu bản thu trên máy.');
+        }
+        return;
+      }
+
+      // Khôi phục bản thu bài nghe từ IndexedDB vào đúng phần/câu hỏi và tự động lưu
+      const paRestoreBtn = ev.target.closest('[data-pa-restore]');
+      if (paRestoreBtn && window.StudySnapPracticeAudioBackup) {
+        const rawMeta = String(paRestoreBtn.getAttribute('data-pa-restore') || '').split('|');
+        const clipId = rawMeta[0] || '';
+        const targetExId = rawMeta[1] || '';
+        const targetKey = rawMeta[2] || '';
+        const clip = window.StudySnapPracticeAudioBackup.getById(clipId);
+        if (!clip || !clip.dataUrl) {
+          showToast('Không tìm thấy bản thu để khôi phục.');
+          return;
+        }
+        const targetEx = (state.practiceExercises || []).find(function (e) { return e && e.exercise_id === targetExId; }) || getActivePracticeExercise();
+        if (!targetEx) return;
+        if (getActivePracticeExercise() && getActivePracticeExercise().exercise_id === targetEx.exercise_id) {
+          collectExerciseFromDom();
+        }
+        const sepIdx = targetKey.indexOf(':');
+        const secId = sepIdx >= 0 ? targetKey.slice(0, sepIdx) : targetKey;
+        const itemId = sepIdx >= 0 ? targetKey.slice(sepIdx + 1) : '';
+        const sec = (targetEx.sections || []).find(function (s) { return s && s.section_id === secId; });
+        let targetObj = sec && sec.data ? sec.data : null;
+        if (itemId && targetObj && Array.isArray(targetObj.items)) {
+          targetObj = targetObj.items.find(function (it) { return it && it.id === itemId; }) || null;
+        }
+        if (!targetObj) {
+          showToast('Không tìm thấy phần câu hỏi để khôi phục file nghe.');
+          return;
+        }
+        targetObj.audio_url = clip.dataUrl;
+        targetObj.audio_duration = clip.duration || targetObj.audio_duration || '00:30';
+        targetObj._audio_backup_id = clip.id;
+        savePracticeDraftLocally(targetEx);
+        renderTeacherPracticeTab();
+        await runWithLoading(paRestoreBtn, 'Đang khôi phục...', async function () {
+          await runPracticeAutoSave(targetEx.exercise_id);
+        });
+        renderTeacherPracticeTab();
+        if (!practiceSessionExpiredFlag && !isPracticeExerciseDirty(targetEx.exercise_id)) {
+          await window.StudySnapPracticeAudioBackup.markStatus(clip.id, 'uploaded');
+          showToast('Đã khôi phục và đồng bộ bản thu lên máy chủ!');
+        } else {
+          showToast('Đã khôi phục bản thu vào bài soạn trên máy!');
+        }
+        return;
+      }
+
+      // Xóa bản thu bài nghe dự phòng khỏi IndexedDB
+      const paDeleteBtn = ev.target.closest('[data-pa-delete]');
+      if (paDeleteBtn && window.StudySnapPracticeAudioBackup) {
+        const clipId = paDeleteBtn.getAttribute('data-pa-delete');
+        await window.StudySnapPracticeAudioBackup.removeTake(clipId);
+        renderTeacherPracticeTab();
+        showToast('Đã xóa bản thu dự phòng khỏi máy.');
+        return;
+      }
     });
   }
 
@@ -12056,6 +12886,9 @@
 
   if (typeof window.addEventListener === 'function') {
     window.addEventListener('beforeunload', function (ev) {
+      if (typeof window.__ssBeforeSessionExpire === 'function') {
+        window.__ssBeforeSessionExpire();
+      }
       const dirtyMap = ui.practiceDirtyMap || {};
       const hasDirty = Object.keys(dirtyMap).some(function (id) {
         return Boolean(dirtyMap[id]);
@@ -12063,6 +12896,21 @@
       if (hasDirty) {
         ev.preventDefault();
         ev.returnValue = '';
+      }
+    });
+  }
+
+  if (typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') {
+        const activeEx = getActivePracticeExercise();
+        if (activeEx && isPracticeExerciseDirty(activeEx.exercise_id)) {
+          if (ui.activeTab === 'practice' && typeof collectExerciseFromDom === 'function') {
+            collectExerciseFromDom();
+          }
+          persistPracticeBackupToLocal(activeEx);
+          runPracticeAutoSave(activeEx.exercise_id);
+        }
       }
     });
   }
@@ -12075,11 +12923,18 @@
         renderTeacherVoiceHistoryPanel();
       });
     }
+    if (window.StudySnapPracticeAudioBackup && typeof window.StudySnapPracticeAudioBackup.loadAll === 'function') {
+      window.StudySnapPracticeAudioBackup.loadAll().then(function () {
+        if (ui.activeTab === 'practice') {
+          renderTeacherPracticeTab();
+        }
+      });
+    }
     if (
       window.StudySnapStore.getGasUrl() ||
       (window.StudySnapAuth && typeof window.StudySnapAuth.isHttpRuntime === 'function' && window.StudySnapAuth.isHttpRuntime())
     ) {
-      window.StudySnapStore.fetchBootstrapFromGas(state).then(function (remoteRes) {
+      window.StudySnapStore.fetchBootstrapFromGas(state).then(async function (remoteRes) {
         if (remoteRes && remoteRes.sessionExpired) {
           return;
         }
@@ -12096,8 +12951,30 @@
             return;
           }
         }
+        await restorePendingPracticeBackupsOnStartup();
         renderAll();
       });
+    } else {
+      restorePendingPracticeBackupsOnStartup();
+    }
+
+    if (
+      typeof window.setInterval === 'function' &&
+      window.StudySnapAuth &&
+      typeof window.StudySnapAuth.isHttpRuntime === 'function' &&
+      window.StudySnapAuth.isHttpRuntime()
+    ) {
+      window.setInterval(function () {
+        if (document.visibilityState === 'visible' && !practiceSessionExpiredFlag) {
+          window.StudySnapAuth.syncSessionFromServer('teacher', { noRedirect: true }).then(function (ses) {
+            if (ses && ses.checked && (!ses.authenticated || ses.roleMismatch)) {
+              if (typeof window.__ssNotifySessionExpiredSilent === 'function') {
+                window.__ssNotifySessionExpiredSilent();
+              }
+            }
+          });
+        }
+      }, 8 * 60 * 1000);
     }
   });
 })();

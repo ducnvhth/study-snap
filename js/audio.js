@@ -3208,11 +3208,8 @@ window.StudySnapAudio = (function () {
     modal.classList.add('is-open');
   }
 
-  // Lịch sử các bản thu Voice Feedback của Giáo viên (IndexedDB + bộ nhớ dự phòng)
-  const teacherVoiceHistoryStore = (function () {
-    const DB_NAME = 'studysnap_teacher_voice_history_v1';
-    const STORE_NAME = 'takes';
-    const MAX_ITEMS = 25;
+  // Bộ lưu trữ lịch sử bản thu trong IndexedDB (dùng chung cho Voice Feedback & Bản thu bài nghe)
+  function createIndexedDbTakeStore(dbName, storeName, maxItems, normalizeEntryFn) {
     let memList = [];
     let loaded = false;
     let dbPromise = null;
@@ -3222,11 +3219,11 @@ window.StudySnapAudio = (function () {
       if (typeof indexedDB === 'undefined') return Promise.resolve(null);
       dbPromise = new Promise(function (resolve) {
         try {
-          const req = indexedDB.open(DB_NAME, 1);
+          const req = indexedDB.open(dbName, 1);
           req.onupgradeneeded = function (ev) {
             const db = ev.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-              const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            if (!db.objectStoreNames.contains(storeName)) {
+              const store = db.createObjectStore(storeName, { keyPath: 'id' });
               store.createIndex('createdAt', 'createdAt', { unique: false });
             }
           };
@@ -3249,12 +3246,12 @@ window.StudySnapAudio = (function () {
       }
       return await new Promise(function (resolve) {
         try {
-          const tx = db.transaction(STORE_NAME, 'readonly');
-          const req = tx.objectStore(STORE_NAME).getAll();
+          const tx = db.transaction(storeName, 'readonly');
+          const req = tx.objectStore(storeName).getAll();
           req.onsuccess = function () {
             const items = Array.isArray(req.result) ? req.result : [];
             items.sort(function (a, b) { return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0); });
-            memList = items.slice(0, MAX_ITEMS);
+            memList = items.slice(0, maxItems);
             loaded = true;
             resolve(memList.slice());
           };
@@ -3274,8 +3271,8 @@ window.StudySnapAudio = (function () {
       if (!db || !item) return;
       await new Promise(function (resolve) {
         try {
-          const tx = db.transaction(STORE_NAME, 'readwrite');
-          tx.objectStore(STORE_NAME).put(item);
+          const tx = db.transaction(storeName, 'readwrite');
+          tx.objectStore(storeName).put(item);
           tx.oncomplete = function () { resolve(); };
           tx.onerror = function () { resolve(); };
         } catch (e) {
@@ -3289,8 +3286,8 @@ window.StudySnapAudio = (function () {
       if (!db || !ids || !ids.length) return;
       await new Promise(function (resolve) {
         try {
-          const tx = db.transaction(STORE_NAME, 'readwrite');
-          const store = tx.objectStore(STORE_NAME);
+          const tx = db.transaction(storeName, 'readwrite');
+          const store = tx.objectStore(storeName);
           ids.forEach(function (id) { store.delete(id); });
           tx.oncomplete = function () { resolve(); };
           tx.onerror = function () { resolve(); };
@@ -3306,24 +3303,11 @@ window.StudySnapAudio = (function () {
       const nowMs = Date.now();
       const d = new Date(nowMs);
       const pad2 = function (n) { return String(n).padStart(2, '0'); };
-      const entry = {
-        id: String(rawEntry.id || ('VH_' + nowMs + '_' + Math.random().toString(36).slice(2, 6).toUpperCase())),
-        createdAt: nowMs,
-        createdLabel: pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ' · ' + pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1),
-        duration: String(rawEntry.duration || '00:01'),
-        mimeType: String(rawEntry.mimeType || 'audio/wav'),
-        sizeKB: Number(rawEntry.sizeKB || 0) || 0,
-        studentId: String(rawEntry.studentId || ''),
-        studentName: String(rawEntry.studentName || ''),
-        assignmentId: String(rawEntry.assignmentId || ''),
-        assignmentTitle: String(rawEntry.assignmentTitle || ''),
-        submissionId: String(rawEntry.submissionId || ''),
-        status: String(rawEntry.status || 'draft'),
-        dataUrl: String(rawEntry.dataUrl)
-      };
+      const createdLabel = pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ' · ' + pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1);
+      const entry = normalizeEntryFn(rawEntry, nowMs, createdLabel);
       memList = [entry].concat(memList.filter(function (x) { return x && x.id !== entry.id; }));
-      const removed = memList.slice(MAX_ITEMS);
-      memList = memList.slice(0, MAX_ITEMS);
+      const removed = memList.slice(maxItems);
+      memList = memList.slice(0, maxItems);
       await persistItem(entry);
       if (removed.length) {
         await deleteIdsFromDb(removed.map(function (r) { return r.id; }));
@@ -3331,12 +3315,15 @@ window.StudySnapAudio = (function () {
       return entry;
     }
 
-    async function markStatus(id, nextStatus) {
+    async function markStatus(id, nextStatus, extraFields) {
       if (!id || !nextStatus) return null;
       await loadAll();
       const found = memList.find(function (x) { return x.id === id; });
       if (!found) return null;
       found.status = String(nextStatus);
+      if (extraFields && typeof extraFields === 'object') {
+        Object.assign(found, extraFields);
+      }
       await persistItem(found);
       return found;
     }
@@ -3359,18 +3346,71 @@ window.StudySnapAudio = (function () {
       return memList.slice();
     }
 
+    function getById(id) {
+      if (!id) return null;
+      return memList.find(function (x) { return x && x.id === id; }) || null;
+    }
+
     return {
       loadAll: loadAll,
       listCached: listCached,
+      getById: getById,
       addTake: addTake,
       markStatus: markStatus,
       removeTake: removeTake,
       clearAll: clearAll
     };
-  })();
+  }
+
+  const teacherVoiceHistoryStore = createIndexedDbTakeStore(
+    'studysnap_teacher_voice_history_v1',
+    'takes',
+    25,
+    function (rawEntry, nowMs, createdLabel) {
+      return {
+        id: String(rawEntry.id || ('VH_' + nowMs + '_' + Math.random().toString(36).slice(2, 6).toUpperCase())),
+        createdAt: nowMs,
+        createdLabel: createdLabel,
+        duration: String(rawEntry.duration || '00:01'),
+        mimeType: String(rawEntry.mimeType || 'audio/wav'),
+        sizeKB: Number(rawEntry.sizeKB || 0) || 0,
+        studentId: String(rawEntry.studentId || ''),
+        studentName: String(rawEntry.studentName || ''),
+        assignmentId: String(rawEntry.assignmentId || ''),
+        assignmentTitle: String(rawEntry.assignmentTitle || ''),
+        submissionId: String(rawEntry.submissionId || ''),
+        status: String(rawEntry.status || 'draft'),
+        dataUrl: String(rawEntry.dataUrl)
+      };
+    }
+  );
+
+  const practiceAudioBackupStore = createIndexedDbTakeStore(
+    'studysnap_practice_audio_backup_v1',
+    'clips',
+    20,
+    function (rawEntry, nowMs, createdLabel) {
+      return {
+        id: String(rawEntry.id || ('PA_' + nowMs + '_' + Math.random().toString(36).slice(2, 6).toUpperCase())),
+        createdAt: nowMs,
+        createdLabel: createdLabel,
+        duration: String(rawEntry.duration || '00:30'),
+        mimeType: String(rawEntry.mimeType || 'audio/wav'),
+        sizeKB: Number(rawEntry.sizeKB || 0) || 0,
+        exerciseId: String(rawEntry.exerciseId || ''),
+        exerciseTitle: String(rawEntry.exerciseTitle || ''),
+        targetKey: String(rawEntry.targetKey || ''),
+        label: String(rawEntry.label || ''),
+        remoteUrl: String(rawEntry.remoteUrl || ''),
+        status: String(rawEntry.status || 'pending_upload'),
+        dataUrl: String(rawEntry.dataUrl)
+      };
+    }
+  );
 
   if (typeof window !== 'undefined') {
     window.StudySnapVoiceHistory = teacherVoiceHistoryStore;
+    window.StudySnapPracticeAudioBackup = practiceAudioBackupStore;
   }
 
   return {
@@ -3400,6 +3440,7 @@ window.StudySnapAudio = (function () {
     cleanAndTrimMonoSamples: cleanAndTrimMonoSamples,
     encodeMonoWavBytes: encodeMonoWavBytes,
     voiceHistory: teacherVoiceHistoryStore,
+    practiceAudioBackup: practiceAudioBackupStore,
     pauseAll: function () {
       stopSpeaking();
       pauseAllExcept(null, null);
