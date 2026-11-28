@@ -3232,6 +3232,8 @@
             explanation: exp.trim()
           });
         });
+        const mcPassageEl = card.querySelector('[data-mc-passage]');
+        const mcPassageVal = mcPassageEl ? mcPassageEl.value.trim() : String(prevData.passage || '').trim();
         const mcImgEl = card.querySelector('[data-sec-img-url]');
         const mcYtEl = card.querySelector('[data-sec-yt-url]');
         const prevMcImg = (sec.data && sec.data.image_url) || '';
@@ -3241,6 +3243,7 @@
         sec.data = {
           items: items
         };
+        if (mcPassageVal) sec.data.passage = mcPassageVal;
         const resolvedMcImg = mcImgEl ? mcImgEl.value.trim() : prevMcImg;
         if (resolvedMcImg) sec.data.image_url = resolvedMcImg;
         if (mcYtId) {
@@ -3274,28 +3277,35 @@
         });
         sec.data = { wordbank: wordbank, items: items };
       } else if (sec.type === 'error_correction') {
+        const prevErrItems = {};
+        ((sec.data && sec.data.items) || []).forEach(function (it) {
+          if (it && it.id) prevErrItems[it.id] = it;
+        });
         const items = [];
         const qCards = card.querySelectorAll('[data-err-qcard]');
         qCards.forEach(function (qCard, qIdx) {
           const itemId = qCard.getAttribute('data-err-qcard') || 'ERR_' + (qIdx + 1);
+          const prevItem = prevErrItems[itemId] || {};
           const wrong = (qCard.querySelector('[data-err-wrong]') || {}).value || '';
           const sit = (qCard.querySelector('[data-err-sit]') || {}).value || '';
           const accRaw = (qCard.querySelector('[data-err-acc]') || {}).value || '';
           const exp = (qCard.querySelector('[data-err-exp]') || {}).value || '';
 
           const accepted = accRaw
-            .split(/[\/,;]/)
+            .split(/[\/;]/)
             .map(function (s) {
               return s.trim();
             })
             .filter(Boolean);
-          items.push({
+          const nextItem = {
             id: itemId,
             wrong: wrong.trim(),
             situation: sit.trim(),
             accepted: accepted.length > 0 ? accepted : [accRaw.trim()],
             explanation: exp.trim()
-          });
+          };
+          if (Number(prevItem.points) > 0) nextItem.points = Number(prevItem.points);
+          items.push(nextItem);
         });
         sec.data = { items: items };
       } else if (sec.type === 'translation') {
@@ -4120,8 +4130,18 @@
         })
         .join('');
 
+      const mcPassageVal = (sec.data && sec.data.passage) ? String(sec.data.passage) : '';
+      const mcPassageHtml =
+        '<details class="listening-script-box"' + (mcPassageVal ? ' open' : '') + ' style="margin-bottom:12px;">' +
+          '<summary style="cursor:pointer;font-weight:700;font-size:0.8125rem;color:var(--color-primary-deep);">Đoạn văn đọc hiểu (Tùy chọn cho nhóm câu trắc nghiệm Đúng/Sai hoặc Đọc hiểu)</summary>' +
+          '<textarea class="form-control" rows="4" data-mc-passage style="margin-top:8px;" placeholder="Dán đoạn văn đọc hiểu nếu các câu trắc nghiệm bên dưới cùng dựa trên một đoạn văn...">' +
+            escapeHtml(mcPassageVal) +
+          '</textarea>' +
+        '</details>';
+
       return (
         '<div>' +
+        mcPassageHtml +
         mcMediaHtml +
         '<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:12px;">' +
         questionsHtml +
@@ -6278,7 +6298,11 @@
     } else if (sec.type === 'multiple_choice' || sec.type === 'listening_mc') {
       const items = (sec.data && sec.data.items) || [];
       const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
-      itemsHtml = items.map(function (item, idx) {
+      const passageText = sec.type === 'multiple_choice' && sec.data && sec.data.passage ? String(sec.data.passage).trim() : '';
+      const passageReviewHtml = passageText
+        ? '<div class="practice-passage-box" style="margin-bottom:10px;"><div class="practice-passage-label">Đoạn văn đọc hiểu</div><div class="practice-passage-text">' + escapeHtml(passageText) + '</div></div>'
+        : '';
+      itemsHtml = passageReviewHtml + items.map(function (item, idx) {
         const options = item.options || [];
         const rawVal = studentAns[item.id];
         const hasAns = rawVal !== undefined && rawVal !== null && rawVal !== '';

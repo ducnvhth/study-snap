@@ -3078,14 +3078,27 @@
     return blocks.length > 0 ? '<div class="practice-media-block">' + blocks.join('') + '</div>' : '';
   }
 
+  function renderPracticePassageBoxHtml(sec) {
+    const passageText = sec && sec.data && sec.data.passage ? String(sec.data.passage).trim() : '';
+    if (!passageText) return '';
+    return (
+      '<div class="practice-passage-box">' +
+        '<div class="practice-passage-label">Đoạn văn đọc hiểu</div>' +
+        '<div class="practice-passage-text">' + escapeHtml(passageText) + '</div>' +
+      '</div>'
+    );
+  }
+
   function renderMcQuestionCardsHtml(sec, skipEmptyOptions) {
     const secAns = ui.practiceAnswers[sec.section_id] || {};
     const items = (sec.data && sec.data.items) || [];
     const isPerQuestionListening =
       sec.type === 'listening_mc' && sec.data && sec.data.listening_mode === 'per_question';
+    const passageHtml = sec.type === 'multiple_choice' ? renderPracticePassageBoxHtml(sec) : '';
     const mediaHeaderHtml = sec.type === 'multiple_choice' ? renderSectionMediaContextHtml(sec, 'student-mc-media-') : '';
 
     return (
+      passageHtml +
       mediaHeaderHtml +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
       items
@@ -3488,12 +3501,7 @@
     const secAns = ui.practiceAnswers[sec.section_id] || {};
     const items = (sec.data && sec.data.items) || [];
     const passageText = sec.data && sec.data.passage ? String(sec.data.passage).trim() : '';
-    const passageHtml = passageText
-      ? '<div class="practice-passage-box">' +
-          '<div class="practice-passage-label">Đoạn văn đọc hiểu</div>' +
-          '<div class="practice-passage-text">' + escapeHtml(passageText) + '</div>' +
-        '</div>'
-      : '';
+    const passageHtml = renderPracticePassageBoxHtml(sec);
     const mediaHtml = renderSectionMediaContextHtml(sec, 'student-sa-');
     const hasLongOrMultiline = items.some(function (it) {
       return Boolean(it && (it.multiline || String(it.prompt || '').length > 36));
@@ -3987,7 +3995,8 @@
       const mcPtsLabel = formatPracticePtsLabel(getPracticeScaledMcPoints(sec, items));
       const isPerQuestionListening =
         sec.type === 'listening_mc' && sec.data && sec.data.listening_mode === 'per_question';
-      return items
+      const passageHtml = sec.type === 'multiple_choice' ? renderPracticePassageBoxHtml(sec) : '';
+      return passageHtml + items
         .map(function (item, idx) {
           const userOpt = studentAns[item.id];
           const isCorrect =
@@ -4213,13 +4222,7 @@
     } else if (sec.type === 'short_answer') {
       const items = (sec.data && sec.data.items) || [];
       const manualGrades = sub.manual_grades || {};
-      const passageText = sec.data && sec.data.passage ? String(sec.data.passage).trim() : '';
-      const passageHtml = passageText
-        ? '<div class="practice-passage-box">' +
-            '<div class="practice-passage-label">Đoạn văn đọc hiểu</div>' +
-            '<div class="practice-passage-text">' + escapeHtml(passageText) + '</div>' +
-          '</div>'
-        : '';
+      const passageHtml = renderPracticePassageBoxHtml(sec);
       const mediaHtml = renderSectionMediaContextHtml(sec, 'student-sa-review-');
 
       const itemsHtml = items
